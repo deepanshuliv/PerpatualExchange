@@ -68,7 +68,14 @@ export type Fills = {
 
 */
     
-
+    calculateTotalTrade(fills:FillInfo[]){
+       const total =  fills.reduce((acc :any, curr:any)=>{
+            acc.totalQty += curr.qty;
+            acc.totalPrice += curr.qty * curr.price
+            return acc
+        }, {totalQty:0 , totalPrice:0})
+        return {totalSpent : total.totalPrice , totalQty:total.totalQty}
+    }
 
     createLimitLongOrder(userId:string , kind :Kind , type :Type , qty:number , price :number , margin :number , market :MARKET){
         const currentOrder = this.createUserOrder(userId , kind , type , qty , margin ,market ,  price );
@@ -117,7 +124,8 @@ export type Fills = {
             }
         }
         if(remianingQty === 0){
-            return {fills :fillInfo , orderId:currentOrder.orderId , filleQty:currentOrder.data.qty }
+            const {totalQty , totalSpent} = this.calculateTotalTrade(fillInfo);
+            return { orderId:currentOrder.orderId , filleQty:totalQty , totalQty:qty , totalSpent , fills :fillInfo  }
         }
         if( type === "LIMIT" ){
 
@@ -199,7 +207,8 @@ export type Fills = {
 
         }
         if(remianingQty === 0 ){
-            return {fills : fillInfo , filledQty : qty - remianingQty , orderId : currrentOrder.orderId , totalQty:currrentOrder.data.qty} 
+            const {totalQty , totalSpent} = this.calculateTotalTrade(fillInfo);
+            return { filledQty : totalQty , orderId : currrentOrder.orderId , totalQty:currrentOrder.data.qty , totalSpent , fills : fillInfo } 
         }
         // sit on same side 
         if(type === "LIMIT"){
@@ -236,7 +245,7 @@ export type Fills = {
         }
     }
 
-    createMarketLongOrder(userId:string , kind :Kind , type :Type , qty:number ,margin :number , market :MARKET){
+    createMarketLongOrder(userId:string , kind :Kind , type :Type, qty:number ,margin :number , market :MARKET){
          const currrentOrder = this.createUserOrder(userId , kind, type , qty , margin,market);
          const fillInfo : FillInfo[]=[];
          let remianingQty = qty;
@@ -281,16 +290,15 @@ export type Fills = {
 
          // right now return  the order 
          // but in future , apply funding rate here
-
+         const {totalQty , totalSpent} = this.calculateTotalTrade(fillInfo);
          return {
-            filledQty : qty - remianingQty,
+            filledQty : totalQty,
             totalQty : qty,
-            fills:fillInfo,
-            orderId : currrentOrder.orderId
+            totalSpent,
+            orderId : currrentOrder.orderId,
+            fills:fillInfo
          }
     }
-
-
 
     createMarketShortOrder(userId:string , kind :Kind , type :Type , qty:number ,margin :number , market :MARKET){
          const currrentOrder = this.createUserOrder(userId , kind, type , qty , margin , market);
@@ -337,16 +345,15 @@ export type Fills = {
 
          // right now return  the order 
          // but in future , apply funding rate here
-
+         const {totalQty , totalSpent} = this.calculateTotalTrade(fillInfo);
          return {
-            filledQty : qty - remianingQty,
+            filledQty : totalQty,
             totalQty : qty,
+            totalSpent,
             fills:fillInfo,
             orderId : currrentOrder.orderId
          }
     }
-
-
 
     createUserOrder(userId:string , kind :Kind , type :Type , qty:number ,  margin :number ,market:MARKET , price? :number ,){
     const orderId = crypto.randomUUID()
@@ -396,8 +403,6 @@ export type Fills = {
         }
         return marketCreate
     }
-
-
 
     cancelOrder(userId : string , orderId:string ){
         // find and delete in open orders that order 

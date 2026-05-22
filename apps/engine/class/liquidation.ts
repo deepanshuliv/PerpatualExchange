@@ -1,9 +1,13 @@
-import type { Kind, MARKET, Positions, Type } from "types";
+import type { Kind, MARKET, MarketIndex, PositionDetails, Positions,  userMarketOrderTypes } from "types";
 
 export default class  Lqiuidation{
     private positions : Positions;
+    private markteIndex : MarketIndex;
+
     constructor(){
         this.positions = new Map()
+        this.markteIndex = new Map<MARKET ,Set<string>>()
+
     }
 
     getPosition(userId : string , market:MARKET){
@@ -22,9 +26,23 @@ export default class  Lqiuidation{
 
     changePosition(userId : string , market : MARKET , kind : Kind , qty:number , costBasis:number, margin:number){
         // create , update , positon , delete postion if - 0
-        const userPos = this.getPosition(userId , market)
+        const userPos = this.getPosition(userId , market);
+        
         if(!userPos){
-            return null
+            const positionDetails : PositionDetails = {
+                costBasis,
+                kind,
+                margin,
+                market, 
+                qty
+            }
+            if (!this.markteIndex.has(market)) {
+                this.markteIndex.set(market, new Set());
+            }
+            this.positions.set(userId , [positionDetails]);
+            this.markteIndex.get(market)?.add(userId);
+
+            return userPos
         }
 
         if(userPos.kind === kind){
@@ -42,7 +60,8 @@ export default class  Lqiuidation{
              userPosToChange = userPosToChange?.filter((pos)=>{
                 return !(pos.market === market && pos.kind === kind)
              })
-            this.positions.set(userId , userPosToChange ?? [])
+            this.positions.set(userId , userPosToChange ?? []);
+            this.markteIndex.get(market)!.delete(userId)
 
             }
             else if(userPos.qty > qty){
@@ -62,9 +81,35 @@ export default class  Lqiuidation{
          
         }
 
-        // update the map with new positions
+        return userPos;        
     }
     
+    calculateLiquidation( market :MARKET , kind :Kind , markPrice:number){
+        // go to each user calculate pnl
+        // before margin - 5% liquidate person 
+        // return { qty , kind , market , userId , margin}
+        const userMarketOrder:userMarketOrderTypes[] =[] 
+       const userPosOfmarket = this.markteIndex.get(market); 
+        if(!userPosOfmarket){
+            return null
+        }
+         
+        userPosOfmarket.forEach((userId)=>{
+            const userPostion = this.positions.get(userId);
 
+           userPostion?.forEach((pos)=>{
+            if(pos.market === market && pos.kind === kind){
+                let liquidationPrice = pos.margin * 0.95;
+                let priceOfPostionAccordingToMarkPrice = markPrice * pos.qty;
+                let uPnl = priceOfPostionAccordingToMarkPrice - pos.costBasis ;
+
+                if(uPnl - liquidationPrice === 0 ){
+                    userMarketOrder.push({qty : pos.qty , market : pos.market , kind : pos.kind , margin : pos.margin})
+                }
+            }
+           })
+        })
+       return userMarketOrder; 
+    }
 
 }
