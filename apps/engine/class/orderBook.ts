@@ -1,6 +1,6 @@
 import { markdown } from "bun";
 import { OrderedMap } from "js-sdsl";
-import { type Fills, type Kind, type MARKET, type Order, type OrderBook, type Type} from "types"
+import { type Fills, type Kind, type MARKET, type Order, type OrderBook, type Status, type Type} from "types"
 
 
 export default class  OrderBookManager{
@@ -56,6 +56,17 @@ export interface Order{
 }
 
 
+export type Fills = {
+    sellerId: string ,
+    buyerId : string ,
+    qty : number , 
+    price : number , 
+    orderId : string , 
+    type: Type, 
+    kind : Kind , 
+    createdAt : Date
+ }
+
 */
     createUserOrder(userId:string , kind :Kind , type :Type , qty:number , price :number , margin :number ){
         const OrderToPush :Order = {
@@ -96,7 +107,7 @@ export interface Order{
 
     createLimitLongOrder(userId:string , kind :Kind , type :Type , qty:number , price :number , margin :number ){
 
-        }
+    }
 
     createLimitShortOrder(){}
 
@@ -104,7 +115,23 @@ export interface Order{
 
     createMarketOrder(){}
     
-    addToFills(){}
+    addToFills(buyerId : string , sellerId : string ,qty:number , price:number , orderId:string , type:Type , kind:Kind  ,status:Status){
+        // orderId is for one either seller or buyer 
+        // status is either "FILLED" and "PARTIALLY_FLLED"
+        const fillDetail:Fills = {
+            buyerId , 
+            sellerId , 
+            price, 
+            orderId, 
+            type, 
+            kind, 
+            qty , 
+            status, 
+            createdAt:new Date()
+        }
+        this.fills.push(fillDetail);
+        return {ok:true , msg:"FILLS_CREATED_SUCCESFULLY"}
+    }
 
     getOrder(userId : string , orderId:string){
         const userOrder = this.orders.find((order)=>{
@@ -116,8 +143,14 @@ export interface Order{
         return userOrder
     };
 
-    changeOrderStatus(orderId :string , userId:string){
-        ``
+    changeOrderStatus( userId:string , orderId :string , status : Status){
+        const userOrder =this.orders.find((order)=> (order.orderId === orderId && userId === userId));
+        if(!userOrder){
+            return {ok:false , msg:"USER_ORDER_NOT_AVAILABEL"}
+        }
+
+        userOrder.status = status
+        return {ok:true , msg:"STATUS_CHNAGED_SUCCESSFULLY_OF_ORDER"}
     }
 
     pushOrder(userId:string , orderId:string){
@@ -126,6 +159,13 @@ export interface Order{
         // delete from here
     }
 
-    getFills(userId : string ){}
+    pushFills(){
+        // push on the response queue 
+        // delete entry from fills table 
+    }
+    // can become trades
+    getFills( ){
+
+    }
 
 }
