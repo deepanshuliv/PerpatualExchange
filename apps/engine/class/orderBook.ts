@@ -73,7 +73,7 @@ export type Fills = {
 
 
     createLimitLongOrder(userId:string , kind :Kind , type :Type , qty:number , price :number , margin :number , market :MARKET){
-        const currentOrder = this.createUserOrder(userId , kind , type , qty , margin , price );
+        const currentOrder = this.createUserOrder(userId , kind , type , qty , margin ,market ,  price );
        
         let fillInfo : FillInfo[] = []
         
@@ -150,7 +150,7 @@ export type Fills = {
     }
 
     createLimitShortOrder(userId:string , kind :Kind , type :Type , qty:number , price :number , margin :number , market :MARKET){
-        const currrentOrder =  this.createUserOrder(userId , kind , type , qty , margin  ,price  );
+        const currrentOrder =  this.createUserOrder(userId , kind , type , qty , margin , market ,price  );
         const fillInfo : FillInfo[] = [];
 
         const oppSide = this.getOppositeSide(market , kind );
@@ -239,7 +239,7 @@ export type Fills = {
     }
 
     createMarketLongOrder(userId:string , kind :Kind , type :Type , qty:number ,margin :number , market :MARKET){
-         const currrentOrder = this.createUserOrder(userId , kind, type , qty , margin);
+         const currrentOrder = this.createUserOrder(userId , kind, type , qty , margin,market);
          const fillInfo : FillInfo[]=[];
          let remianingQty = qty;
          const oppSide = this.getOppositeSide(market , kind);
@@ -295,7 +295,7 @@ export type Fills = {
 
 
     createMarketShortOrder(userId:string , kind :Kind , type :Type , qty:number ,margin :number , market :MARKET){
-         const currrentOrder = this.createUserOrder(userId , kind, type , qty , margin);
+         const currrentOrder = this.createUserOrder(userId , kind, type , qty , margin , market);
          const fillInfo : FillInfo[]=[];
          let remianingQty = qty;
          const oppSide = this.getOppositeSide(market , kind);
@@ -350,7 +350,7 @@ export type Fills = {
 
 
 
-    createUserOrder(userId:string , kind :Kind , type :Type , qty:number ,  margin :number ,price? :number ,){
+    createUserOrder(userId:string , kind :Kind , type :Type , qty:number ,  margin :number ,market:MARKET , price? :number ,){
     const orderId = crypto.randomUUID()
             const OrderToPush :Orderdetails = {
                 userId,
@@ -360,6 +360,7 @@ export type Fills = {
                 status:"OPEN",
                 margin,
                 kind, 
+                market,
                 createdAt:new Date()
             }
             this.orders.set(orderId , OrderToPush);
@@ -404,7 +405,27 @@ export type Fills = {
         // find and delete in open orders that order 
         // chnage the order status to cancelled in orders array
 
-    this.getOrder(userId , orderId);    
+    const userOrderDetails = this.getOrder(userId , orderId);    
+    if(!userOrderDetails){
+        return null
+    }
+    // changed order status
+    this.changeOrderStatus(userId , orderId , "CANCELLED");
+
+    const kind = userOrderDetails.kind;
+    const market = userOrderDetails.market;
+    const price = userOrderDetails.price;
+
+    const side = this.getSameSide(market , kind);
+    const priceLevel = side?.getElementByKey(price);
+    if(!priceLevel){
+        return null;
+    }
+    //TODO:- check can be a better way to delete a order from orderBook
+    priceLevel.openOrder =priceLevel.openOrder.filter((order)=>{
+        return order.orderId !== orderId
+    })
+        
 
     }
 
