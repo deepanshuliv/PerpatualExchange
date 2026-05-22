@@ -8,9 +8,9 @@
   },
   "peerDependencies": {
     "typescript": "^5",
-    "types":"workspace:*"
+    "types": "workspace:*"
   },
   "dependencies": {
-
+    "js-sdsl": "^4.4.2"
   }
 }
