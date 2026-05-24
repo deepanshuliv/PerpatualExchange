@@ -1,0 +1,17 @@
+{
+  "name": "types",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "exports": {
+    ".": "./index.ts"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "js-sdsl": "^4.4.2",
+    "zod": "^4.4.3"
+  }
+}

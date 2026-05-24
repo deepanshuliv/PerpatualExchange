@@ -14,50 +14,46 @@ import type { User } from "types";
             lockedBalance : 0 
         }
     }
-    return {ok:true, msg:"USER_BALANCE_ADDED"}
    }
 
    getBalance(userId:string){
     if(!this.user[userId]){
-        return {ok:false ,msg:"USER_NOT_PRESENT"}
+        return null
     }
-    return {ok:true , balance:this.user[userId].balance}
+    return this.user[userId].balance
    }
 
    updateBalance(userId : string , signedAmount: number){
     if(!this.user[userId]){
-        return {ok:false ,msg:"USER_NOT_PRESENT"}
+        return null
     }
-
-    balance:this.user[userId].balance -= signedAmount;
-
-    return {ok:true , }
+    this.user[userId].balance += signedAmount;
    }
 
    addBalance(userId :string , amount : number){
     if(!this.user[userId]){
-        return {ok : false, msg: "USER_NOT_PRESENT"}
+        return null
     }  
     this.user[userId].balance+=amount
    }
    updateLockedBalance(userId  : string, signedAmount : number){
     if(!this.user[userId]){
-        return {ok : false, msg: "USER_NOT_PRESENT"}
+        return null
     }  
-    this.user[userId].balance+=signedAmount 
+    this.user[userId].lockedBalance+=signedAmount 
    }
 
    addLockedBalance(userId: string , amount : number){
     if(!this.user[userId]){
-        return {ok : false, msg: "USER_NOT_PRESENT"}
+        return null
     }  
-    this.user[userId].balance+=amount
+    this.user[userId].lockedBalance+=amount
    }
    getLockedBalance(userId : string ){
     if(!this.user[userId]){
-        return {ok : false, msg: "USER_NOT_PRESENT"}
+        return null
     }  
-    return {ok : true , lockedBalance: this.user[userId].lockedBalance}
+    return this.user[userId].lockedBalance
    }
    
 
