@@ -248,7 +248,7 @@ export default class OrderBookManager {
         while (oppSide?.front() && remianingQty > 0) {
             const [bestPrice, priceLevel] = oppSide.front()!;
 
-            while (priceLevel.openOrder.length > 0  && remianingQty > 0) {
+            while (priceLevel.openOrder.length > 0 && remianingQty > 0) {
                 const topOrder = priceLevel.openOrder[0]!;
                 const remainingPriceLevelQty = topOrder.totalQty - topOrder.filledQty;
                 const maxQtyFillPriceLevel = Math.min(remainingPriceLevelQty, remianingQty);
@@ -419,10 +419,19 @@ export default class OrderBookManager {
             return null;
         }
         //TODO:- check can be a better way to delete a order from orderBook
+        const deleteIngOrder = priceLevel.openOrder.find((order) => {
+            return order.userId === userId
+        })
         priceLevel.openOrder = priceLevel.openOrder.filter((order) => {
             return order.orderId !== orderId
         })
 
+        return {
+            ...deleteIngOrder, kind: userOrderDetails.kind
+            , margin: userOrderDetails.margin,
+            market: userOrderDetails.market, 
+            price : userOrderDetails.price
+        };
 
     }
 

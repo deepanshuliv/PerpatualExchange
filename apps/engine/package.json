@@ -15,8 +15,10 @@
   },
   "dependencies": {
     "@types/redis": "^4.0.11",
+    "@types/ws": "^8.18.1",
     "js-sdsl": "^4.4.2",
     "redis": "^5.12.1",
-    "types": "workspace:*"
+    "types": "workspace:*",
+    "ws": "^8.21.0"
   }
 }

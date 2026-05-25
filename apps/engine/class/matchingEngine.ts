@@ -2,7 +2,6 @@ import type { Kind, MARKET, MarketIndex, Type } from "types";
 import Balance from "./balance";
 import PostionManager from "./liquidation";
 import ORDERBOOK from "./orderBook";
-import { REDISEARCH_LANGUAGE } from "redis";
 
 export default class MatchingEngine {
     private orderBook: ORDERBOOK;
@@ -29,7 +28,7 @@ export default class MatchingEngine {
 
             if (kind === "LONG") {
                 this.balance.updateLockedBalance(userId, equity);
-                this.balance.updateBalance(userId, -equity); 
+                this.balance.updateBalance(userId, -equity);
                 const orderDetails = this.orderBook.createLongOrder(userId, kind, type, qty, price, equity, market);
                 if (!orderDetails) {
                     // Rollback: restore balance
@@ -122,7 +121,7 @@ export default class MatchingEngine {
                 const flippedMargin = equity * flippedMarginRatio;
 
                 this.balance.updateLockedBalance(userId, flippedMargin);
-                this.balance.updateBalance(userId, -flippedMargin); 
+                this.balance.updateBalance(userId, -flippedMargin);
 
                 this.positons.changePosition(userId, market, kind, existingQty, existingCostBasis, existingMargin);
                 this.positons.changePosition(userId, market, kind, flippedQty, flippedCostBasis, flippedMargin);
@@ -130,10 +129,32 @@ export default class MatchingEngine {
             return orderDetails;
         }
     }
-    cancelOrder() { }
-    getOrder() { }
-    getBalance() { }
-    getOpenPositions() { }
-    getClosePositions() { }
+
+    cancelOrder(userId: string, orderId: string) {
+        const cancelOrder = this.orderBook.cancelOrder(userId, orderId);
+        if (!cancelOrder) {
+            return
+        }
+        const cancelOrderReductionratio = cancelOrder.filledQty! / cancelOrder.totalQty!;
+        const cancelOrderMarginSpent = cancelOrder.margin * cancelOrderReductionratio!;
+        this.balance.updateBalance(userId, cancelOrderMarginSpent);
+        this.balance.updateLockedBalance(userId, -cancelOrderMarginSpent);
+
+        return cancelOrder;
+
+    }
+
+    getOrder(userId: string, orderId: string) {
+        const userOrder = this.orderBook.getOrder(userId, orderId);
+        if (!userOrder) {
+            return null;
+        }
+        return userOrder
+    }
+
+    getBalance(userId: string) {
+        const userBalance = this.balance.getBalance(userId);
+        return userBalance;
+    }
 
 }
