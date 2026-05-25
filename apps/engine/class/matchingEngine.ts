@@ -1,6 +1,6 @@
 import type { Kind, MARKET, MarketIndex, Type } from "types";
 import Balance from "./balance";
-import PostionManager from "./liquidation";
+import PostionManager from "./PositionManager";
 import ORDERBOOK from "./orderBook";
 
 export default class MatchingEngine {
