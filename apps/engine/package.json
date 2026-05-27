@@ -14,6 +14,7 @@
     "types": "workspace:*"
   },
   "dependencies": {
+    "shared-types": "workspace:*",
     "@repo/redis": "workspace:*",
     "@types/redis": "^4.0.11",
     "@types/ws": "^8.18.1",

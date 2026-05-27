@@ -13,16 +13,20 @@ const CREATE_ORDER_SCHEMA = BASE_BACKEND_REQUEST.extend({
         price: z.number(),
         market: MARKET_AVAILABEL_SCHEMA,
         type: TYPE_SCHEMA,
-        kind: KIND_SCHEMA
+        kind: KIND_SCHEMA,
+        margin: z.number()
     })
 })
+type CREATE_ORDER = z.infer<typeof CREATE_ORDER_SCHEMA>
 
 const CANCEL_ORDER_SCHEMA = BASE_BACKEND_REQUEST.extend({
     type: z.literal("cancel_order"),
     data: z.object({
         orderId: z.string()
     })
-})
+}
+)
+type CANCEL_ORDER = z.infer<typeof CANCEL_ORDER_SCHEMA>;
 
 const GET_BALANCE_SCHEMA = BASE_BACKEND_REQUEST.extend({
     type: z.literal("get_balance"),
@@ -31,33 +35,41 @@ const GET_BALANCE_SCHEMA = BASE_BACKEND_REQUEST.extend({
     })
 })
 
+type GET_BALANCE = z.infer<typeof GET_BALANCE_SCHEMA>
+
 const ADD_BALANCE_SCHEMA = BASE_BACKEND_REQUEST.extend({
-    type: "add_balance",
+    type: z.literal("add_balance"),
     data: z.object({
         // for adding usd only
         amount: z.number()
     })
 })
 
+type ADD_BALANCE = z.infer<typeof ADD_BALANCE_SCHEMA>
+
 const GET_DEPTH_SCHEMA = BASE_BACKEND_REQUEST.extend({
-    type: "get_depth_update",
+    type: z.literal("get_depth_update"),
     data: z.object({
         market: MARKET_AVAILABEL_SCHEMA
     })
 })
 
+type GET_DEPTH = z.infer<typeof GET_DEPTH_SCHEMA>
+
 const GET_POSITION_SCHEMA = BASE_BACKEND_REQUEST.extend({
-    type: "get_position",
+    type: z.literal("get_position"),
     data: z.object({
         market: MARKET_AVAILABEL_SCHEMA.optional()
     })
 })
 
-const DB_REQUEST_data = z.object({
+type GET_POSITION = z.infer<typeof GET_POSITION_SCHEMA>;
+
+const DB_REQUEST_SCHEMA = z.object({
     orderId: z.string()
 })
 
-const ENGINE_REQUEST_data = z.union([
+const BACKEND_REQUEST_TYPE = z.union([
     GET_BALANCE_SCHEMA,
     GET_DEPTH_SCHEMA,
     GET_POSITION_SCHEMA,
@@ -68,15 +80,25 @@ const ENGINE_REQUEST_data = z.union([
 
 
 
-const BACKEND_REQUEST_SCHEMA = z.union([ENGINE_REQUEST_data, DB_REQUEST_data])
+
+const BACKEND_REQUEST_SCHEMA = z.union([BACKEND_REQUEST_TYPE, DB_REQUEST_SCHEMA])
+
+type BACKEND_REQUEST = z.infer<typeof BACKEND_REQUEST_SCHEMA>
 
 export {
     GET_BALANCE_SCHEMA,
+    type GET_BALANCE,
     GET_DEPTH_SCHEMA,
+    type GET_DEPTH,
     GET_POSITION_SCHEMA,
+    type GET_POSITION,
     CREATE_ORDER_SCHEMA,
+    type CREATE_ORDER,
     CANCEL_ORDER_SCHEMA,
+    type CANCEL_ORDER,
     ADD_BALANCE_SCHEMA,
-    ENGINE_REQUEST_data,
-    BACKEND_REQUEST_SCHEMA
+    type ADD_BALANCE,
+    DB_REQUEST_SCHEMA,
+    BACKEND_REQUEST_SCHEMA,
+    type BACKEND_REQUEST
 }

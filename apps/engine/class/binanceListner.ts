@@ -51,7 +51,7 @@ export default class BinanceClassListner {
                 await this.redisClient.xAdd(process.env.REQUEST_STREAM!, "*", {
                     data: JSON.stringify({
                         type: "markprice_updated",
-                        payload: { price: parsedData.p, symbol: parsedData.i },
+                        payload: { price: parsedData.p, market: parsedData.i },
                     }),
                 });
 

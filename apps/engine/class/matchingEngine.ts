@@ -8,10 +8,11 @@ export default class MatchingEngine {
     private balance: Balance;
     private positons: PostionManager;
 
-    constructor() {
+    constructor(position: PostionManager) {
         this.orderBook = new ORDERBOOK();
         this.balance = new Balance();
-        this.positons = new PostionManager()
+        this.positons = position;
+        
     }
 
     createOrder(userId: string, market: MARKET, type: Type, kind: Kind, qty: number, price: number, equity: number) {

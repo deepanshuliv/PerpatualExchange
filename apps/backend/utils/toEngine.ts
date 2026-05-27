@@ -1,7 +1,7 @@
+import { parse } from 'dotenv';
 import 'dotenv/config'
 import { createClient } from "redis"
-import type { EngineRequest, EngineResponse } from "types"
-import { response } from "express";
+import type { BackendRequest, EngineRequest } from "shared-types"
 
 const publisher = createClient();
 const subscriber = createClient()
@@ -16,48 +16,53 @@ type RedisStreamResponse = Array<{
 
 const correlationIdToResolveMap = new Map<string, (data: any) => void>()
 
-export function toEngine( engineRequest: EngineRequest ) :Promise<EngineRequest>{
+export function toEngine(engineRequest: EngineRequest.ENGINE_REQUEST): Promise<BackendRequest.BACKEND_REQUEST> {
 
   return new Promise((resolve, reject) => {
+
     correlationIdToResolveMap.set(engineRequest.correlationId, resolve);
+
     setTimeout(() => {
       correlationIdToResolveMap.delete(engineRequest.correlationId);
       reject(new Error("Timeout"));
     }, 10000)
 
     publisher.xAdd(process.env.RESPONSE_STREAM!, "*", { data: JSON.stringify(engineRequest) });
+
   })
 
 }
 
+function handleEngineResponse(parsedMessage: unknown) {
+  const response = correlationIdToResolveMap.get(parsedMessage.correlationId);
+  if (!response) {
+    return
+  }
+  response(parsedMessage.payload)
+}
 
 async function engineTOBackend() {
   await subscriber.connect()
-  let lastId = '$' 
-  
-
+  let lastId = '$'
   while (1) {
 
     const response = await subscriber.xRead([{
       key: "to-backend",
       id: lastId
     }], {
-      COUNT: 10,
+      COUNT: 100,
       BLOCK: 0
     }) as RedisStreamResponse;
 
-    console.log(response);
-
-    if (!response) {
+    if (!response || !Array.isArray(response)) {
       continue;
     }
 
-    if (response && response.length > 0) {
-      const messages = response[0].messages;
-      lastId = messages[messages.length - 1].id; 
-      
-      console.log("Response strem  resopnse", messages);
-
+    for (const stream of response) {
+      for (const msg of stream.messages) {
+        const parsedMessage = JSON.parse(msg.message.data!)
+        handleEngineResponse(parsedMessage)
+      }
     }
   }
 }

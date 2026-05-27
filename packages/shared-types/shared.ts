@@ -19,13 +19,20 @@ const MARKET_AVAILABEL_SCHEMA = z.union([
 
 const KIND_SCHEMA = z.union([z.literal("LONG"), z.literal("SHORT")]);
 const TYPE_SCHEMA = z.union([z.literal("LIMIT"), z.literal("MARKET")]);
+const STATUS_SCHEMA = z.union([z.literal("PARTIALLY_FILLED"), z.literal("FILLED"), z.literal("OPEN"), z.literal("CANCELLED")])
 
+type KIND = z.infer<typeof KIND_SCHEMA>
+type TYPE = z.infer<typeof TYPE_SCHEMA>
+type STATUS = z.infer<typeof STATUS_SCHEMA>
 
 
 export {
-    type REQUEST_TYPE,
     REQUEST_TYPE_SCHEMA,
     MARKET_AVAILABEL_SCHEMA,
     KIND_SCHEMA,
-    TYPE_SCHEMA
+    TYPE_SCHEMA,
+    type REQUEST_TYPE,
+    type KIND,
+    type TYPE,
+    type STATUS
 }

@@ -1,6 +1,9 @@
 {
   "name": "shared-types",
   "private": true,
+  "exports": {
+    ".": "./index.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
