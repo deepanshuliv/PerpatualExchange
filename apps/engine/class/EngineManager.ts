@@ -102,7 +102,7 @@ export default class EngineManager {
                 const marketOrder = this.matchingManger.palceMarketOrderForLiquidation(userId, kind, qty, margin, market, costBasis);
                 this.sendTobackend(marketOrder)
             })
-``        }
+        }
     }
 
     async start() {
