@@ -1,7 +1,7 @@
-import type { Kind, MARKET, MarketIndex, Type } from "types";
 import Balance from "./balance";
 import PostionManager from "./PositionManager";
 import ORDERBOOK from "./orderBook";
+import { Shared } from "shared-types";
 
 export default class MatchingEngine {
     private orderBook: ORDERBOOK;
@@ -12,10 +12,10 @@ export default class MatchingEngine {
         this.orderBook = new ORDERBOOK();
         this.balance = new Balance();
         this.positons = position;
-        
+
     }
 
-    createOrder(userId: string, market: MARKET, type: Type, kind: Kind, qty: number, price: number, equity: number) {
+    createOrder(userId: string, market: Shared.MARKET_AVAILABEL, type: Shared.TYPE, kind: Shared.KIND, qty: number, price: number, equity: number) {
 
         const userCurrentPostion = this.positons.getPosition(userId, market)
         if (!userCurrentPostion || userCurrentPostion.kind === kind) {
@@ -153,9 +153,55 @@ export default class MatchingEngine {
         return userOrder
     }
 
-    getBalance(userId: string) {
+    getBalance(userId: string, market?: Shared.MARKET_AVAILABEL) {
+        if (market) {
+            const userBalance = this.positons.getPosition(userId, market);
+            return userBalance
+        }
         const userBalance = this.balance.getBalance(userId);
         return userBalance;
     }
 
+    addBalance(userId: string, amount: number) {
+        const addUserBalance = this.balance.addBalance(userId, amount);
+        if (!addUserBalance) {
+            return null
+        }
+
+    }
+
+    palceMarketOrderForLiquidation(userId: string, kind: Shared.KIND, qty: number, margin: number, market: Shared.MARKET_AVAILABEL, costBasis: number) {
+        let userOrderInfo;
+        // opposite order placed in order to close postion
+        if (kind === "SHORT") {
+            userOrderInfo = this.orderBook.createLiquidationMarketLongOrder(userId, qty, margin, market);
+            // do the calculation in balances as revert back loss or profit and release the remianing margin
+            const rpnl = costBasis - userOrderInfo.totalSpent;
+            const amountToReturn = margin - rpnl;
+            // if amountToReturn -ve than max 0 can be posssibel than rest of it decrese from exchange insurance funds
+            // can be negative suppose if other person can buy at worst price
+            const reductionRatio = userOrderInfo.filledQty / userOrderInfo.totalQty;
+            const lockedMarginToRelease = margin * reductionRatio;
+            // update margin
+            this.balance.updateLockedBalance(userId, lockedMarginToRelease);
+            // return the amountToreturn after adding profit and substracting loss
+            this.balance.updateBalance(userId, amountToReturn)
+
+        } else {
+            userOrderInfo = this.orderBook.createLiquidationMarketShortOrder(userId, qty, margin, market)
+            // do the calculation in balances as revert back loss or profit and release the remianing margin 
+            const rpnl = costBasis - userOrderInfo.totalSpent;
+            // if amountToReturn -ve than max 0 can be posssibel than rest of it decrese from exchange insurance funds
+            // amountReturn negative suppose if other person can buy at worst price
+            // TO DO : decrese from exhange profit balnces -> insurance funds
+            const amountToReturn = margin - rpnl;
+            const reductionRatio = userOrderInfo.filledQty / userOrderInfo.totalQty;
+            const lockedMarginToRelease = margin * reductionRatio;
+            // update margin
+            this.balance.updateLockedBalance(userId, lockedMarginToRelease);
+            // return the amountToreturn after adding profit and substracting loss
+            this.balance.updateBalance(userId, amountToReturn)
+        }
+        return { ...userOrderInfo, userId, kind: kind === "SHORT" ? "LONG" : "SHORT" }
+    }
 }

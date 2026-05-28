@@ -1,25 +1,22 @@
-import type {OrderedMap} from "js-sdsl"
-
-export type MARKET = "SOL" | "BTC" | "USD";
-export type Type = "LIMIT" | "MARKET";
-export type Kind = "SHORT" | "LONG";
-export type Status = "FILLED" | "PARTIALLY_FILLED" | "OPEN" | "CANCELLED";
+import type { OrderedMap } from "js-sdsl"
+import type { Shared } from "shared-types"
 
 
-export interface Bids{
-totalqty : number, 
-openOrder:openOrder[]
+
+export interface Bids {
+    totalqty: number,
+    openOrder: openOrder[]
 }
 
-export interface openOrder{
-    totalQty : number, 
-    filledQty:number , 
-    orderId :string, 
-    userId : string
+export interface openOrder {
+    totalQty: number,
+    filledQty: number,
+    orderId: string,
+    userId: string
 }
 
 
-export type OrderBook = Partial<Record<MARKET ,{
-    asks: OrderedMap<number , Bids >
-    bids: OrderedMap<number , Bids >
+export type OrderBook = Partial<Record<Shared.MARKET_AVAILABEL, {
+    asks: OrderedMap<number, Bids>
+    bids: OrderedMap<number, Bids>
 }>>

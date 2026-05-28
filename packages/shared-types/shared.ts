@@ -24,11 +24,13 @@ const STATUS_SCHEMA = z.union([z.literal("PARTIALLY_FILLED"), z.literal("FILLED"
 type KIND = z.infer<typeof KIND_SCHEMA>
 type TYPE = z.infer<typeof TYPE_SCHEMA>
 type STATUS = z.infer<typeof STATUS_SCHEMA>
+type MARKET_AVAILABEL= z.infer<typeof MARKET_AVAILABEL_SCHEMA>
 
 
 export {
     REQUEST_TYPE_SCHEMA,
     MARKET_AVAILABEL_SCHEMA,
+    type MARKET_AVAILABEL,
     KIND_SCHEMA,
     TYPE_SCHEMA,
     type REQUEST_TYPE,

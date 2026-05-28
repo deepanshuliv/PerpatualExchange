@@ -16,6 +16,7 @@
 - currently cancel a open order Take o(n) time with lazy deleting it can become o(1).
 - write now any order after liquidation will leave on orderBook forever.
 - in order to close position you need to send equity = 0 
+- csotBasis is total spent in market in order to get positoins
 ## Difficult questions 
 - what if i place the liquidation order and opposiet side giving me worst price what should happen ? because right now my while loop is running and consuming all  orders until he sells complete qty .
 - 

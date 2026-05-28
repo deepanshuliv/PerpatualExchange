@@ -12,7 +12,7 @@ const ENGINE_PAYLOAD_SCHEMA = z.object({ userId: z.string() })
 const CREATE_ORDER_SCHEMA = BASE_ENGINE_SCHEMA.extend({
     type: z.literal("create_order"),
     payload: ENGINE_PAYLOAD_SCHEMA.extend({
-        qty: z.string(),
+        qty: z.number(),
         price: z.number(),
         market: MARKET_AVAILABEL_SCHEMA,
         type: TYPE_SCHEMA,

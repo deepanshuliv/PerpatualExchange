@@ -1,6 +1,7 @@
 import { OrderedMap } from "js-sdsl";
-import { type Bids, type FillInfo, type Fills, type Kind, type MARKET, type openOrder, type Order, type OrderBook, type Orderdetails, type Status, type Type } from "types"
-
+import { type Bids, type FillInfo, type Fills, type openOrder, type Order, type OrderBook, type Orderdetails } from "types"
+import { Shared } from 'shared-types'
+import type { SHA1 } from "bun";
 
 export default class OrderBookManager {
     private orderBook: OrderBook;
@@ -77,7 +78,7 @@ export default class OrderBookManager {
         return { totalSpent: total.totalPrice, totalQty: total.totalQty }
     }
 
-    createLongOrder(userId: string, kind: Kind, type: Type, qty: number, price: number, margin: number, market: MARKET) {
+    createLongOrder(userId: string, kind: Shared.KIND, type: Shared.TYPE, qty: number, price: number, margin: number, market: Shared.MARKET_AVAILABEL) {
         const currentOrder = this.createUserOrder(userId, kind, type, qty, margin, market, price);
 
         let fillInfo: FillInfo[] = []
@@ -153,7 +154,7 @@ export default class OrderBookManager {
         return { filledQty: totalQty, orderId: currentOrder.orderId, totalQty: currentOrder.data.qty, totalSpent, fills: fillInfo }
     }
 
-    createShortOrder(userId: string, kind: Kind, type: Type, qty: number, price: number, margin: number, market: MARKET) {
+    createShortOrder(userId: string, kind: Shared.KIND, type: Shared.TYPE, qty: number, price: number, margin: number, market: Shared.MARKET_AVAILABEL) {
         const currrentOrder = this.createUserOrder(userId, kind, type, qty, margin, market, price);
         const fillInfo: FillInfo[] = [];
 
@@ -239,8 +240,9 @@ export default class OrderBookManager {
         return { filledQty: totalQty, orderId: currrentOrder.orderId, totalQty: currrentOrder.data.qty, totalSpent, fills: fillInfo }
     }
 
-    createLiquidationMarketLongOrder(userId: string, kind: Kind, type: Type, qty: number, margin: number, market: MARKET) {
-        const currrentOrder = this.createUserOrder(userId, kind, type, qty, margin, market);
+    createLiquidationMarketLongOrder(userId: string, qty: number, margin: number, market: Shared.MARKET_AVAILABEL) {
+        const kind = "LONG"
+        const currrentOrder = this.createUserOrder(userId, kind, "MARKET", qty, margin, market);
         const fillInfo: FillInfo[] = [];
         let remianingQty = qty;
         const oppSide = this.getOppositeSide(market, kind);
@@ -294,8 +296,10 @@ export default class OrderBookManager {
         }
     }
 
-    createLiquidationMarketShortOrder(userId: string, kind: Kind, type: Type, qty: number, margin: number, market: MARKET) {
-        const currrentOrder = this.createUserOrder(userId, kind, type, qty, margin, market);
+    createLiquidationMarketShortOrder(userId: string, qty: number, margin: number, market: Shared.MARKET_AVAILABEL) {
+        const kind = "SHORT"
+
+        const currrentOrder = this.createUserOrder(userId, kind, "MARKET", qty, margin, market);
         const fillInfo: FillInfo[] = [];
         let remianingQty = qty;
         const oppSide = this.getOppositeSide(market, kind);
@@ -349,7 +353,7 @@ export default class OrderBookManager {
         }
     }
 
-    createUserOrder(userId: string, kind: Kind, type: Type, qty: number, margin: number, market: MARKET, price?: number,) {
+    createUserOrder(userId: string, kind: Shared.KIND, type: Shared.TYPE, qty: number, margin: number, market: Shared.MARKET_AVAILABEL, price?: number,) {
         const orderId = crypto.randomUUID()
         const OrderToPush: Orderdetails = {
             userId,
@@ -367,7 +371,7 @@ export default class OrderBookManager {
         return { orderId, data: OrderToPush }
     }
 
-    getOppositeSide(market: MARKET, kind: Kind) {
+    getOppositeSide(market: Shared.MARKET_AVAILABEL, kind: Shared.KIND) {
         const marketPresent = this.orderBook[market];
         if (!marketPresent) {
             return null;
@@ -377,7 +381,7 @@ export default class OrderBookManager {
         return marketPresent[oppPos];
     }
 
-    getSameSide(market: MARKET, kind: Kind) {
+    getSameSide(market: Shared.MARKET_AVAILABEL, kind: Shared.KIND) {
         const marketPresent = this.orderBook[market];
         if (!marketPresent) {
             return null;
@@ -387,7 +391,7 @@ export default class OrderBookManager {
         return marketPresent[samePos];
     }
 
-    intializedMarket(market: MARKET) {
+    intializedMarket(market: Shared.MARKET_AVAILABEL) {
         const marketCreate = this.orderBook[market];
         if (!marketCreate) {
             this.orderBook[market] = {
@@ -429,13 +433,13 @@ export default class OrderBookManager {
         return {
             ...deleteIngOrder, kind: userOrderDetails.kind
             , margin: userOrderDetails.margin,
-            market: userOrderDetails.market, 
-            price : userOrderDetails.price
+            market: userOrderDetails.market,
+            price: userOrderDetails.price
         };
 
     }
 
-    addToFills(buyerId: string, sellerId: string, qty: number, price: number, orderId: string, type: Type, kind: Kind, status: Status) {
+    addToFills(buyerId: string, sellerId: string, qty: number, price: number, orderId: string, type: Shared.TYPE, kind: Shared.KIND, status: Shared.STATUS) {
         // orderId is for one either seller or buyer 
         // status is either "FILLED" and "PARTIALLY_FLLED"
         const fillDetail: Fills = {
@@ -460,7 +464,7 @@ export default class OrderBookManager {
         return userOrder
     };
 
-    changeOrderStatus(userId: string, orderId: string, status: Status) {
+    changeOrderStatus(userId: string, orderId: string, status: Shared.STATUS) {
         const tempOrder = this.orders.get(orderId);
         if (tempOrder?.userId !== userId) {
             return null

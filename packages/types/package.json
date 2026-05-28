@@ -8,7 +8,8 @@
     ".": "./index.ts"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5",
+    "shared-types": "workspace:*"
   },
   "dependencies": {
     "js-sdsl": "^4.4.2",

@@ -121,6 +121,7 @@
         "@types/bun": "latest",
       },
       "peerDependencies": {
+        "shared-types": "workspace:*",
         "typescript": "^5",
       },
     },
