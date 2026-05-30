@@ -1,12 +1,16 @@
-import type { MarketIndex, PositionDetails, Positions, userMarketOrderTypes } from "types";
+import type { MarketIndex, MarketMarkPrice, PositionDetails, Positions, userMarketOrderTypes } from "types";
 import { Shared } from "shared-types";
+import type { MARKET_AVAILABEL } from "../../../packages/shared-types/shared";
+import { isReadonlyKeywordOrPlusOrMinusToken } from "typescript";
 export default class PostionManager {
     private positions: Positions;
     private markteIndex: MarketIndex;
+    private marketsMarkPrice: MarketMarkPrice
 
     constructor() {
         this.positions = new Map()
-        this.markteIndex = new Map<Shared.MARKET_AVAILABEL, Set<string>>()
+        this.markteIndex = new Map<Shared.MARKET_AVAILABEL, Set<string>>();
+        this.marketsMarkPrice = new Map()
     }
 
     getPosition(userId: string, market: Shared.MARKET_AVAILABEL) {
@@ -50,7 +54,7 @@ export default class PostionManager {
             userPos.margin += margin
         }
         else {
-            // opposite side decrease qty fo positions
+            // opposite side decrease qty of positions
             if (userPos.qty === qty) {
                 // pos = 0 
                 // delete pos — filter out the position for this market
@@ -107,5 +111,83 @@ export default class PostionManager {
             })
         })
         return userMarketOrder;
+    }
+
+    claculateFundingRate(markPrice: number, indexPrice: number, market: MARKET_AVAILABEL) {
+        // get all user for a market 
+        const marketUser = this.markteIndex.get(market);
+        if (!marketUser) {
+            return null
+        }
+        let longUser: PositionDetails[] = []
+        let shortUser: PositionDetails[] = []
+        marketUser.forEach((userId) => {
+            const userPositions = this.positions.get(userId)!;
+            let templongUser = userPositions.find((pos) => {
+                return pos.market === market && pos.kind === "LONG"
+            })!
+            let tempshortUser = userPositions.find((pos) => {
+                return pos.market === market && pos.kind === "SHORT"
+            })
+            if (!templongUser || !tempshortUser) return;
+
+            longUser.push(templongUser)
+            shortUser.push(tempshortUser)
+
+        })
+        if (!shortUser || !longUser) return null;
+
+        const fundingRatio = markPrice / indexPrice;
+
+
+        if (markPrice > indexPrice) {
+            // short  should pay to long
+            // find out show 
+            const shortTotalMargin = shortUser.reduce((acc, curr) => {
+                return acc + curr.margin
+            }, 0)
+
+            const fundingRateAmount = shortTotalMargin * fundingRatio;
+            const longUsersTotalQty = longUser.reduce((acc, curr) => acc + curr.qty, 0);
+
+            longUser.forEach((userPos) => {
+                {
+                    userPos.margin += (userPos.qty / longUsersTotalQty) * fundingRateAmount
+                }
+            })
+
+            shortUser.forEach((userPos) => {
+                userPos.margin -= (userPos.qty / longUsersTotalQty) * fundingRateAmount
+            })
+
+        }
+        if (indexPrice > markPrice) {
+            // long should pay short
+            const longTotalMargin = longUser.reduce((acc, curr) => {
+                return acc + curr.margin
+            }, 0)
+
+            const fundingRateAmount = longTotalMargin * fundingRatio;
+            const shortUsersTotalQty = shortUser.reduce((acc, curr) => acc + curr.qty, 0);
+
+            shortUser.forEach((userPos) => {
+                {
+                    userPos.margin += (userPos.qty / shortUsersTotalQty) * fundingRateAmount
+                }
+            })
+
+            longUser.forEach((userPos) => {
+                userPos.margin -= (userPos.qty / shortUsersTotalQty) * fundingRateAmount
+            })
+        }
+
+    }
+
+    updateMarkpriceMap(market: Shared.MARKET_AVAILABEL, price: number) {
+        this.marketsMarkPrice.set(market, price);
+    }
+    
+    getMarkpriceOfMarket(market: Shared.MARKET_AVAILABEL) {
+        return this.marketsMarkPrice.get(market)
     }
 }

@@ -3,7 +3,8 @@ import BinanceClassListner from "./binanceListner"
 import PostionManager from "./PositionManager";
 import MatchingEngine from "./matchingEngine";
 import { EngineRequest } from "shared-types";
-
+import { Shared } from "shared-types";
+import { allMarketsList } from "../../../packages/shared-types/shared";
 
 type RedisStreamResponse = Array<{
     name: string;
@@ -24,8 +25,7 @@ export default class EngineManager {
 
     constructor() {
         this.redisClient = redisClient.duplicate();
-        this.redisClient.connect()
-        this.binanceListner = new BinanceClassListner(this.redisClient.duplicate());
+        this.binanceListner = new BinanceClassListner(redisClient.duplicate());
         this.positionManager = new PostionManager();
         this.matchingManger = new MatchingEngine(this.positionManager)
     }
@@ -33,7 +33,11 @@ export default class EngineManager {
     // right now  one response  and one request stream. 
     async sendTobackend(payload: any, correlationId?: string,) {
         // TODO- create a object with correlationId and push to response stream.
-        await redisClient.xAdd(process.env.RESPONSE_STREAM!, "*", { data: JSON.stringify(payload) })
+        console.log("sending message to {to-backend} ");
+
+        const publisher = await this.redisClient.connect()
+        await publisher.xAdd("to-backend", "*", { data: JSON.stringify(payload) });
+        
     }
 
     hadleRequest(request: EngineRequest.ENGINE_REQUEST) {
@@ -95,7 +99,9 @@ export default class EngineManager {
             this.sendTobackend(user, request.correlationId);
         }
         else if (request.type === "markprice_updated") {
+            console.log("liquidation satrted")
             const { price, market } = request.payload;
+            this.positionManager.updateMarkpriceMap(market, price);
             const userToLiquidate = this.positionManager.calculateLiquidation(market, price);
             userToLiquidate?.forEach((user) => {
                 const { qty, margin, userId, kind, market, costBasis } = user;
@@ -103,28 +109,40 @@ export default class EngineManager {
                 this.sendTobackend(marketOrder)
             })
         }
+        else if (request.type === "run_funding_rate") {
+            setInterval(async () => {
+                const publisher = await redisClient.connect();
+                publisher.xAdd("to-engine", "*", { data: JSON.stringify({ type: "run_funding_rate" }) })
+
+            }, 8 * 60 * 60 * 1000) // 8hrs timer
+            allMarketsList.forEach((market) => {
+                const markPrice = this.positionManager.getMarkpriceOfMarket(market) || 0;
+                const lastTradedPrice = this.matchingManger.getLastTradedPriceOFMarket(market) || 0;
+                this.positionManager.claculateFundingRate(markPrice, lastTradedPrice, market);
+            })
+
+        }
     }
 
     async start() {
+        await this.binanceListner.intialize();
+        const subscriber = await this.redisClient.connect();
+
         while (1) {
-            const response = await redisClient.xRead([{ key: process.env.REQUEST_STREAM!, id: "$" }], { BLOCK: 0, COUNT: 100 }) as RedisStreamResponse
-            if (!response || !Array.isArray(response)) {
+            const response = await subscriber.xRead([{ key: "to-engine", id: "$" }], { BLOCK: 0, COUNT: 100 })
+            if (!response) {
                 continue
             }
-
             for (const stream of response) {
                 for (const msg of stream.messages) {
-                    const parsedMessage = JSON.parse(msg.message.data!);
-                    if (!parsedMessage) {
-                        continue
-                    }
+                    const parsedMessage = JSON.parse(msg.message.data!) || {};
                     const { success, data } = EngineRequest.ENGINE_REQUEST_SCHEMA.safeParse(parsedMessage)
                     if (!success) continue;
+                    console.log("message come and handling to engine");
 
                     this.hadleRequest(data)
                 }
             }
         }
     }
-
 }

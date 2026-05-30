@@ -1,7 +1,6 @@
 import { OrderedMap } from "js-sdsl";
 import { type Bids, type FillInfo, type Fills, type openOrder, type Order, type OrderBook, type Orderdetails } from "types"
 import { Shared } from 'shared-types'
-import type { SHA1 } from "bun";
 
 export default class OrderBookManager {
     private orderBook: OrderBook;
@@ -15,6 +14,8 @@ export default class OrderBookManager {
     }
 
     /*
+
+    
     
     export type MARKET = "SOL" | "BTC" | "USD";
     export type Type = "LIMIT" | "MARKET";
@@ -69,6 +70,11 @@ export default class OrderBookManager {
     
     */
 
+
+    getLastTradedPriceOFMarket(market: Shared.MARKET_AVAILABEL) {
+        return this.orderBook[market]?.lastTradedPrice; 
+
+    }
     calculateTotalTrade(fills: FillInfo[]): { totalSpent: number, totalQty: number } {
         const total = fills.reduce((acc: any, curr: any) => {
             acc.totalQty += curr.qty;
@@ -97,6 +103,9 @@ export default class OrderBookManager {
                     const priceLevelMaxFill = Math.min(priceLevelRemianingQty, remianingQty);
                     remianingQty -= priceLevelMaxFill;
                     topOrder.filledQty += priceLevelMaxFill;
+
+                    this.orderBook[market]!.lastTradedPrice = bestPrice;
+
                     fillInfo.push({ price: bestPrice, qty: priceLevelMaxFill });
                     if (remianingQty === 0) {
                         this.addToFills(userId, topOrder.userId, priceLevelMaxFill, bestPrice, currentOrder.orderId, currentOrder.data.type, currentOrder.data.kind, "FILLED")
@@ -396,7 +405,8 @@ export default class OrderBookManager {
         if (!marketCreate) {
             this.orderBook[market] = {
                 asks: new OrderedMap([], (a: number, b: number) => (a - b)),
-                bids: new OrderedMap([], (a: number, b: number) => (b - a))
+                bids: new OrderedMap([], (a: number, b: number) => (b - a)),
+                lastTradedPrice: 0
             }
         }
         return marketCreate

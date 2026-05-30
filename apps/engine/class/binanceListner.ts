@@ -1,61 +1,49 @@
 import type { RedisClientType } from "redis";
 import WebSocket from "ws";
+
+// stream.binancefuture.com works from all regions (fstream.binance.com is geo-blocked)
+const STREAM_URL =
+    "wss://stream.binancefuture.com/stream?streams=btcusdt@markPrice@1s/solusdt@markPrice@1s/ethusdt@markPrice@1s";
+
 export default class BinanceClassListner {
-    private binanceSubscritpionRequest: {
-        method: "SUBSCRIBE",
-        param: string[],
-        id: 1
-    } = {
-            method: "SUBSCRIBE",
-            param: [],
-            id: 1
-        }
     private redisClient: RedisClientType;
-    private marketToSubscribe: string[] = [
-        "btcusd@indexPrice",
-        "solusd@indexPrice",
-        "ethusd@indexPrice",]
-
-
-    async intialize(redisClient: RedisClientType) {
-        await redisClient.connect();
-    }
 
     constructor(redisClient: RedisClientType) {
         this.redisClient = redisClient;
-        this.setupPriceSubscription()
-
     }
-    async setupPriceSubscription() {
-        const ws = new WebSocket("wss://fstream.binance.com/market/stream");
 
-        this.marketToSubscribe.forEach((market) => {
-            this.binanceSubscritpionRequest.param.push(market);
-        })
+    async intialize() {
+        await this.redisClient.connect();
+        this.setupPriceSubscription();
+    }
+
+    setupPriceSubscription() {
+        const ws = new WebSocket(STREAM_URL);
 
         ws.on("open", () => {
-            ws.send(JSON.stringify(this.binanceSubscritpionRequest));
+            console.log("binance ws connected (stream.binancefuture.com)");
         });
 
-        ws.on("message", (data) => {
-            const message = data.toString()
-            const parseMesssage = JSON.parse(message);
+        ws.on("error", (err) => {
+            console.error("binance ws error:", err.message);
+        });
 
-            if (parseMesssage.id !== 1 && !parseMesssage.error) {
-                return
-            }
-            ws.onmessage = async ({ data }) => {
-                const parsedData = JSON.parse(data.toString());
-                // this needs to be pushed on redis input stream
-                // to keep input to engine deterministic
-                await this.redisClient.xAdd(process.env.REQUEST_STREAM!, "*", {
-                    data: JSON.stringify({
-                        type: "markprice_updated",
-                        payload: { price: parsedData.p, market: parsedData.i },
-                    }),
-                });
+        ws.on("close", (code) => {
+            console.warn("binance ws closed, reconnecting in 3s...", code);
+            setTimeout(() => this.setupPriceSubscription(), 3000);
+        });
 
-            }
-        })
+        ws.on("message", async (raw) => {
+            // combined stream wraps payload in { stream, data }
+            const { data } = JSON.parse(raw.toString());
+            // data.s = symbol, data.p = mark price
+            console.log("price update from binance", data.p, data.s);
+            await this.redisClient.xAdd("to-engine", "*", {
+                data: JSON.stringify({
+                    type: "markprice_updated",
+                    payload: { price: data.p, market: data.s },
+                }),
+            });
+        });
     }
 }

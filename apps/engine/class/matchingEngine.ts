@@ -14,6 +14,9 @@ export default class MatchingEngine {
         this.positons = position;
 
     }
+    getLastTradedPriceOFMarket(market: Shared.MARKET_AVAILABEL) {
+        return this.orderBook.getLastTradedPriceOFMarket(market)
+    }
 
     createOrder(userId: string, market: Shared.MARKET_AVAILABEL, type: Shared.TYPE, kind: Shared.KIND, qty: number, price: number, equity: number) {
 
