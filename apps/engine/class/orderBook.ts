@@ -6,11 +6,15 @@ export default class OrderBookManager {
     private orderBook: OrderBook;
     private fills: Fills[]
     private orders: Order
+    private exchangeProfit: number;
+    private fundingInsurance: number;
 
     constructor() {
         this.orderBook = {};
         this.fills = [];
         this.orders = new Map();
+        this.exchangeProfit = 0;
+        this.fundingInsurance = 0;
     }
 
     /*
@@ -70,9 +74,23 @@ export default class OrderBookManager {
     
     */
 
+    getFundingInsurance() {
+        return this.fundingInsurance;
+    }
+    getExchangeProfit() {
+        return this.exchangeProfit;
+    }
+    updateExchangeProfit(signedAmount: number) {
+        this.exchangeProfit += signedAmount;
+
+    }
+
+    updateFundingInsurance(signedAmount: number) {
+        this.fundingInsurance += signedAmount
+    }
 
     getLastTradedPriceOFMarket(market: Shared.MARKET_AVAILABEL) {
-        return this.orderBook[market]?.lastTradedPrice; 
+        return this.orderBook[market]?.lastTradedPrice;
 
     }
     calculateTotalTrade(fills: FillInfo[]): { totalSpent: number, totalQty: number } {
@@ -105,6 +123,7 @@ export default class OrderBookManager {
                     topOrder.filledQty += priceLevelMaxFill;
 
                     this.orderBook[market]!.lastTradedPrice = bestPrice;
+                    // deduct the fees
 
                     fillInfo.push({ price: bestPrice, qty: priceLevelMaxFill });
                     if (remianingQty === 0) {
@@ -200,6 +219,7 @@ export default class OrderBookManager {
                     if (remianingQty === 0) {
                         this.addToFills(topOrder.userId, currrentOrder.data.userId, currrentOrder.data.qty, currrentOrder.data.price, currrentOrder.orderId, currrentOrder.data.type, "SHORT", "FILLED");
                         this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "FILLED");
+
                     } else {
                         this.addToFills(topOrder.userId, currrentOrder.data.userId, currrentOrder.data.qty, currrentOrder.data.price, currrentOrder.orderId, currrentOrder.data.type, "SHORT", "PARTIALLY_FILLED");
                         this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "PARTIALLY_FILLED");
@@ -215,11 +235,13 @@ export default class OrderBookManager {
             }
         }
 
+
         // if complete filled any type
         if (remianingQty === 0) {
             const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
             return { filledQty: totalQty, orderId: currrentOrder.orderId, totalQty: currrentOrder.data.qty, totalSpent, fills: fillInfo }
         }
+
         // sit on same side 
         if (type === "LIMIT") {
             const sameSide = this.getSameSide(market, kind);
@@ -248,120 +270,122 @@ export default class OrderBookManager {
         const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
         return { filledQty: totalQty, orderId: currrentOrder.orderId, totalQty: currrentOrder.data.qty, totalSpent, fills: fillInfo }
     }
+    /*
+    this startegy biggest issue it can force user to buy or sell at worst price if oposite oly worst price is avilabel.
 
-    createLiquidationMarketLongOrder(userId: string, qty: number, margin: number, market: Shared.MARKET_AVAILABEL) {
-        const kind = "LONG"
-        const currrentOrder = this.createUserOrder(userId, kind, "MARKET", qty, margin, market);
-        const fillInfo: FillInfo[] = [];
-        let remianingQty = qty;
-        const oppSide = this.getOppositeSide(market, kind);
-
-        while (oppSide?.front() && remianingQty > 0) {
-            const [bestPrice, priceLevel] = oppSide.front()!;
-
-            while (priceLevel.openOrder.length > 0 && remianingQty > 0) {
-                const topOrder = priceLevel.openOrder[0]!;
-                const remainingPriceLevelQty = topOrder.totalQty - topOrder.filledQty;
-                const maxQtyFillPriceLevel = Math.min(remainingPriceLevelQty, remianingQty);
-                remianingQty -= maxQtyFillPriceLevel;
-                topOrder.filledQty += maxQtyFillPriceLevel;
-                fillInfo.push({
-                    price: bestPrice,
-                    qty: maxQtyFillPriceLevel
-                })
-                if (topOrder.filledQty === topOrder.totalQty) {
-                    this.addToFills(userId, topOrder.userId, maxQtyFillPriceLevel, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "SHORT", "FILLED");
-                    this.changeOrderStatus(topOrder.userId, topOrder.orderId, "FILLED");
-                    priceLevel.openOrder.shift()
-
-                } else {
-                    this.addToFills(userId, topOrder.userId, maxQtyFillPriceLevel, bestPrice, topOrder.orderId, currrentOrder.data.type, "SHORT", "PARTIALLY_FILLED");
-                    this.changeOrderStatus(topOrder.userId, topOrder.orderId, "PARTIALLY_FILLED");
+        createLiquidationMarketLongOrder(userId: string, qty: number, margin: number, market: Shared.MARKET_AVAILABEL) {
+            const kind = "LONG"
+            const currrentOrder = this.createUserOrder(userId, kind, "MARKET", qty, margin, market);
+            const fillInfo: FillInfo[] = [];
+            let remianingQty = qty;
+            const oppSide = this.getOppositeSide(market, kind);
+    
+            while (oppSide?.front() && remianingQty > 0) {
+                const [bestPrice, priceLevel] = oppSide.front()!;
+    
+                while (priceLevel.openOrder.length > 0 && remianingQty > 0) {
+                    const topOrder = priceLevel.openOrder[0]!;
+                    const remainingPriceLevelQty = topOrder.totalQty - topOrder.filledQty;
+                    const maxQtyFillPriceLevel = Math.min(remainingPriceLevelQty, remianingQty);
+                    remianingQty -= maxQtyFillPriceLevel;
+                    topOrder.filledQty += maxQtyFillPriceLevel;
+                    fillInfo.push({
+                        price: bestPrice,
+                        qty: maxQtyFillPriceLevel
+                    })
+                    if (topOrder.filledQty === topOrder.totalQty) {
+                        this.addToFills(userId, topOrder.userId, maxQtyFillPriceLevel, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "SHORT", "FILLED");
+                        this.changeOrderStatus(topOrder.userId, topOrder.orderId, "FILLED");
+                        priceLevel.openOrder.shift()
+    
+                    } else {
+                        this.addToFills(userId, topOrder.userId, maxQtyFillPriceLevel, bestPrice, topOrder.orderId, currrentOrder.data.type, "SHORT", "PARTIALLY_FILLED");
+                        this.changeOrderStatus(topOrder.userId, topOrder.orderId, "PARTIALLY_FILLED");
+                    }
+                    if (remianingQty === 0) {
+                        this.addToFills(userId, topOrder.userId, currrentOrder.data.qty, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "LONG", "FILLED");
+                        this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "FILLED");
+                    } else {
+                        this.addToFills(userId, topOrder.userId, currrentOrder.data.qty, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "LONG", "PARTIALLY_FILLED");
+                        this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "PARTIALLY_FILLED");
+                    }
+                    priceLevel.totalqty -= maxQtyFillPriceLevel;
                 }
-                if (remianingQty === 0) {
-                    this.addToFills(userId, topOrder.userId, currrentOrder.data.qty, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "LONG", "FILLED");
-                    this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "FILLED");
-                } else {
-                    this.addToFills(userId, topOrder.userId, currrentOrder.data.qty, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "LONG", "PARTIALLY_FILLED");
-                    this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "PARTIALLY_FILLED");
+                if (priceLevel.totalqty === 0) {
+                    oppSide.eraseElementByKey(bestPrice);
                 }
-                priceLevel.totalqty -= maxQtyFillPriceLevel;
+    
             }
-            if (priceLevel.totalqty === 0) {
-                oppSide.eraseElementByKey(bestPrice);
+    
+            // right now return  the order 
+            // but in future , apply funding rate here
+            const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
+            return {
+                filledQty: totalQty,
+                totalQty: qty,
+                totalSpent,
+                orderId: currrentOrder.orderId,
+                fills: fillInfo
             }
-
         }
-
-        // right now return  the order 
-        // but in future , apply funding rate here
-        const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
-        return {
-            filledQty: totalQty,
-            totalQty: qty,
-            totalSpent,
-            orderId: currrentOrder.orderId,
-            fills: fillInfo
-        }
-    }
-
-    createLiquidationMarketShortOrder(userId: string, qty: number, margin: number, market: Shared.MARKET_AVAILABEL) {
-        const kind = "SHORT"
-
-        const currrentOrder = this.createUserOrder(userId, kind, "MARKET", qty, margin, market);
-        const fillInfo: FillInfo[] = [];
-        let remianingQty = qty;
-        const oppSide = this.getOppositeSide(market, kind);
-
-        while (oppSide?.front() && remianingQty > 0) {
-            const [bestPrice, priceLevel] = oppSide.front()!;
-
-            while (priceLevel.openOrder.length > 0 && remianingQty > 0) {
-                const topOrder = priceLevel.openOrder[0]!;
-                const remainingPriceLevelQty = topOrder.totalQty - topOrder.filledQty;
-                const maxQtyFillPriceLevel = Math.min(remainingPriceLevelQty, remianingQty);
-                remianingQty -= maxQtyFillPriceLevel;
-                topOrder.filledQty += maxQtyFillPriceLevel;
-                fillInfo.push({
-                    price: bestPrice,
-                    qty: maxQtyFillPriceLevel
-                })
-                if (topOrder.filledQty === topOrder.totalQty) {
-                    this.addToFills(userId, topOrder.userId, maxQtyFillPriceLevel, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "SHORT", "FILLED");
-                    this.changeOrderStatus(topOrder.userId, topOrder.orderId, "FILLED");
-                    priceLevel.openOrder.shift()
-
-                } else {
-                    this.addToFills(userId, topOrder.userId, maxQtyFillPriceLevel, bestPrice, topOrder.orderId, currrentOrder.data.type, "SHORT", "PARTIALLY_FILLED");
-                    this.changeOrderStatus(topOrder.userId, topOrder.orderId, "PARTIALLY_FILLED");
+    
+        createLiquidationMarketShortOrder(userId: string, qty: number, margin: number, market: Shared.MARKET_AVAILABEL) {
+            const kind = "SHORT"
+    
+            const currrentOrder = this.createUserOrder(userId, kind, "MARKET", qty, margin, market);
+            const fillInfo: FillInfo[] = [];
+            let remianingQty = qty;
+            const oppSide = this.getOppositeSide(market, kind);
+    
+            while (oppSide?.front() && remianingQty > 0) {
+                const [bestPrice, priceLevel] = oppSide.front()!;
+    
+                while (priceLevel.openOrder.length > 0 && remianingQty > 0) {
+                    const topOrder = priceLevel.openOrder[0]!;
+                    const remainingPriceLevelQty = topOrder.totalQty - topOrder.filledQty;
+                    const maxQtyFillPriceLevel = Math.min(remainingPriceLevelQty, remianingQty);
+                    remianingQty -= maxQtyFillPriceLevel;
+                    topOrder.filledQty += maxQtyFillPriceLevel;
+                    fillInfo.push({
+                        price: bestPrice,
+                        qty: maxQtyFillPriceLevel
+                    })
+                    if (topOrder.filledQty === topOrder.totalQty) {
+                        this.addToFills(userId, topOrder.userId, maxQtyFillPriceLevel, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "SHORT", "FILLED");
+                        this.changeOrderStatus(topOrder.userId, topOrder.orderId, "FILLED");
+                        priceLevel.openOrder.shift()
+    
+                    } else {
+                        this.addToFills(userId, topOrder.userId, maxQtyFillPriceLevel, bestPrice, topOrder.orderId, currrentOrder.data.type, "SHORT", "PARTIALLY_FILLED");
+                        this.changeOrderStatus(topOrder.userId, topOrder.orderId, "PARTIALLY_FILLED");
+                    }
+                    if (remianingQty === 0) {
+                        this.addToFills(userId, topOrder.userId, currrentOrder.data.qty, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "LONG", "FILLED");
+                        this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "FILLED");
+                    } else {
+                        this.addToFills(userId, topOrder.userId, currrentOrder.data.qty, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "LONG", "PARTIALLY_FILLED");
+                        this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "PARTIALLY_FILLED");
+                    }
+                    priceLevel.totalqty -= maxQtyFillPriceLevel;
                 }
-                if (remianingQty === 0) {
-                    this.addToFills(userId, topOrder.userId, currrentOrder.data.qty, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "LONG", "FILLED");
-                    this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "FILLED");
-                } else {
-                    this.addToFills(userId, topOrder.userId, currrentOrder.data.qty, bestPrice, currrentOrder.orderId, currrentOrder.data.type, "LONG", "PARTIALLY_FILLED");
-                    this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, "PARTIALLY_FILLED");
+                if (priceLevel.totalqty === 0) {
+                    oppSide.eraseElementByKey(bestPrice);
                 }
-                priceLevel.totalqty -= maxQtyFillPriceLevel;
+    
             }
-            if (priceLevel.totalqty === 0) {
-                oppSide.eraseElementByKey(bestPrice);
+    
+            // right now return  the order 
+            // but in future , apply funding rate here
+            const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
+            return {
+                filledQty: totalQty,
+                totalQty: qty,
+                totalSpent,
+                fills: fillInfo,
+                orderId: currrentOrder.orderId
             }
-
         }
-
-        // right now return  the order 
-        // but in future , apply funding rate here
-        const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
-        return {
-            filledQty: totalQty,
-            totalQty: qty,
-            totalSpent,
-            fills: fillInfo,
-            orderId: currrentOrder.orderId
-        }
-    }
-
+    */
     createUserOrder(userId: string, kind: Shared.KIND, type: Shared.TYPE, qty: number, margin: number, market: Shared.MARKET_AVAILABEL, price?: number,) {
         const orderId = crypto.randomUUID()
         const OrderToPush: Orderdetails = {

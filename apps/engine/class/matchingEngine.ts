@@ -2,6 +2,7 @@ import Balance from "./balance";
 import PostionManager from "./PositionManager";
 import ORDERBOOK from "./orderBook";
 import { Shared } from "shared-types";
+import { fileURLToPath } from "bun";
 
 export default class MatchingEngine {
     private orderBook: ORDERBOOK;
@@ -26,6 +27,7 @@ export default class MatchingEngine {
             if (userAmount === null) {
                 return null // user account doesn't exist
             }
+
             if (userAmount < equity) {
                 return null
             }
@@ -176,35 +178,91 @@ export default class MatchingEngine {
     palceMarketOrderForLiquidation(userId: string, kind: Shared.KIND, qty: number, margin: number, market: Shared.MARKET_AVAILABEL, costBasis: number) {
         let userOrderInfo;
         // opposite order placed in order to close postion
+        const maxPrice = costBasis / qty;
+
         if (kind === "SHORT") {
-            userOrderInfo = this.orderBook.createLiquidationMarketLongOrder(userId, qty, margin, market);
-            // do the calculation in balances as revert back loss or profit and release the remianing margin
+            userOrderInfo = this.orderBook.createLongOrder(userId, "LONG", "MARKET", qty, maxPrice, margin, market)
+            if (userOrderInfo.filledQty < userOrderInfo.totalQty) {
+                // run ADL 
+                const prfitDetails = this.positons.calculateAndGetHigestPnl("SHORT", market);
+                const [pnl, profitableUserId] = prfitDetails.profitableUser!;
+
+                //. update positions of profitable trader 
+                const remianingQty = userOrderInfo.filledQty - userOrderInfo.totalQty;
+                const getProfitableUserPosition = this.positons.getPosition(profitableUserId, market);
+                const getAdlUserPosition = this.positons.getPosition(userId, market)
+                this.positons.changePosition(profitableUserId, market, "SHORT", remianingQty, prfitDetails.markPrice, getProfitableUserPosition?.margin!);
+                // creaet ptofitabel user order on book1
+                const profitableUserOrder = this.orderBook.createLongOrder(profitableUserId, "SHORT", "MARKET", remianingQty, prfitDetails.markPrice, getProfitableUserPosition?.margin!, market)
+                // create ADL user arket order as well and match it with remiaing
+                const adlUserOrder = this.orderBook.createShortOrder(userId, "LONG", "MARKET", remianingQty, maxPrice, prfitDetails.markPrice, market)
+
+                // balance managing of profitable user 
+                const uPnlOfprofitableUser = profitableUserOrder.totalSpent - getProfitableUserPosition?.costBasis!;
+                const reductionRatio = profitableUserOrder.filledQty / profitableUserOrder.totalQty;
+
+                const marginToFree = getProfitableUserPosition?.margin! * reductionRatio;
+                this.balance.updateBalance(profitableUserId, marginToFree + uPnlOfprofitableUser);
+                this.balance.updateLockedBalance(profitableUserId, -marginToFree);
+                // TODO: delete if filled qty and position.qty
+                // balance managin of other user1
+                const uPnlOfAdlUser = getAdlUserPosition?.costBasis! - adlUserOrder.totalSpent;
+                const reductionRatioAdlUser = adlUserOrder.filledQty - getAdlUserPosition?.qty!;
+                const marginToFreeAdlUser = getAdlUserPosition?.margin! * reductionRatioAdlUser;
+
+                this.balance.updateBalance(userId, marginToFreeAdlUser + uPnlOfAdlUser)
+                this.balance.updateLockedBalance(userId, -marginToFreeAdlUser)
+
+            }
             const rpnl = costBasis - userOrderInfo.totalSpent;
             const amountToReturn = margin - rpnl;
-            // if amountToReturn -ve than max 0 can be posssibel than rest of it decrese from exchange insurance funds
-            // can be negative suppose if other person can buy at worst price
             const reductionRatio = userOrderInfo.filledQty / userOrderInfo.totalQty;
             const lockedMarginToRelease = margin * reductionRatio;
-            // update margin
             this.balance.updateLockedBalance(userId, lockedMarginToRelease);
-            // return the amountToreturn after adding profit and substracting loss
             this.balance.updateBalance(userId, amountToReturn)
 
         } else {
-            userOrderInfo = this.orderBook.createLiquidationMarketShortOrder(userId, qty, margin, market)
-            // do the calculation in balances as revert back loss or profit and release the remianing margin 
+            userOrderInfo = this.orderBook.createLongOrder(userId, "SHORT", "MARKET", qty, maxPrice, margin, market)
+            if (userOrderInfo.filledQty < userOrderInfo.totalQty) {
+                // run ADL 
+    
+                const prfitDetails = this.positons.calculateAndGetHigestPnl("LONG", market);
+                const [pnl, profitableUserId] = prfitDetails.profitableUser!;
+
+                //. update positions of profitable trader 
+                const remianingQty = userOrderInfo.filledQty - userOrderInfo.totalQty;
+                const getProfitableUserPosition = this.positons.getPosition(profitableUserId, market);
+                const getAdlUserPosition = this.positons.getPosition(userId, market)
+                this.positons.changePosition(profitableUserId, market, "LONG", remianingQty, prfitDetails.markPrice, getProfitableUserPosition?.margin!);
+                // creaet ptofitabel user order on book1
+                const profitableUserOrder = this.orderBook.createLongOrder(profitableUserId, "LONG", "MARKET", remianingQty, prfitDetails.markPrice, getProfitableUserPosition?.margin!, market)
+                // create ADL user arket order as well and match it with remiaing
+                const adlUserOrder = this.orderBook.createShortOrder(userId, "SHORT", "MARKET", remianingQty, maxPrice, prfitDetails.markPrice, market)
+
+                // balance managing of profitable user 
+                const uPnlOfprofitableUser = profitableUserOrder.totalSpent - getProfitableUserPosition?.costBasis!;
+                const reductionRatio = profitableUserOrder.filledQty / profitableUserOrder.totalQty;
+
+                const marginToFree = getProfitableUserPosition?.margin! * reductionRatio;
+                this.balance.updateBalance(profitableUserId, marginToFree + uPnlOfprofitableUser);
+                this.balance.updateLockedBalance(profitableUserId, -marginToFree);
+                // TODO: delete if filled qty and position.qty
+                // balance managin of other user1
+                const uPnlOfAdlUser = getAdlUserPosition?.costBasis! - adlUserOrder.totalSpent;
+                const reductionRatioAdlUser = adlUserOrder.filledQty - getAdlUserPosition?.qty!;
+                const marginToFreeAdlUser = getAdlUserPosition?.margin! * reductionRatioAdlUser;
+
+                this.balance.updateBalance(userId, marginToFreeAdlUser + uPnlOfAdlUser)
+                this.balance.updateLockedBalance(userId, -marginToFreeAdlUser)
+            }
             const rpnl = costBasis - userOrderInfo.totalSpent;
-            // if amountToReturn -ve than max 0 can be posssibel than rest of it decrese from exchange insurance funds
-            // amountReturn negative suppose if other person can buy at worst price
-            // TO DO : decrese from exhange profit balnces -> insurance funds
             const amountToReturn = margin - rpnl;
             const reductionRatio = userOrderInfo.filledQty / userOrderInfo.totalQty;
             const lockedMarginToRelease = margin * reductionRatio;
-            // update margin
             this.balance.updateLockedBalance(userId, lockedMarginToRelease);
-            // return the amountToreturn after adding profit and substracting loss
             this.balance.updateBalance(userId, amountToReturn)
         }
         return { ...userOrderInfo, userId, kind: kind === "SHORT" ? "LONG" : "SHORT" }
     }
+    
 }

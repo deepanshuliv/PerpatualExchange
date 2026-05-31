@@ -184,21 +184,6 @@ describe("OrderBookManager", () => {
         });
     });
 
-    describe("addToFills", () => {
-        test("adds a fill record", () => {
-            const ob = new OrderBookManager();
-            ob.addToFills("buyer1", "seller1", 5, 100, "order1", "LIMIT", "LONG", "FILLED");
-            const fills = getFills(ob);
-            expect(fills.length).toBe(1);
-            expect(fills[0].buyerId).toBe("buyer1");
-            expect(fills[0].sellerId).toBe("seller1");
-            expect(fills[0].qty).toBe(5);
-            expect(fills[0].price).toBe(100);
-            expect(fills[0].orderId).toBe("order1");
-            expect(fills[0].status).toBe("FILLED");
-        });
-    });
-
     describe("cancelOrder", () => {
         test("cancels an existing order stored in orders map", () => {
             const ob = new OrderBookManager();

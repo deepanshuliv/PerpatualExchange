@@ -1,5 +1,5 @@
-import type { Kind, MARKET, Type } from "./orderbook";
 import { Shared } from "shared-types"
+import type { MARKET_AVAILABEL } from "../../shared-types/shared";
 
 export interface PositionDetails {
     market: Shared.MARKET_AVAILABEL,
@@ -17,6 +17,8 @@ export interface userMarketOrderTypes {
     kind: Shared.KIND,
     costBasis: number
 }
+
+export type MarketMarkPrice = Map<Shared.MARKET_AVAILABEL , number>
 
 export type Positions = Map<string, PositionDetails[]>;
 

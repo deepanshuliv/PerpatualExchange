@@ -1,7 +1,8 @@
 ## Stratigies to make it more enhanced 
 
 - lazy deleting -> mean as delet come you store its orderId and status in a map and when we are hadling the open order in orderbook , we check that if current order is not present in the map using orderID and userId.
-
+- add trading fees based on maker and taker order. 
+- add funding insurancde and logic before hit ADL consume money from funding insurance.
 
 
 
@@ -16,7 +17,9 @@
 - currently cancel a open order Take o(n) time with lazy deleting it can become o(1).
 - write now any order after liquidation will leave on orderBook forever.
 - in order to close position you need to send equity = 0 
-- csotBasis is total spent in market in order to get positoins
+- csotBasis is total spent in market in order to get positoins.
+- no exchange fees (or trading fees ) right now , so no insurance funds (as half trading fees goes to , exchange profit and funding insurance )
+- as liquidation hit some qty is not filled than directly adl logic will run which forcely place the opposite side most profitable order as market order in order to close this loss person positions 
 ## Difficult questions 
 - what if i place the liquidation order and opposiet side giving me worst price what should happen ? because right now my while loop is running and consuming all  orders until he sells complete qty .
 - 

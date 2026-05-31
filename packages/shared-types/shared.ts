@@ -24,8 +24,8 @@ const STATUS_SCHEMA = z.union([z.literal("PARTIALLY_FILLED"), z.literal("FILLED"
 type KIND = z.infer<typeof KIND_SCHEMA>
 type TYPE = z.infer<typeof TYPE_SCHEMA>
 type STATUS = z.infer<typeof STATUS_SCHEMA>
-type MARKET_AVAILABEL= z.infer<typeof MARKET_AVAILABEL_SCHEMA>
-
+type MARKET_AVAILABEL = z.infer<typeof MARKET_AVAILABEL_SCHEMA>
+const allMarketsList = MARKET_AVAILABEL_SCHEMA.options.map((o) => o.value)
 
 export {
     REQUEST_TYPE_SCHEMA,
@@ -36,5 +36,6 @@ export {
     type REQUEST_TYPE,
     type KIND,
     type TYPE,
-    type STATUS
+    type STATUS,
+    allMarketsList
 }

@@ -37,7 +37,7 @@ export default class EngineManager {
 
         const publisher = await this.redisClient.connect()
         await publisher.xAdd("to-backend", "*", { data: JSON.stringify(payload) });
-        
+
     }
 
     hadleRequest(request: EngineRequest.ENGINE_REQUEST) {
@@ -105,7 +105,7 @@ export default class EngineManager {
             const userToLiquidate = this.positionManager.calculateLiquidation(market, price);
             userToLiquidate?.forEach((user) => {
                 const { qty, margin, userId, kind, market, costBasis } = user;
-                const marketOrder = this.matchingManger.palceMarketOrderForLiquidation(userId, kind, qty, margin, market, costBasis);
+                const marketOrder = this.matchingManger.palceMarketOrderForLiquidation(userId, kind, qty, margin, market, costBasis );
                 this.sendTobackend(marketOrder)
             })
         }

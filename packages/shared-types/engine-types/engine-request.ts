@@ -57,6 +57,9 @@ const GET_MARKET_PRICE_SCHEMA = z.object({
         market: MARKET_AVAILABEL_SCHEMA
     })
 })
+const RUN_FUNDING_RATE_SCHEMA = z.object({
+    type: z.literal("run_funding_rate"),
+})
 
 type GET_MARKET_PRICE = z.infer<typeof GET_MARKET_PRICE_SCHEMA>
 
@@ -73,7 +76,9 @@ const ENGINE_REQUEST_SCHEMA = z.union([
     CREATE_ORDER_SCHEMA,
     ADD_BALANCE_SCHEMA,
     CANCEL_ORDER_SCHEMA,
-    GET_MARKET_PRICE_SCHEMA
+    GET_MARKET_PRICE_SCHEMA,
+    RUN_FUNDING_RATE_SCHEMA
+
 
 ])
 

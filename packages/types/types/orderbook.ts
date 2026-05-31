@@ -18,5 +18,6 @@ export interface openOrder {
 
 export type OrderBook = Partial<Record<Shared.MARKET_AVAILABEL, {
     asks: OrderedMap<number, Bids>
-    bids: OrderedMap<number, Bids>
+    bids: OrderedMap<number, Bids>,
+    lastTradedPrice:number
 }>>

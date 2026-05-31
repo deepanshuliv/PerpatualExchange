@@ -1,7 +1,7 @@
 import type { MarketIndex, MarketMarkPrice, PositionDetails, Positions, userMarketOrderTypes } from "types";
 import { Shared } from "shared-types";
 import type { MARKET_AVAILABEL } from "../../../packages/shared-types/shared";
-import { isReadonlyKeywordOrPlusOrMinusToken } from "typescript";
+import { OrderedMap } from "js-sdsl";
 export default class PostionManager {
     private positions: Positions;
     private markteIndex: MarketIndex;
@@ -183,11 +183,36 @@ export default class PostionManager {
 
     }
 
+
     updateMarkpriceMap(market: Shared.MARKET_AVAILABEL, price: number) {
         this.marketsMarkPrice.set(market, price);
     }
-    
+
+
+
     getMarkpriceOfMarket(market: Shared.MARKET_AVAILABEL) {
         return this.marketsMarkPrice.get(market)
     }
+
+    calculateAndGetHigestPnl(kind: Shared.KIND, market: Shared.MARKET_AVAILABEL) {
+        const oppSide = kind === "SHORT" ? "LONG" : "SHORT";
+        const markPrice = this.marketsMarkPrice.get(market) || 0;
+
+        const oppSideMaxPnlUsers = new OrderedMap<number, string>()
+        this.markteIndex.get(market)?.forEach((userId) => {
+            const userPositions = this.positions.get(userId);
+            const userMarketPos = userPositions?.find((pos) => {
+                return pos.kind === oppSide && pos.market === market
+            })!
+
+            const marketPositionValue = markPrice * userMarketPos.qty;
+            const uPnl = marketPositionValue - userMarketPos.costBasis;
+
+            oppSideMaxPnlUsers.setElement(uPnl, userId)
+
+        })
+        return { profitableUser: oppSideMaxPnlUsers.front(), markPrice };
+
+    }
+
 }

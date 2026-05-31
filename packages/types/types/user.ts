@@ -1,4 +1,4 @@
-import type { Kind, MARKET, Status, Type } from "./orderbook"
+import type { Shared } from "shared-types"
 
 export interface Collateral{
     balance : number ,
@@ -6,13 +6,13 @@ export interface Collateral{
 }
 export interface Orderdetails{
     userId : string , 
-    kind:Kind , 
-    type : Type  , 
+    kind:Shared.KIND , 
+    type : Shared.TYPE  , 
     qty:number , 
     price : number  ,
     margin : number , 
-    status:Status,
-    market:MARKET,
+    status:Shared.STATUS,
+    market:Shared.MARKET_AVAILABEL,
     createdAt : Date
 }
 export type Order= Map<string , Orderdetails>
