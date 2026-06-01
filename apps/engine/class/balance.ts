@@ -1,4 +1,5 @@
-import type { User } from "types";
+import type { User } from "shared-types/internal-types";
+
 
 export default class Balance {
     private user: User;

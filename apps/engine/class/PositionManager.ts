@@ -1,6 +1,5 @@
-import type { MarketIndex, MarketMarkPrice, PositionDetails, Positions, userMarketOrderTypes } from "types";
+import type { MarketIndex, MarketMarkPrice, PositionDetails, Positions, userMarketOrderTypes } from "shared-types/internal-types";
 import { Shared } from "shared-types";
-import type { MARKET_AVAILABEL } from "../../../packages/shared-types/shared";
 import { OrderedMap } from "js-sdsl";
 export default class PostionManager {
     private positions: Positions;
@@ -113,7 +112,7 @@ export default class PostionManager {
         return userMarketOrder;
     }
 
-    claculateFundingRate(markPrice: number, indexPrice: number, market: MARKET_AVAILABEL) {
+    claculateFundingRate(markPrice: number, indexPrice: number, market: Shared.MARKET_AVAILABEL) {
         // get all user for a market 
         const marketUser = this.markteIndex.get(market);
         if (!marketUser) {

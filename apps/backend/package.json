@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "shared-types": "workspace:*",
+    "@repo/db": "workspace:*",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/redis": "^4.0.11",

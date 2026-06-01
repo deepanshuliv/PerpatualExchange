@@ -37,5 +37,6 @@ export {
     type KIND,
     type TYPE,
     type STATUS,
-    allMarketsList
+    allMarketsList,
+    STATUS_SCHEMA
 }

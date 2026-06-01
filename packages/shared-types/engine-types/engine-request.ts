@@ -3,7 +3,6 @@ import { KIND_SCHEMA, MARKET_AVAILABEL_SCHEMA, TYPE_SCHEMA } from "../shared";
 
 
 const BASE_ENGINE_SCHEMA = z.object({
-    stream: z.string(),
     correlationId: z.string()
 })
 
@@ -71,15 +70,25 @@ const GET_ORDER_SCHEMA = z.object({
 
 const DB_REQUEST_SCHEMA = z.union([GET_ORDER_SCHEMA])
 
+// Requests that the BACKEND sends — all extend BASE_ENGINE_SCHEMA so
+// they all carry a correlationId for request/response matching.
+const BACKEND_ENGINE_REQUEST_SCHEMA = z.union([
+    GET_BALANCE_SCHEMA,
+    CREATE_ORDER_SCHEMA,
+    ADD_BALANCE_SCHEMA,
+    CANCEL_ORDER_SCHEMA,
+])
+type BACKEND_ENGINE_REQUEST = z.infer<typeof BACKEND_ENGINE_REQUEST_SCHEMA>;
+
+// Full union the engine reads off to-engine stream — includes internal
+// events (markprice, funding rate) that have no correlationId.
 const ENGINE_REQUEST_SCHEMA = z.union([
     GET_BALANCE_SCHEMA,
     CREATE_ORDER_SCHEMA,
     ADD_BALANCE_SCHEMA,
     CANCEL_ORDER_SCHEMA,
     GET_MARKET_PRICE_SCHEMA,
-    RUN_FUNDING_RATE_SCHEMA
-
-
+    RUN_FUNDING_RATE_SCHEMA,
 ])
 
 type ENGINE_REQUEST = z.infer<typeof ENGINE_REQUEST_SCHEMA>;
@@ -111,5 +120,7 @@ export {
     isDbRequest,
     isEngineRequest,
     type DB_REQUEST,
-    type ENGINE_REQUEST
+    type ENGINE_REQUEST,
+    BACKEND_ENGINE_REQUEST_SCHEMA,
+    type BACKEND_ENGINE_REQUEST,
 }

@@ -1,5 +1,5 @@
 import { OrderedMap } from "js-sdsl";
-import { type Bids, type FillInfo, type Fills, type openOrder, type Order, type OrderBook, type Orderdetails } from "types"
+import type { Bids, FillInfo, Fills, openOrder, Order, OrderBook, Orderdetails } from "shared-types/internal-types"
 import { Shared } from 'shared-types'
 
 export default class OrderBookManager {

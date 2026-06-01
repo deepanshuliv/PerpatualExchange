@@ -2,8 +2,7 @@ import { redisClient, type RedisClientType } from "@repo/redis"
 import BinanceClassListner from "./binanceListner"
 import PostionManager from "./PositionManager";
 import MatchingEngine from "./matchingEngine";
-import { EngineRequest } from "shared-types";
-import { Shared } from "shared-types";
+import { EngineRequest, EngineResponse, Shared } from "shared-types";
 import { allMarketsList } from "../../../packages/shared-types/shared";
 
 type RedisStreamResponse = Array<{
@@ -29,98 +28,105 @@ export default class EngineManager {
         this.positionManager = new PostionManager();
         this.matchingManger = new MatchingEngine(this.positionManager)
     }
-    // might be stream name as well if i am taking the response stream for each backend . and a common reposne stream for db and ws.
-    // right now  one response  and one request stream. 
-    async sendTobackend(payload: any, correlationId?: string,) {
-        // TODO- create a object with correlationId and push to response stream.
-        console.log("sending message to {to-backend} ");
-
+    // Wraps the result into the canonical ENGINE_RESPONSE shape and pushes to
+    // the to-backend stream.  The correlationId is what the backend uses to
+    // match this response to the promise that is waiting for it.
+    async sendTobackend(response: EngineResponse.ENGINE_RESPONSE) {
         const publisher = await this.redisClient.connect()
-        await publisher.xAdd("to-backend", "*", { data: JSON.stringify(payload) });
-
+        await publisher.xAdd("to-backend", "*", { data: JSON.stringify(response) });
     }
 
     hadleRequest(request: EngineRequest.ENGINE_REQUEST) {
+
         if (request.type === "get_balance") {
+            const { correlationId } = request;
             const { market, userId } = request.paylaod;
-            let userBalance;
-            if (market) {
-                userBalance = this.matchingManger.getBalance(userId, market);
-                if (!userBalance) {
-                    const payload = {
-                        error: "USER_BALANCE_NOT_PRESENT"
-                    }
-                    userBalance = payload
-                }
-            }
-
-            userBalance = this.matchingManger.getBalance(userId, market);
-
-            this.sendTobackend(userBalance, request.correlationId)
+            const balance = this.matchingManger.getBalance(userId, market);
+            const numericBalance = typeof balance === "number" ? balance : null;
+            this.sendTobackend({
+                correlationId,
+                type: "get_balance",
+                payload: numericBalance,
+            });
         }
         else if (request.type === "create_order") {
-            let createOrder;
-
+            const { correlationId } = request;
             const { userId, qty, market, margin, type, kind, price } = request.payload;
-            createOrder = this.matchingManger.createOrder(userId, market, type, kind, qty, price, margin);
+            const createOrder = this.matchingManger.createOrder(userId, market, type, kind, qty, price, margin);
             if (!createOrder) {
-                const payload = {
-                    error: "ERROR_IN_CREATING_ORDER"
-                }
-                createOrder = payload
+                this.sendTobackend({ correlationId, type: "error", payload: { error: "ERROR_IN_CREATING_ORDER" } });
+                return;
             }
-
-            this.sendTobackend(createOrder, request.correlationId);
+            this.sendTobackend({
+                correlationId,
+                type: "create_order",
+                payload: createOrder,
+            });
         }
-
         else if (request.type === "add_balance") {
-            let user;
+            const { correlationId } = request;
             const { userId, amount } = request.payload;
-            user = this.matchingManger.addBalance(userId, amount);
-            if (!user) {
-                const paylaod = {
-                    error: "FAILED_TO_ADD_BALANCE"
-                }
-                user = paylaod
-            }
-
-            this.sendTobackend(user, request.correlationId);
+            this.matchingManger.addBalance(userId, amount);
+            this.sendTobackend({ correlationId, type: "add_balance", payload: null });
         }
         else if (request.type === "cancel_order") {
-            let user;
+            const { correlationId } = request;
             const { userId, orderId } = request.payload;
-            user = this.matchingManger.cancelOrder(userId, orderId);
-            if (!user) {
-                const payload = {
-                    error: "NOT_ABLE_TO_CANCEL"
-                }
-                user = payload
+            const cancelled = this.matchingManger.cancelOrder(userId, orderId);
+            if (!cancelled) {
+                this.sendTobackend({ correlationId, type: "error", payload: { error: "NOT_ABLE_TO_CANCEL" } });
+                return;
             }
-            this.sendTobackend(user, request.correlationId);
+            this.sendTobackend({
+                correlationId,
+                type: "cancel_order",
+                payload: {
+                    orderId: cancelled.orderId!,
+                    userId: cancelled.userId!,
+                    kind: cancelled.kind,
+                    market: cancelled.market,
+                    price: cancelled.price,
+                    totalQty: cancelled.totalQty!,
+                    filledQty: cancelled.filledQty!,
+                    margin: cancelled.margin,
+                },
+            });
         }
         else if (request.type === "markprice_updated") {
-            console.log("liquidation satrted")
+            console.log("liquidation started")
             const { price, market } = request.payload;
             this.positionManager.updateMarkpriceMap(market, price);
             const userToLiquidate = this.positionManager.calculateLiquidation(market, price);
             userToLiquidate?.forEach((user) => {
                 const { qty, margin, userId, kind, market, costBasis } = user;
-                const marketOrder = this.matchingManger.palceMarketOrderForLiquidation(userId, kind, qty, margin, market, costBasis );
-                this.sendTobackend(marketOrder)
+                const liquidationOrder = this.matchingManger.palceMarketOrderForLiquidation(userId, kind, qty, margin, market, costBasis);
+                if (!liquidationOrder) return;
+                // Push to to-backend so DB poller and WS can react
+                this.sendTobackend({
+                    type: "liquidation",
+                    payload: {
+                        orderId: liquidationOrder.orderId,
+                        userId,
+                        kind: liquidationOrder.kind as any,
+                        market,
+                        filledQty: liquidationOrder.filledQty,
+                        totalQty: liquidationOrder.totalQty,
+                        totalSpent: liquidationOrder.totalSpent,
+                        fills: liquidationOrder.fills,
+                    },
+                });
             })
         }
         else if (request.type === "run_funding_rate") {
             setInterval(async () => {
                 const publisher = await redisClient.connect();
                 publisher.xAdd("to-engine", "*", { data: JSON.stringify({ type: "run_funding_rate" }) })
-
-            }, 8 * 60 * 60 * 1000) // 8hrs timer
+            }, 8 * 60 * 60 * 1000) // 8hr timer
             allMarketsList.forEach((market) => {
                 const markPrice = this.positionManager.getMarkpriceOfMarket(market) || 0;
                 const lastTradedPrice = this.matchingManger.getLastTradedPriceOFMarket(market) || 0;
                 this.positionManager.claculateFundingRate(markPrice, lastTradedPrice, market);
             })
-
         }
     }
 
