@@ -28,7 +28,7 @@ export default class EngineManager {
     this.positionManager = new PostionManager();
     this.matchingManger = new MatchingEngine(this.positionManager);
   }
-  
+
   async sendTobackend(response: EngineResponse.ENGINE_RESPONSE) {
     const publisher = await this.redisClient.connect();
     await publisher.xAdd("to-backend", "*", { data: JSON.stringify(response) });
@@ -164,9 +164,10 @@ export default class EngineManager {
 
   async addSnapShotInFile(data: any) {
     const path = await this.getSnapShotFolderPath();
-    const date = Date();
-    await fs.writeFile(`${path}/${date}.txt`, data, "utf8");
+    const date = Date.now();
+    await fs.writeFile(`${path}/${date}.txt`, JSON.stringify(data));
   }
+
   async loadLatestSnapShotfromFile() {
     //
     const pathLocation = await this.getSnapShotFolderPath();
@@ -189,24 +190,28 @@ export default class EngineManager {
     }
 
     const latestFilePathName = path.join(pathLocation, latestFile);
+    console.log("[LATEST_FILEPATH]", latestFilePathName);
 
     const data = await fs.readFile(latestFilePathName, "utf8");
     const parsedSnapShot = JSON.parse(data ?? "") as EngineSnapShotInstanceType;
     this.matchingManger.loadSnapShotOfEngine(parsedSnapShot);
   }
+
   async getSnapShotFolderPath() {
     const currentFilePath = import.meta.dir;
     const rootFolder = path.join(currentFilePath, "..", "..");
     const destinationFolder = path.join(rootFolder, "snapshot");
-    const stats = await fs.stat(destinationFolder);
-    if (!stats.isDirectory()) {
+    try {
+      await fs.stat(destinationFolder);
+    } catch (error) {
       await fs.mkdir(destinationFolder, { recursive: true });
       console.log("created a folder");
     }
+    console.log("directroy created");
 
-    console.log("directroy is already present");
-    return rootFolder;
+    return destinationFolder;
   }
+
   async start() {
     // load snapshot if avaialbel
     console.log("loading snapshot...");
@@ -217,7 +222,8 @@ export default class EngineManager {
 
     setInterval(async () => {
       await this.addSnapShotInFile(this.matchingManger.getSnapShotOfEngine());
-    }, 50000);
+    }, 8000 // 8 seconds
+);
 
     console.log("waiting for binance...");
     // write now we are supposing error wont come
