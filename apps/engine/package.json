@@ -16,9 +16,11 @@
   "dependencies": {
     "@repo/redis": "workspace:*",
     "@types/redis": "^4.0.11",
+    "@types/ws": "^8.18.1",
     "js-sdsl": "^4.4.2",
     "redis": "^5.12.1",
     "shared-types": "workspace:*",
-    "types": "workspace:*"
+    "types": "workspace:*",
+    "ws": "^8.21.0"
   }
 }
