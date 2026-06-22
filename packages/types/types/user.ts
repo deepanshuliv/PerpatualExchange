@@ -1,4 +1,4 @@
-import type { Shared } from "shared-types"
+import type { Shared } from "@repo/shared-types"
 
 export interface Collateral{
     balance : number ,

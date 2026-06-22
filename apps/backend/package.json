@@ -13,7 +13,7 @@
     "dev": "bun index.ts"
   },
   "dependencies": {
-    "shared-types": "workspace:*",
+    "@repo/shared-types": "workspace:*",
     "@repo/db": "workspace:*",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",

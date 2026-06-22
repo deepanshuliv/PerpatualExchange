@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "@repo/db"
-import { InternalTypes } from "shared-types";
+import { InternalTypes } from "@repo/shared-types";
 import jwt from "jsonwebtoken"
 
 export async function signIn(req: Request, res: Response) {

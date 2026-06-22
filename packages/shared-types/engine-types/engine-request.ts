@@ -39,7 +39,6 @@ const CANCEL_ORDER_SCHEMA = BASE_ENGINE_SCHEMA.extend({
 
 type CANCEL_ORDER = z.infer<typeof CANCEL_ORDER_SCHEMA>
 
-// currently only for usd
 const ADD_BALANCE_SCHEMA = BASE_ENGINE_SCHEMA.extend({
     type: z.literal("add_balance"),
     payload: ENGINE_PAYLOAD_SCHEMA.extend({
@@ -63,15 +62,12 @@ const RUN_FUNDING_RATE_SCHEMA = z.object({
 type GET_MARKET_PRICE = z.infer<typeof GET_MARKET_PRICE_SCHEMA>
 
 
-// it is a DB request
 const GET_ORDER_SCHEMA = z.object({
     orderId: z.string()
 })
 
 const DB_REQUEST_SCHEMA = z.union([GET_ORDER_SCHEMA])
 
-// Requests that the BACKEND sends — all extend BASE_ENGINE_SCHEMA so
-// they all carry a correlationId for request/response matching.
 const BACKEND_ENGINE_REQUEST_SCHEMA = z.union([
     GET_BALANCE_SCHEMA,
     CREATE_ORDER_SCHEMA,
@@ -80,8 +76,6 @@ const BACKEND_ENGINE_REQUEST_SCHEMA = z.union([
 ])
 type BACKEND_ENGINE_REQUEST = z.infer<typeof BACKEND_ENGINE_REQUEST_SCHEMA>;
 
-// Full union the engine reads off to-engine stream — includes internal
-// events (markprice, funding rate) that have no correlationId.
 const ENGINE_REQUEST_SCHEMA = z.union([
     GET_BALANCE_SCHEMA,
     CREATE_ORDER_SCHEMA,

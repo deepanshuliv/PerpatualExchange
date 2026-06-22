@@ -1,5 +1,5 @@
 import type { OrderedMap } from "js-sdsl"
-import type { Shared } from "shared-types"
+import type { Shared } from "@repo/shared-types"
 
 
 

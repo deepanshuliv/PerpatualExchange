@@ -1,4 +1,4 @@
-import type { Shared } from "shared-types";
+import type { Shared } from "@repo/shared-types";
 import OrderBookManager from "./orderBook";
 
 export default class Admin {

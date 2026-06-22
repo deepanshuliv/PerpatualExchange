@@ -5,8 +5,8 @@ import type {
   Positions,
   userMarketOrderTypes,
   positonSnapshotInstanceType,
-} from "shared-types/internal-types";
-import { Shared } from "shared-types";
+} from "@repo/shared-types/internal-types";
+import { Shared } from "@repo/shared-types";
 import { OrderedMap } from "js-sdsl";
 export default class PostionManager {
   private positions: Positions;

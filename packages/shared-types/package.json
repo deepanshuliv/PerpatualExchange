@@ -1,5 +1,5 @@
 {
-  "name": "shared-types",
+  "name": "@repo/shared-types",
   "private": true,
   "exports": {
     ".": "./index.ts",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "js-sdsl": "^4.4.2",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@repo/shared-types": "workspace:*"
   }
 }

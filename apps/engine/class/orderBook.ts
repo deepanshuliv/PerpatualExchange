@@ -8,8 +8,8 @@ import type {
   OrderBook,
   Orderdetails,
   OrderManagerSnapShotInstance,
-} from "shared-types/internal-types";
-import { Shared } from "shared-types";
+} from "@repo/shared-types/internal-types";
+import { Shared } from "@repo/shared-types";
 
 export default class OrderBookManager {
   private orderBook: OrderBook;

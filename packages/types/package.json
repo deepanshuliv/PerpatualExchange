@@ -9,7 +9,7 @@
   },
   "peerDependencies": {
     "typescript": "^5",
-    "shared-types": "workspace:*"
+    "@repo/shared-types": "workspace:*"
   },
   "dependencies": {
     "js-sdsl": "^4.4.2",

@@ -7,9 +7,11 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
+    "types": "workspace:*",
     "@repo/redis": "workspace:*",
     "@repo/db": "workspace:*",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@repo/shared-types": "workspace:*"
   },
   "dependencies": {
     "@types/ws": "^8.18.1",

@@ -1,8 +1,8 @@
 import Balance from "./balance";
 import PostionManager from "./PositionManager";
 import ORDERBOOK from "./orderBook";
-import { Shared } from "shared-types";
-import type { EngineSnapShotInstanceType } from "shared-types/internal-types";
+import { Shared } from "@repo/shared-types";
+import type { EngineSnapShotInstanceType } from "@repo/shared-types/internal-types";
 
 export default class MatchingEngine {
   private orderBook: ORDERBOOK;

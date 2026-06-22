@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { createClient } from "redis"
-import type { EngineRequest } from "shared-types"
-import { EngineResponse } from "shared-types"
+import type { EngineRequest } from "@repo/shared-types"
+import { EngineResponse } from "@repo/shared-types"
 
 const publisher = createClient();
 const subscriber = createClient()

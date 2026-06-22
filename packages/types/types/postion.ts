@@ -1,4 +1,4 @@
-import { Shared } from "shared-types"
+import { Shared } from "@repo/shared-types"
 import type { MARKET_AVAILABEL } from "../../shared-types/shared";
 
 export interface PositionDetails {

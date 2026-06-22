@@ -14,6 +14,7 @@
       "name": "backend",
       "dependencies": {
         "@repo/db": "workspace:*",
+        "@repo/shared-types": "workspace:*",
         "@types/express": "^5.0.6",
         "@types/jsonwebtoken": "^9.0.10",
         "@types/redis": "^4.0.11",
@@ -21,7 +22,6 @@
         "express": "^5.2.1",
         "jsonwebtoken": "^9.0.3",
         "redis": "^5.12.1",
-        "shared-types": "workspace:*",
         "types": "workspace:*",
       },
       "devDependencies": {
@@ -34,19 +34,18 @@
     "apps/engine": {
       "name": "engine",
       "dependencies": {
-        "@repo/redis": "workspace:*",
+        "@repo/shared-types": "workspace:*",
         "@types/redis": "^4.0.11",
         "@types/ws": "^8.18.1",
         "js-sdsl": "^4.4.2",
         "redis": "^5.12.1",
-        "shared-types": "workspace:*",
-        "types": "workspace:*",
         "ws": "^8.21.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
       },
       "peerDependencies": {
+        "@repo/redis": "workspace:*",
         "types": "workspace:*",
         "typescript": "^5",
       },
@@ -63,6 +62,8 @@
       "peerDependencies": {
         "@repo/db": "workspace:*",
         "@repo/redis": "workspace:*",
+        "@repo/shared-types": "workspace:*",
+        "types": "workspace:*",
         "typescript": "^5",
       },
     },
@@ -116,8 +117,9 @@
       },
     },
     "packages/shared-types": {
-      "name": "shared-types",
+      "name": "@repo/shared-types",
       "dependencies": {
+        "@repo/shared-types": "workspace:*",
         "js-sdsl": "^4.4.2",
         "zod": "^4.4.3",
       },
@@ -138,7 +140,7 @@
         "@types/bun": "latest",
       },
       "peerDependencies": {
-        "shared-types": "workspace:*",
+        "@repo/shared-types": "workspace:*",
         "typescript": "^5",
       },
     },
@@ -285,6 +287,8 @@
     "@repo/eslint-config": ["@repo/eslint-config@workspace:packages/eslint-config"],
 
     "@repo/redis": ["@repo/redis@workspace:packages/redis"],
+
+    "@repo/shared-types": ["@repo/shared-types@workspace:packages/shared-types"],
 
     "@repo/typescript-config": ["@repo/typescript-config@workspace:packages/typescript-config"],
 
@@ -957,8 +961,6 @@
     "set-proto": ["set-proto@1.0.0", "", { "dependencies": { "dunder-proto": "^1.0.1", "es-errors": "^1.3.0", "es-object-atoms": "^1.0.0" } }, "sha512-RJRdvCo6IAnPdsvP/7m6bsQqNnn1FCBX5ZNtFL98MmFF/4xAIJTIg1YbHW5DC2W5SKZanrC6i4HsJqlajw/dZw=="],
 
     "setprototypeof": ["setprototypeof@1.2.0", "", {}, "sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw=="],
-
-    "shared-types": ["shared-types@workspace:packages/shared-types"],
 
     "shebang-command": ["shebang-command@2.0.0", "", { "dependencies": { "shebang-regex": "^3.0.0" } }, "sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA=="],
 

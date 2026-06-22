@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { toEngine } from "../utils/toEngine";
 import { isAuth } from "../middleware/authentication";
-import { BackendRequest, EngineRequest } from "shared-types";
+import { BackendRequest, EngineRequest } from "@repo/shared-types";
 
 const exchangeRoutes = Router()
 
