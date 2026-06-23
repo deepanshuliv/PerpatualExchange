@@ -48,6 +48,36 @@ const ADD_BALANCE_SCHEMA = BASE_ENGINE_SCHEMA.extend({
 
 type ADD_BALANCE = z.infer<typeof ADD_BALANCE_SCHEMA>;
 
+const GET_POSITION_SCHEMA = BASE_ENGINE_SCHEMA.extend({
+    type: z.literal("get_position"),
+    payload: ENGINE_PAYLOAD_SCHEMA.extend({
+        market: MARKET_AVAILABEL_SCHEMA.optional()
+    })
+})
+type GET_POSITION = z.infer<typeof GET_POSITION_SCHEMA>
+
+const GET_OPEN_ORDERS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
+    type: z.literal("get_open_orders"),
+    payload: ENGINE_PAYLOAD_SCHEMA.extend({
+        market: MARKET_AVAILABEL_SCHEMA.optional()
+    })
+})
+type GET_OPEN_ORDERS = z.infer<typeof GET_OPEN_ORDERS_SCHEMA>
+
+const GET_CLOSED_ORDERS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
+    type: z.literal("get_closed_orders"),
+    payload: ENGINE_PAYLOAD_SCHEMA.extend({
+        market: MARKET_AVAILABEL_SCHEMA.optional()
+    })
+})
+type GET_CLOSED_ORDERS = z.infer<typeof GET_CLOSED_ORDERS_SCHEMA>
+
+const GET_FILLS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
+    type: z.literal("get_fills"),
+    payload: ENGINE_PAYLOAD_SCHEMA
+})
+type GET_FILLS = z.infer<typeof GET_FILLS_SCHEMA>
+
 const GET_MARKET_PRICE_SCHEMA = z.object({
     type: z.literal("markprice_updated"),
     payload: z.object({
@@ -73,6 +103,10 @@ const BACKEND_ENGINE_REQUEST_SCHEMA = z.union([
     CREATE_ORDER_SCHEMA,
     ADD_BALANCE_SCHEMA,
     CANCEL_ORDER_SCHEMA,
+    GET_POSITION_SCHEMA,
+    GET_OPEN_ORDERS_SCHEMA,
+    GET_CLOSED_ORDERS_SCHEMA,
+    GET_FILLS_SCHEMA,
 ])
 type BACKEND_ENGINE_REQUEST = z.infer<typeof BACKEND_ENGINE_REQUEST_SCHEMA>;
 
@@ -81,6 +115,10 @@ const ENGINE_REQUEST_SCHEMA = z.union([
     CREATE_ORDER_SCHEMA,
     ADD_BALANCE_SCHEMA,
     CANCEL_ORDER_SCHEMA,
+    GET_POSITION_SCHEMA,
+    GET_OPEN_ORDERS_SCHEMA,
+    GET_CLOSED_ORDERS_SCHEMA,
+    GET_FILLS_SCHEMA,
     GET_MARKET_PRICE_SCHEMA,
     RUN_FUNDING_RATE_SCHEMA,
 ])
@@ -110,6 +148,14 @@ export {
     type CANCEL_ORDER,
     type GET_MARKET_PRICE,
     GET_MARKET_PRICE_SCHEMA,
+    GET_POSITION_SCHEMA,
+    type GET_POSITION,
+    GET_OPEN_ORDERS_SCHEMA,
+    type GET_OPEN_ORDERS,
+    GET_CLOSED_ORDERS_SCHEMA,
+    type GET_CLOSED_ORDERS,
+    GET_FILLS_SCHEMA,
+    type GET_FILLS,
     ENGINE_REQUEST_SCHEMA,
     isDbRequest,
     isEngineRequest,

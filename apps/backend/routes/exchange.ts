@@ -1,176 +1,340 @@
 import { Router } from "express";
-import { toEngine } from "../utils/toEngine";
+import crypto from "crypto";
+import { sendToEngine } from "../utils/toEngine";
 import { isAuth } from "../middleware/authentication";
-import { BackendRequest, EngineRequest } from "@repo/shared-types";
+import { BackendRequest, EngineRequest, Shared } from "@repo/shared-types";
 
-const exchangeRoutes = Router()
+const exchangeRoutes = Router();
 
-exchangeRoutes.post("/onramp", async (req, res) => {
-    // TO DO add zod  validation 
+exchangeRoutes.post("/onramp", isAuth, async (req, res) => {
     const { success, data } = BackendRequest.ADD_BALANCE_SCHEMA.safeParse(req.body);
     if (!success) {
         return res.status(411).json({
             msg: "invalid input fields"
-        })
+        });
     }
 
-    const engineResponse = await toEngine(data);
+    const { amount } = data.data;
+
+    const engineRequest: EngineRequest.ADD_BALANCE = {
+        correlationId: crypto.randomUUID(),
+        type: "add_balance",
+        payload: {
+            userId: req.userId!,
+            amount
+        }
+    };
+
+    const engineResponse = await sendToEngine(engineRequest);
     if (!engineResponse) {
         return res.status(403).json({
             msg: "some error occured"
-        })
-
+        });
     }
+
+    if (engineResponse.type === "error") {
+        return res.status(400).json({
+            msg: engineResponse.payload.error
+        });
+    }
+
     res.status(201).json({
         ok: true,
-        engineResponse
-    })
-
-})
+        data: engineResponse.payload
+    });
+});
 
 exchangeRoutes.post("/order", isAuth, async (req, res) => {
     const { success, data } = BackendRequest.CREATE_ORDER_SCHEMA.safeParse(req.body);
     if (!success) {
         return res.status(411).json({
             msg: "invalid input fields"
-        })
+        });
     }
 
     const { qty, price, market, type, kind, margin } = data.data;
 
     const engineRequest: EngineRequest.CREATE_ORDER = {
         correlationId: crypto.randomUUID(),
-        stream: process.env.REQUEST_STREAM!,
+        type: "create_order",
         payload: {
             userId: req.userId!,
             kind,
-            qty,
+            qty: Number(qty),
             price,
             market,
             type,
             margin
         }
+    };
+    const engineResponse = await sendToEngine(engineRequest);
+
+    if (!engineResponse) {
+        return res.status(403).json({
+            msg: "some error occured"
+        });
     }
-    const engineResponse = await toEngine(engineRequest);
 
-    if (!engineResponse && engineResponse) {
-        return res.status(411).json({
-
-        })
+    if (engineResponse.type === "error") {
+        return res.status(400).json({
+            msg: engineResponse.payload.error
+        });
     }
 
-})
+    return res.status(200).json({
+        ok: true,
+        data: engineResponse.payload
+    });
+});
 
 exchangeRoutes.get("/equity/available", isAuth, async (req, res) => {
-    const { success, data } = BackendRequest.GET_POSITION_SCHEMA.safeParse(req.body);
-    if (!success) {
-        return res.status(411).json({
-            msg: "invalid inputs"
-        })
+    const marketRaw = req.query.market as string | undefined;
+    let market: Shared.MARKET_AVAILABEL | undefined;
+    if (marketRaw !== undefined) {
+        const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketRaw);
+        if (!parsed.success) {
+            return res.status(400).json({
+                msg: "invalid market"
+            });
+        }
+        market = parsed.data;
     }
-    const { market } = data.data;
 
-    const engineReequest: BackendRequest.GET_POSITION = {
+    const engineRequest: EngineRequest.GET_BALANCE = {
         correlationId: crypto.randomUUID(),
-        type: "get_position",
-        data: {
+        type: "get_balance",
+        paylaod: {
+            userId: req.userId!,
             market
-        },
-        reponseStream: process.env.REPONSE_STREAM!,
-    }
+        }
+    };
 
-    const engineResponse = await toEngine(engineReequest);
+    const engineResponse = await sendToEngine(engineRequest);
     if (!engineResponse) {
         return res.status(403).json({
             msg: "some error occured"
-        })
-
+        });
     }
-    res.status(201).json({
-        ok: true,
-        data: engineResponse
-    })
 
-})
+    if (engineResponse.type === "error") {
+        return res.status(400).json({
+            msg: engineResponse.payload.error
+        });
+    }
+
+    res.status(200).json({
+        ok: true,
+        data: engineResponse.payload
+    });
+});
 
 exchangeRoutes.get("/positions/open/:marketId", isAuth, async (req, res) => {
-    const engineReequest: EngineRequest = {
-        correlationId: crypto.randomUUID(),
-        messageType: "open_position",
-        payload: {
-            userId: req.userId,
-            status: "OPEN"
-        },
-        reponseStream: process.env.REPONSE_STREAM!,
+    const marketId = req.params.marketId === "all" ? undefined : req.params.marketId;
+    let market: Shared.MARKET_AVAILABEL | undefined;
+    if (marketId !== undefined) {
+        const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+        if (!parsed.success) {
+            return res.status(400).json({
+                msg: "invalid market"
+            });
+        }
+        market = parsed.data;
     }
 
-    const engineResponse = await toEngine(engineReequest);
+    const engineRequest: EngineRequest.GET_POSITION = {
+        correlationId: crypto.randomUUID(),
+        type: "get_position",
+        payload: {
+            userId: req.userId!,
+            market
+        }
+    };
+
+    const engineResponse = await sendToEngine(engineRequest);
     if (!engineResponse) {
         return res.status(403).json({
             msg: "some error occured"
-        })
-
+        });
     }
-    res.status(201).json({
+
+    if (engineResponse.type === "error") {
+        return res.status(400).json({
+            msg: engineResponse.payload.error
+        });
+    }
+
+    res.status(200).json({
         ok: true,
-        data: engineResponse
-    })
+        data: engineResponse.payload
+    });
 });
+
 exchangeRoutes.get("/positions/closed/:marketId", isAuth, async (req, res) => {
-    // TO DO :- write zod validation to marketId param 
-    // get market name or symbol from Db 
-    const engineReequest: EngineRequest = {
-        correlationId: crypto.randomUUID(),
-        messageType: "closed_position",
-        payload: {
-            userId: req.userId,
-            status: "CANCELLED",
-            marketId: req.params.marketId
-        },
-        reponseStream: process.env.REPONSE_STREAM!,
+    const marketId = req.params.marketId === "all" ? undefined : req.params.marketId;
+    let market: Shared.MARKET_AVAILABEL | undefined;
+    if (marketId !== undefined) {
+        const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+        if (!parsed.success) {
+            return res.status(400).json({
+                msg: "invalid market"
+            });
+        }
+        market = parsed.data;
     }
 
-    const engineResponse = await toEngine(engineReequest);
+    const engineRequest: EngineRequest.GET_CLOSED_ORDERS = {
+        correlationId: crypto.randomUUID(),
+        type: "get_closed_orders",
+        payload: {
+            userId: req.userId!,
+            market
+        }
+    };
+
+    const engineResponse = await sendToEngine(engineRequest);
     if (!engineResponse) {
         return res.status(403).json({
             msg: "some error occured"
-        })
-
+        });
     }
-    res.status(201).json({
+
+    if (engineResponse.type === "error") {
+        return res.status(400).json({
+            msg: engineResponse.payload.error
+        });
+    }
+
+    res.status(200).json({
         ok: true,
-        data: engineResponse
-    })
+        data: engineResponse.payload
+    });
 });
+
 exchangeRoutes.get("/orders/open/:marketId", isAuth, async (req, res) => {
-    const engineReequest: EngineRequest = {
-        correlationId: crypto.randomUUID(),
-        messageType: "open_orders",
-        payload: {
-            userId: req.userId,
-            marketid: req.params
-        },
-        reponseStream: process.env.REPONSE_STREAM!,
+    const marketId = req.params.marketId === "all" ? undefined : req.params.marketId;
+    let market: Shared.MARKET_AVAILABEL | undefined;
+    if (marketId !== undefined) {
+        const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+        if (!parsed.success) {
+            return res.status(400).json({
+                msg: "invalid market"
+            });
+        }
+        market = parsed.data;
     }
 
-    const engineResponse = await toEngine(engineReequest);
+    const engineRequest: EngineRequest.GET_OPEN_ORDERS = {
+        correlationId: crypto.randomUUID(),
+        type: "get_open_orders",
+        payload: {
+            userId: req.userId!,
+            market
+        }
+    };
+
+    const engineResponse = await sendToEngine(engineRequest);
     if (!engineResponse) {
         return res.status(403).json({
             msg: "some error occured"
-        })
-
+        });
     }
-    res.status(201).json({
+
+    if (engineResponse.type === "error") {
+        return res.status(400).json({
+            msg: engineResponse.payload.error
+        });
+    }
+
+    res.status(200).json({
         ok: true,
-        data: engineResponse
-    })
-})
-exchangeRoutes.get("/orders/:marketId", isAuth, (req, res) => {
-    //get from 
-})
-exchangeRoutes.get("/fills", isAuth, (req, res) => {
-    // get from Db for particular user    
+        data: engineResponse.payload
+    });
 });
 
+exchangeRoutes.get("/orders/:marketId", isAuth, async (req, res) => {
+    const marketId = req.params.marketId === "all" ? undefined : req.params.marketId;
+    let market: Shared.MARKET_AVAILABEL | undefined;
+    if (marketId !== undefined) {
+        const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+        if (!parsed.success) {
+            return res.status(400).json({
+                msg: "invalid market"
+            });
+        }
+        market = parsed.data;
+    }
+
+    const openRequest: EngineRequest.GET_OPEN_ORDERS = {
+        correlationId: crypto.randomUUID(),
+        type: "get_open_orders",
+        payload: {
+            userId: req.userId!,
+            market
+        }
+    };
+ 
+    const closedRequest: EngineRequest.GET_CLOSED_ORDERS = {
+        correlationId: crypto.randomUUID(),
+        type: "get_closed_orders",
+        payload: {
+            userId: req.userId!,
+            market
+        }
+    };
+
+    const [openRes, closedRes] = await Promise.all([
+        sendToEngine(openRequest),
+        sendToEngine(closedRequest)
+    ]);
+
+    if (!openRes || !closedRes) {
+        return res.status(403).json({
+            msg: "some error occured"
+        });
+    }
+
+    if (openRes.type === "error") {
+        return res.status(400).json({ msg: openRes.payload.error });
+    }
+    if (closedRes.type === "error") {
+        return res.status(400).json({ msg: closedRes.payload.error });
+    }
+
+    const openOrders = openRes.type === "get_open_orders" ? openRes.payload : [];
+    const closedOrders = closedRes.type === "get_closed_orders" ? closedRes.payload : [];
+
+    res.status(200).json({
+        ok: true,
+        data: [...openOrders, ...closedOrders]
+    });
+});
+
+exchangeRoutes.get("/fills", isAuth, async (req, res) => {
+    const engineRequest: EngineRequest.GET_FILLS = {
+        correlationId: crypto.randomUUID(),
+        type: "get_fills",
+        payload: {
+            userId: req.userId!
+        }
+    };
+
+    const engineResponse = await sendToEngine(engineRequest);
+    if (!engineResponse) {
+        return res.status(403).json({
+            msg: "some error occured"
+        });
+    }
+
+    if (engineResponse.type === "error") {
+        return res.status(400).json({
+            msg: engineResponse.payload.error
+        });
+    }
+
+    res.status(200).json({
+        ok: true,
+        data: engineResponse.payload
+    });
+});
 
 export default exchangeRoutes;

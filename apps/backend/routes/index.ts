@@ -1,5 +1,5 @@
 import  {Router}   from "express"
-import authenticationRoutes from "./exchange";
+import authenticationRoutes from "./authentication";
 import exchangeRoutes from "./exchange";
 
 

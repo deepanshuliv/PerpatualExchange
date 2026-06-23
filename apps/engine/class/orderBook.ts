@@ -667,6 +667,37 @@ export default class OrderBookManager {
     // push on the response queue
     // delete entry from fills table
   }
-  // can become trades
-  getFills() {}
+  getFills(userId: string) {
+    return this.fills.filter(
+      (fill) => fill.buyerId === userId || fill.sellerId === userId
+    );
+  }
+
+  getOpenOrders(userId: string, market?: Shared.MARKET_AVAILABEL) {
+    const openOrders: any[] = [];
+    this.orders.forEach((order, orderId) => {
+      if (
+        order.userId === userId &&
+        order.status === "OPEN" &&
+        (!market || order.market === market)
+      ) {
+        openOrders.push({ ...order, orderId });
+      }
+    });
+    return openOrders;
+  }
+
+  getClosedOrders(userId: string, market?: Shared.MARKET_AVAILABEL) {
+    const closedOrders: any[] = [];
+    this.orders.forEach((order, orderId) => {
+      if (
+        order.userId === userId &&
+        order.status !== "OPEN" &&
+        (!market || order.market === market)
+      ) {
+        closedOrders.push({ ...order, orderId });
+      }
+    });
+    return closedOrders;
+  }
 }

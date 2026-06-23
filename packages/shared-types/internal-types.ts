@@ -134,3 +134,11 @@ export type MarketMarkPrice = Map<string, number>;
 export type Positions = Map<string, PositionDetails[]>;
 
 export type MarketIndex = Map<string, Set<string>>;
+
+export type RedisStreamResponse = Array<{
+  name: string;
+  messages: Array<{
+    id: string;
+    message: Record<string, string>;
+  }>;
+}> | null;

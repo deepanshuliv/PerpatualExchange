@@ -1,5 +1,6 @@
 import type { RedisClientType } from "redis";
 import WebSocket from "ws";
+import { connectRedisClient } from "@repo/redis";
 
 // stream.binancefuture.com works from all regions (fstream.binance.com is geo-blocked)
 const STREAM_URL =
@@ -13,7 +14,7 @@ export default class BinanceClassListner {
     }
 
     async intialize() {
-        await this.redisClient.connect();
+        await connectRedisClient(this.redisClient, "BinancePriceListener");
         this.setupPriceSubscription();
     }
 

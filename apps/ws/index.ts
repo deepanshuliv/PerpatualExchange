@@ -11,14 +11,19 @@ type UserSubscribeStore = Record<string, UserSchema[]>;
 
 const store: UserSubscribeStore = {};
 
-const wss = new WebSocketServer({ port: 8080 });
+async function bootstrap() {
+  try {
+    console.log("Connecting WS to Redis...");
+    await startConsumerGroup();
+    console.log("Redis connected. Starting WebSocket server...");
 
-wss.on('listening', () => {
-  console.log('WebSocket server is listening on port 8080');
-  startConsumerGroup().catch(console.error);
-});
+    const wss = new WebSocketServer({ port: 8080 });
 
-wss.on('connection', function connection(ws) {
+    wss.on('listening', () => {
+      console.log('WebSocket server is listening on port 8080');
+    });
+
+    wss.on('connection', function connection(ws) {
   ws.on('error', console.error);
 
   ws.on('message', function message(_data) {
@@ -76,6 +81,14 @@ wss.on('connection', function connection(ws) {
     });
   });
 });
+
+  } catch (error) {
+    console.error("Failed to start WS server:", error);
+    process.exit(1);
+  }
+}
+
+bootstrap();
 
 type ProcessableEngineMessage = Extract<
   EngineResponse.ENGINE_RESPONSE,

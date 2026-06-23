@@ -1,20 +1,12 @@
-import { redisClient, type RedisClientType } from '@repo/redis';
+import { redisClient, type RedisClientType, connectRedisClient } from '@repo/redis';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { EngineRequest, EngineResponse } from '@repo/shared-types';
+import { EngineRequest, EngineResponse, type RedisStreamResponse } from '@repo/shared-types';
 import type { EngineSnapShotInstanceType } from '@repo/shared-types/internal-types';
 import { allMarketsList } from '../../../packages/shared-types/shared';
 import BinanceClassListner from './binanceListner';
 import MatchingEngine from './matchingEngine';
 import PostionManager from './PositionManager';
-
-type RedisStreamResponse = Array<{
-  name: string;
-  messages: Array<{
-    id: string;
-    message: Record<string, string>;
-  }>;
-}> | null;
 
 export default class EngineManager {
   private binanceListner: BinanceClassListner;
@@ -30,8 +22,8 @@ export default class EngineManager {
   }
 
   async sendTobackend(response: EngineResponse.ENGINE_RESPONSE) {
-    const publisher = await this.redisClient.connect();
-    await publisher.xAdd('to-backend', '*', { data: JSON.stringify(response) });
+    await connectRedisClient(this.redisClient, "MatchingEngine");
+    await this.redisClient.xAdd('to-backend', '*', { data: JSON.stringify(response) });
   }
 
   hadleRequest(request: EngineRequest.ENGINE_REQUEST) {
@@ -101,6 +93,51 @@ export default class EngineManager {
           filledQty: cancelled.filledQty!,
           margin: cancelled.margin,
         },
+      });
+    } else if (request.type === 'get_position') {
+      const { correlationId } = request;
+      const { market, userId } = request.payload;
+      if (market) {
+        const position = this.matchingManger.getPosition(userId, market);
+        this.sendTobackend({
+          correlationId,
+          type: 'get_position',
+          payload: position,
+        });
+      } else {
+        const positions = this.matchingManger.getPositions(userId);
+        this.sendTobackend({
+          correlationId,
+          type: 'get_position',
+          payload: positions,
+        });
+      }
+    } else if (request.type === 'get_open_orders') {
+      const { correlationId } = request;
+      const { market, userId } = request.payload;
+      const openOrders = this.matchingManger.getOpenOrders(userId, market);
+      this.sendTobackend({
+        correlationId,
+        type: 'get_open_orders',
+        payload: openOrders,
+      });
+    } else if (request.type === 'get_closed_orders') {
+      const { correlationId } = request;
+      const { market, userId } = request.payload;
+      const closedOrders = this.matchingManger.getClosedOrders(userId, market);
+      this.sendTobackend({
+        correlationId,
+        type: 'get_closed_orders',
+        payload: closedOrders,
+      });
+    } else if (request.type === 'get_fills') {
+      const { correlationId } = request;
+      const { userId } = request.payload;
+      const fills = this.matchingManger.getFills(userId);
+      this.sendTobackend({
+        correlationId,
+        type: 'get_fills',
+        payload: fills,
       });
     } else if (request.type === 'markprice_updated') {
       console.log('liquidation started');
@@ -206,6 +243,10 @@ export default class EngineManager {
   }
 
   async start() {
+    console.log("Connecting to Redis...");
+    await connectRedisClient(this.redisClient, "MatchingEngine");
+    console.log("Redis connected successfully.");
+
     // load snapshot if avaialbel
     console.log('loading snapshot...');
 
@@ -230,7 +271,7 @@ export default class EngineManager {
 
     console.log('subscribing to stream...');
 
-    const subscriber = await this.redisClient.connect();
+    const subscriber = this.redisClient;
     console.log('connected to stream');
     //read if availabel startpointer else from start
     while (1) {

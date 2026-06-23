@@ -276,6 +276,26 @@ export default class MatchingEngine {
     }
   }
 
+  getPositions(userId: string) {
+    return this.positons.getPositionsForUser(userId);
+  }
+
+  getPosition(userId: string, market: Shared.MARKET_AVAILABEL) {
+    return this.positons.getPosition(userId, market);
+  }
+
+  getOpenOrders(userId: string, market?: Shared.MARKET_AVAILABEL) {
+    return this.orderBook.getOpenOrders(userId, market);
+  }
+
+  getClosedOrders(userId: string, market?: Shared.MARKET_AVAILABEL) {
+    return this.orderBook.getClosedOrders(userId, market);
+  }
+
+  getFills(userId: string) {
+    return this.orderBook.getFills(userId);
+  }
+
   palceMarketOrderForLiquidation(
     userId: string,
     kind: Shared.KIND,

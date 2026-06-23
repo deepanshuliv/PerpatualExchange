@@ -14,6 +14,7 @@
       "name": "backend",
       "dependencies": {
         "@repo/db": "workspace:*",
+        "@repo/redis": "workspace:*",
         "@repo/shared-types": "workspace:*",
         "@types/express": "^5.0.6",
         "@types/jsonwebtoken": "^9.0.10",

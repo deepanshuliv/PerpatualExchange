@@ -13,3 +13,5 @@ export {
   InternalTypes,
   WebsocketTypes,
 };
+
+export type { RedisStreamResponse } from "./internal-types";

@@ -1,0 +1,16 @@
+{
+  "extends": "./packages/typescript-config/base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "files": [],
+  "references": [
+    { "path": "packages/db" },
+    { "path": "packages/redis" },
+    { "path": "packages/shared-types" },
+    { "path": "packages/types" },
+    { "path": "apps/backend" },
+    { "path": "apps/engine" },
+    { "path": "apps/ws" }
+  ]
+}

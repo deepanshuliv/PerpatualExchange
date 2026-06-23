@@ -44,6 +44,10 @@ export default class PostionManager {
     return marketPos;
   }
 
+  getPositionsForUser(userId: string) {
+    return this.positions.get(userId) ?? [];
+  }
+
   changePosition(
     userId: string,
     market: Shared.MARKET_AVAILABEL,

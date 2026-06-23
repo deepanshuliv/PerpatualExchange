@@ -1,23 +1,13 @@
 import 'dotenv/config'
-import { createClient } from "redis"
-import type { EngineRequest } from "@repo/shared-types"
-import { EngineResponse } from "@repo/shared-types"
+import { EngineResponse, type EngineRequest, type RedisStreamResponse } from "@repo/shared-types"
+import { connectRedisClient, redisClient } from "@repo/redis"
 
-const publisher = createClient();
-const subscriber = createClient()
+const publisher = redisClient.duplicate();
+const subscriber = redisClient.duplicate();
 
-type RedisStreamResponse = Array<{
-  name: string;
-  messages: Array<{
-    id: string;
-    message: Record<string, string>;
-  }>;
-}> | null;
-
-// Maps correlationId → the resolve() of the promise waiting for that response
 const correlationIdToResolveMap = new Map<string, (data: EngineResponse.ENGINE_RESPONSE) => void>()
 
-export function toEngine(engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST): Promise<EngineResponse.ENGINE_RESPONSE> {
+export function sendToEngine(engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST): Promise<EngineResponse.ENGINE_RESPONSE> {
 
   return new Promise((resolve, reject) => {
 
@@ -41,14 +31,10 @@ function handleEngineResponse(rawMessage: unknown) {
     return;
   }
 
-  // Liquidation is a broadcast event — no one is waiting for it via a promise.
-  // DB poller and WS will consume it separately from the to-backend stream.
   if (data.type === "liquidation") {
     return;
   }
 
-  // After the type check above, TypeScript knows data is one of the response
-  // variants that all carry a correlationId.
   const resolve = correlationIdToResolveMap.get(data.correlationId);
   if (!resolve) {
     return;
@@ -57,8 +43,7 @@ function handleEngineResponse(rawMessage: unknown) {
   resolve(data);
 }
 
-async function engineToBackend() {
-  await subscriber.connect()
+async function engineToBackendLoop() {
   let lastId = '$'
   while (1) {
 
@@ -84,4 +69,15 @@ async function engineToBackend() {
   }
 }
 
-engineToBackend()
+export async function initializeRedis() {
+  await Promise.all([
+    connectRedisClient(subscriber, "Backend-Subscriber"),
+    connectRedisClient(publisher, "Backend-Publisher")
+  ]);
+
+  // Run the read loop in the background
+  engineToBackendLoop().catch((err) => {
+    console.error("[Backend] Engine loop error:", err);
+    process.exit(1);
+  });
+}
