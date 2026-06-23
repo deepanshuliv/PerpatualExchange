@@ -12,7 +12,7 @@ export async function connectRedisClient(client: any, serviceName: string): Prom
     process.exit(1);
   };
 
-  client.on('error', (err) => {
+  client.on('error', (err: any) => {
     console.error(`[${serviceName}] Redis error:`, err);
     handleDisconnect(err);
   });

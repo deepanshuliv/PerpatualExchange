@@ -296,6 +296,10 @@ export default class MatchingEngine {
     return this.orderBook.getFills(userId);
   }
 
+  getDepth(market: Shared.MARKET_AVAILABEL) {
+    return this.orderBook.getDepth(market);
+  }
+
   palceMarketOrderForLiquidation(
     userId: string,
     kind: Shared.KIND,

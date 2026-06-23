@@ -139,6 +139,15 @@ const GET_FILLS_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
 });
 type GET_FILLS_RESPONSE = z.infer<typeof GET_FILLS_RESPONSE_SCHEMA>;
 
+const GET_DEPTH_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
+  type: z.literal("get_depth"),
+  payload: z.object({
+    bids: z.array(z.tuple([z.number(), z.number()])),
+    asks: z.array(z.tuple([z.number(), z.number()])),
+  }),
+});
+type GET_DEPTH_RESPONSE = z.infer<typeof GET_DEPTH_RESPONSE_SCHEMA>;
+
 const ENGINE_RESPONSE_SCHEMA = z.discriminatedUnion("type", [
   CREATE_ORDER_RESPONSE_SCHEMA,
   CANCEL_ORDER_RESPONSE_SCHEMA,
@@ -150,6 +159,7 @@ const ENGINE_RESPONSE_SCHEMA = z.discriminatedUnion("type", [
   GET_OPEN_ORDERS_RESPONSE_SCHEMA,
   GET_CLOSED_ORDERS_RESPONSE_SCHEMA,
   GET_FILLS_RESPONSE_SCHEMA,
+  GET_DEPTH_RESPONSE_SCHEMA,
 ]);
 
 type ENGINE_RESPONSE = z.infer<typeof ENGINE_RESPONSE_SCHEMA>;
@@ -181,4 +191,6 @@ export {
   type FILL_DETAIL,
   GET_FILLS_RESPONSE_SCHEMA,
   type GET_FILLS_RESPONSE,
+  GET_DEPTH_RESPONSE_SCHEMA,
+  type GET_DEPTH_RESPONSE,
 };

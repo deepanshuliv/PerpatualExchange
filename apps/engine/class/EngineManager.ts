@@ -139,6 +139,15 @@ export default class EngineManager {
         type: 'get_fills',
         payload: fills,
       });
+    } else if (request.type === 'get_depth') {
+      const { correlationId } = request;
+      const { market } = request.payload;
+      const depth = this.matchingManger.getDepth(market);
+      this.sendTobackend({
+        correlationId,
+        type: 'get_depth',
+        payload: depth,
+      });
     } else if (request.type === 'markprice_updated') {
       console.log('liquidation started');
       const { price, market } = request.payload;

@@ -700,4 +700,30 @@ export default class OrderBookManager {
     });
     return closedOrders;
   }
+
+  getDepth(market: Shared.MARKET_AVAILABEL) {
+    const marketBook = this.orderBook[market];
+    if (!marketBook) {
+      return {
+        bids: [],
+        asks: []
+      };
+    }
+
+    const bids: [number, number][] = [];
+    const asks: [number, number][] = [];
+
+    for (const [price, bid] of marketBook.bids) {
+      bids.push([price, bid.totalqty]);
+    }
+
+    for (const [price, ask] of marketBook.asks) {
+      asks.push([price, ask.totalqty]);
+    }
+
+    return {
+      bids,
+      asks
+    };
+  }
 }

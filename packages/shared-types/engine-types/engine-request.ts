@@ -85,6 +85,14 @@ const GET_MARKET_PRICE_SCHEMA = z.object({
         market: MARKET_AVAILABEL_SCHEMA
     })
 })
+const GET_DEPTH_SCHEMA = BASE_ENGINE_SCHEMA.extend({
+    type: z.literal("get_depth"),
+    payload: z.object({
+        market: MARKET_AVAILABEL_SCHEMA
+    })
+})
+type GET_DEPTH = z.infer<typeof GET_DEPTH_SCHEMA>;
+
 const RUN_FUNDING_RATE_SCHEMA = z.object({
     type: z.literal("run_funding_rate"),
 })
@@ -107,6 +115,7 @@ const BACKEND_ENGINE_REQUEST_SCHEMA = z.union([
     GET_OPEN_ORDERS_SCHEMA,
     GET_CLOSED_ORDERS_SCHEMA,
     GET_FILLS_SCHEMA,
+    GET_DEPTH_SCHEMA,
 ])
 type BACKEND_ENGINE_REQUEST = z.infer<typeof BACKEND_ENGINE_REQUEST_SCHEMA>;
 
@@ -121,6 +130,7 @@ const ENGINE_REQUEST_SCHEMA = z.union([
     GET_FILLS_SCHEMA,
     GET_MARKET_PRICE_SCHEMA,
     RUN_FUNDING_RATE_SCHEMA,
+    GET_DEPTH_SCHEMA,
 ])
 
 type ENGINE_REQUEST = z.infer<typeof ENGINE_REQUEST_SCHEMA>;
@@ -156,6 +166,8 @@ export {
     type GET_CLOSED_ORDERS,
     GET_FILLS_SCHEMA,
     type GET_FILLS,
+    GET_DEPTH_SCHEMA,
+    type GET_DEPTH,
     ENGINE_REQUEST_SCHEMA,
     isDbRequest,
     isEngineRequest,

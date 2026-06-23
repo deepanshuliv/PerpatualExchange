@@ -337,4 +337,47 @@ exchangeRoutes.get("/fills", isAuth, async (req, res) => {
     });
 });
 
+exchangeRoutes.get("/depth/:marketId", async (req, res) => {
+    const marketId = req.params.marketId;
+    const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+    if (!parsed.success) {
+        return res.status(400).json({
+            msg: "invalid market"
+        });
+    }
+    const market = parsed.data;
+
+    const engineRequest: EngineRequest.GET_DEPTH = {
+        correlationId: crypto.randomUUID(),
+        type: "get_depth",
+        payload: {
+            market
+        }
+    };
+
+    const engineResponse = await sendToEngine(engineRequest);
+    if (!engineResponse) {
+        return res.status(403).json({
+            msg: "some error occured"
+        });
+    }
+
+    if (engineResponse.type === "error") {
+        return res.status(400).json({
+            msg: engineResponse.payload.error
+        });
+    }
+
+    if (engineResponse.type === "get_depth") {
+        return res.status(200).json({
+            ok: true,
+            data: engineResponse.payload
+        });
+    }
+
+    res.status(500).json({
+        msg: "invalid response type"
+    });
+});
+
 export default exchangeRoutes;
