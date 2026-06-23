@@ -7,22 +7,34 @@ export async function startConsumerGroup() {
   await consumerGroups.connect();
 
   while (1) {
-    const response = await consumerGroups.xReadGroup(
+    const response = (await consumerGroups.xReadGroup(
       'ws-group',
       'ws',
       { key: 'to-backend', id: '>' },
       { BLOCK: 0, COUNT: 100 },
-    );
+    )) as unknown as Array<{
+      name: string;
+      messages: Array<{
+        id: string;
+        message: {
+          [key: string]: string;
+        };
+      }>;
+    }> | null;
     if (!response) continue;
+    if (!Array.isArray(response)) continue;
 
-    const {success , data} = WebsocketTypes.WsStreamingResponse.safeParse(response);
+    for (const stream of response) {
+      if (!stream) continue;
+      for (const message of stream.messages) {
+        const data = WebsocketTypes.WsStreamingResponse.parse(
+          JSON.parse(message.message.data ?? '{}'),
+        );
 
-    if(!success){
-        continue;
+        checkMarketUpdateAndSendToSubsribedUser(data);
+
+        await consumerGroups.xAck('to-backend', 'ws-group', message.id);
+      }
     }
-
-    checkMarketUpdateAndSendToSubsribedUser(data);
-
-
   }
 }
