@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { sendToEngine } from "../utils/toEngine";
 import { isAuth } from "../middleware/authentication";
 import { BackendRequest, EngineRequest, Shared } from "@repo/shared-types";
+import { prisma } from "@repo/db";
 
 const exchangeRoutes = Router();
 
@@ -378,6 +379,43 @@ exchangeRoutes.get("/depth/:marketId", async (req, res) => {
     res.status(500).json({
         msg: "invalid response type"
     });
+});
+
+exchangeRoutes.get("/ticker/price/:marketId", async (req, res) => {
+    const marketId = req.params.marketId;
+    const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+    if (!parsed.success) {
+        return res.status(400).json({
+            msg: "invalid market"
+        });
+    }
+    const market = parsed.data;
+
+    try {
+        const lastFill = await prisma.fill.findFirst({
+            where: {
+                order: {
+                    market: market as any
+                }
+            },
+            orderBy: {
+                transactionTime: "desc"
+            },
+            select: {
+                price: true
+            }
+        });
+
+        return res.status(200).json({
+            ok: true,
+            price: lastFill ? lastFill.price : 0
+        });
+    } catch (error) {
+        console.error("Error fetching last traded price:", error);
+        return res.status(500).json({
+            msg: "failed to fetch last traded price"
+        });
+    }
 });
 
 export default exchangeRoutes;

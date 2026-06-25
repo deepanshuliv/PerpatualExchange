@@ -15,3 +15,4 @@ export {
 };
 
 export type { RedisStreamResponse } from "./internal-types";
+export { WS_SUBSCRIBE_SCHEMA } from "./ws-types/types";

@@ -1,5 +1,5 @@
 import { redisClient, connectRedisClient } from '@repo/redis';
-import { WebsocketTypes } from '@repo/shared-types';
+import { WebsocketTypes, type RedisStreamResponse } from '@repo/shared-types';
 import { checkMarketUpdateAndSendToSubsribedUser } from '..';
 
 export async function startConsumerGroup() {
@@ -14,15 +14,7 @@ export async function startConsumerGroup() {
         'ws',
         { key: 'to-backend', id: '>' },
         { BLOCK: 0, COUNT: 100 },
-      )) as unknown as Array<{
-        name: string;
-        messages: Array<{
-          id: string;
-          message: {
-            [key: string]: string;
-          };
-        }>;
-      }> | null;
+      )) as unknown as RedisStreamResponse;
       if (!response) continue;
       if (!Array.isArray(response)) continue;
 

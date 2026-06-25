@@ -14,7 +14,9 @@ export const ORDERMANAGERINSATNCE_SCHEMA = z.object({
   fills: z.string(),
   fundingInsurance: z.number(),
   exchangeProfit: z.number(),
+  lastOrderId: z.number().optional().default(0),
 });
+
 export type OrderManagerSnapShotInstance = z.infer<
   typeof ORDERMANAGERINSATNCE_SCHEMA
 >;
@@ -74,6 +76,7 @@ export const FILLS_SCHEMA = z.object({
   kind: KIND_SCHEMA,
   status: STATUS_SCHEMA,
   createdAt: z.date(),
+  transactionTime: z.number(),
 });
 export type Fills = z.infer<typeof FILLS_SCHEMA>;
 

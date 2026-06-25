@@ -13,20 +13,28 @@ export default class BinanceClassListner {
         this.redisClient = redisClient;
     }
 
-    async intialize() {
-        await connectRedisClient(this.redisClient, "BinancePriceListener");
-        this.setupPriceSubscription();
+    async intialize(): Promise<void> {
+        await connectRedisClient(this.redisClient, 'BinancePriceListener');
+        return new Promise<void>((resolve, reject) => {
+            this.setupPriceSubscription(resolve, reject);
+        });
     }
 
-    setupPriceSubscription() {
+    setupPriceSubscription(resolve?: () => void, reject?: (err: Error) => void) {
         const ws = new WebSocket(STREAM_URL);
 
         ws.on("open", () => {
             console.log("binance ws connected (stream.binancefuture.com)");
+            if (resolve) {
+                resolve();
+            }
         });
 
         ws.on("error", (err) => {
             console.error("binance ws error:", err.message);
+            if (reject) {
+                reject(err);
+            }
         });
 
         ws.on("close", (code) => {

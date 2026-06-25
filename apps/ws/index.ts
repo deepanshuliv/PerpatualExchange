@@ -1,21 +1,17 @@
-import { EngineResponse, WebsocketTypes } from '@repo/shared-types';
+import { EngineResponse, WebsocketTypes, WS_SUBSCRIBE_SCHEMA } from '@repo/shared-types';
 import { WebSocket, WebSocketServer } from 'ws';
 import { startConsumerGroup } from './src/redis';
 
-type UserSchema = {
+interface ClientConnection {
   ws: WebSocket;
-  userId: string;
-};
+  subscriptions: Set<string>;
+}
 
-type UserSubscribeStore = Record<string, UserSchema[]>;
-
-const store: UserSubscribeStore = {};
+const activeClients = new Set<ClientConnection>();
 
 async function bootstrap() {
   try {
-    console.log("Connecting WS to Redis...");
     await startConsumerGroup();
-    console.log("Redis connected. Starting WebSocket server...");
 
     const wss = new WebSocketServer({ port: 8080 });
 
@@ -24,63 +20,51 @@ async function bootstrap() {
     });
 
     wss.on('connection', function connection(ws) {
-  ws.on('error', console.error);
+      ws.on('error', console.error);
 
-  ws.on('message', function message(_data) {
-    let parsedData;
-    try {
-      parsedData = JSON.parse(_data.toString());
-    } catch (e) {
-      return ws.send(JSON.stringify({ success: false, error: "Invalid JSON format" }));
-    }
-
-    const { success, data } = WebsocketTypes.WS_REQUEST_SCHEMA.safeParse(parsedData);
-    if (!success) {
-      return ws.send(JSON.stringify({ success: false, error: "please provide valid fields" }));
-    }
-
-    const { market, type, userId } = data;
-
-    if (type === 'unsubscribe') {
-      if (store[market]) {
-        store[market] = store[market].filter((user) => user.userId !== userId);
-      }
-
-      const msgToSend: WebsocketTypes.marketUnsubscribeType = {
-        market: market,
-        msg: `unsubscribed from market ${market}`,
-        success: true,
-        type: 'unsubscribed',
-      };
-      ws.send(JSON.stringify(msgToSend));
-    } else if (type === 'subscribe') {
-      if (!store[market]) {
-        store[market] = [];
-      }
-      store[market]?.push({
-        userId,
+      const client: ClientConnection = {
         ws,
+        subscriptions: new Set<string>(),
+      };
+      activeClients.add(client);
+
+      ws.on('message', function message(_data) {
+        let parsedData;
+        try {
+          parsedData = JSON.parse(_data.toString());
+        } catch (e) {
+          return ws.send(JSON.stringify({ success: false, error: "Invalid JSON format" }));
+        }
+
+        // Validate standard subscription request
+        const subscriptionParse = WS_SUBSCRIBE_SCHEMA.safeParse(parsedData);
+        if (!subscriptionParse.success) {
+          return ws.send(JSON.stringify({ success: false, error: "Please provide valid subscription parameters" }));
+        }
+
+        const { method, params, id } = subscriptionParse.data;
+        const targetId = id || 1;
+
+        if (method === 'SUBSCRIBE') {
+          for (const param of params) {
+            client.subscriptions.add(param);
+          }
+        } else if (method === 'UNSUBSCRIBE') {
+          for (const param of params) {
+            client.subscriptions.delete(param);
+          }
+        }
+
+        return ws.send(JSON.stringify({
+          result: null,
+          id: targetId,
+        }));
       });
 
-      const msgToSend: WebsocketTypes.marketSubscribeType = {
-        market: market,
-        msg: `subscribed to market ${market}`,
-        success: true,
-        type: 'subscribed',
-      };
-      ws.send(JSON.stringify(msgToSend));
-    }
-  });
-
-  // Clean up subscriptions when client disconnects to prevent memory leaks
-  ws.on('close', () => {
-    Object.keys(store).forEach((market) => {
-      if (store[market]) {
-        store[market] = store[market].filter((user) => user.ws !== ws);
-      }
+      ws.on('close', () => {
+        activeClients.delete(client);
+      });
     });
-  });
-});
 
   } catch (error) {
     console.error("Failed to start WS server:", error);
@@ -92,28 +76,125 @@ bootstrap();
 
 type ProcessableEngineMessage = Extract<
   EngineResponse.ENGINE_RESPONSE,
-  { type: 'create_order' | 'cancel_order' | 'liquidation' }
+  {
+    type:
+      | 'create_order'
+      | 'cancel_order'
+      | 'liquidation'
+      | 'markprice_updated'
+      | 'bookticker_updated';
+  }
 >;
 
 export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngineMessage) {
-  const fills =
-    update.type === 'cancel_order'
-      ? [{ price: update.payload.price, qty: update.payload.totalQty - update.payload.filledQty }]
-      : update.payload.fills;
+  const transactionTime = update.payload.transactionTime;
+  const executionTime = Date.now();
 
-  const dataSent: WebsocketTypes.WebsocketResponse = {
-    market: update.payload.market,
-    kind: update.payload.kind,
-    side: update.payload.kind === 'LONG' ? 'bids' : 'asks',
-    fills,
-  };
+  if (update.type === 'create_order' || update.type === 'cancel_order' || update.type === 'liquidation') {
+    const market = update.payload.market;
 
-  Object.entries(store).forEach(([market, users]) => {
-    if (market === update.payload.market) {
-      for (const user of users) {
-        user.ws.send(JSON.stringify(dataSent));
+    const fills =
+      update.type === 'cancel_order'
+        ? [{ price: update.payload.price, qty: update.payload.totalQty - update.payload.filledQty }]
+        : update.payload.fills;
+
+    const depthMsg = {
+      stream: `depth.${market}`,
+      data: {
+        type: 'depth',
+        market,
+        kind: update.payload.kind,
+        side: update.payload.kind === 'LONG' ? 'bids' : 'asks',
+        fills,
+        transactionTime,
+        executionTime,
+      },
+    };
+
+    const tradeMessages: Array<{ stream: string; data: any }> = [];
+    const actualFills = (update.type === 'create_order' || update.type === 'liquidation') ? (update.payload.fills || []) : [];
+    
+    for (const fill of actualFills) {
+      tradeMessages.push({
+        stream: `trade.${market}`,
+        data: {
+          type: 'trade',
+          market,
+          price: fill.price,
+          qty: fill.qty,
+          transactionTime,
+          executionTime,
+        },
+      });
+    }
+
+    let lastTradedPriceMsg: any = null;
+    const lastFill = actualFills[actualFills.length - 1];
+    if (lastFill) {
+      lastTradedPriceMsg = {
+        stream: `lastTradedPrice.${market}`,
+        data: {
+          type: 'lastTradedPrice',
+          market,
+          price: lastFill.price,
+          transactionTime,
+          executionTime,
+        },
+      };
+    }
+
+    for (const client of activeClients) {
+      if (client.subscriptions.has(`depth.${market}`)) {
+        client.ws.send(JSON.stringify(depthMsg));
+      }
+      if (client.subscriptions.has(`trade.${market}`)) {
+        for (const t of tradeMessages) {
+          client.ws.send(JSON.stringify(t));
+        }
+      }
+      if (lastTradedPriceMsg && client.subscriptions.has(`lastTradedPrice.${market}`)) {
+        client.ws.send(JSON.stringify(lastTradedPriceMsg));
       }
     }
-  });
+  } else if (update.type === 'markprice_updated') {
+    const { market, price } = update.payload;
+    const markPriceMsg = {
+      stream: `markPrice.${market}`,
+      data: {
+        type: 'markPrice',
+        market,
+        price,
+        transactionTime,
+        executionTime,
+      },
+    };
+
+    for (const client of activeClients) {
+      if (client.subscriptions.has(`markPrice.${market}`)) {
+        client.ws.send(JSON.stringify(markPriceMsg));
+      }
+    }
+  } else if (update.type === 'bookticker_updated') {
+    const { market, bestBidPrice, bestBidQty, bestAskPrice, bestAskQty } = update.payload;
+    const bookTickerMsg = {
+      stream: `bookTicker.${market}`,
+      data: {
+        type: 'bookTicker',
+        market,
+        bestBidPrice,
+        bestBidQty,
+        bestAskPrice,
+        bestAskQty,
+        transactionTime,
+        executionTime,
+      },
+    };
+
+    for (const client of activeClients) {
+      if (client.subscriptions.has(`bookTicker.${market}`)) {
+        client.ws.send(JSON.stringify(bookTickerMsg));
+      }
+    }
+  }
 }
 

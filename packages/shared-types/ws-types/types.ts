@@ -4,6 +4,8 @@ import {
   CANCEL_ORDER_RESPONSE_SCHEMA,
   CREATE_ORDER_RESPONSE_SCHEMA,
   LIQUIDATION_EVENT_SCHEMA,
+  MARKPRICE_UPDATED_RESPONSE_SCHEMA,
+  BOOKTICKER_UPDATED_RESPONSE_SCHEMA,
 } from '../engine-types/engine-response';
 import { KIND_SCHEMA, MARKET_AVAILABEL_SCHEMA } from '../shared';
 
@@ -19,49 +21,28 @@ export const WS_MARKET_UPDATE_RESPONSE_SCHEMA = z.object({
   kind: KIND_SCHEMA,           // "LONG" | "SHORT"
   side: SIDE_SCHEMA,           // "bids" | "asks"
   fills: z.array(FILL_SCHEMA), // [{ price, qty }, ...]
+  transactionTime: z.number().optional(),
+  executionTime: z.number().optional(),
 });
 
 export type WebsocketResponse = z.infer<typeof WS_MARKET_UPDATE_RESPONSE_SCHEMA>;
 
 
-export const WS_MARKET_SUBSCRIBE_RESPONSE_SCHEMA = z.object({
-  success: z.literal(true),
-  type: z.literal('subscribed'),
-  market: MARKET_AVAILABEL_SCHEMA,
-  msg: z.string(),
-});
-
 export const WsStreamingResponse = z.union([
   CREATE_ORDER_RESPONSE_SCHEMA,
   CANCEL_ORDER_RESPONSE_SCHEMA,
   LIQUIDATION_EVENT_SCHEMA,
+  MARKPRICE_UPDATED_RESPONSE_SCHEMA,
+  BOOKTICKER_UPDATED_RESPONSE_SCHEMA,
 ]);
 
-export type marketSubscribeType = z.infer<typeof WS_MARKET_SUBSCRIBE_RESPONSE_SCHEMA>;
-
-export const WS_MARKET_UNSUBSCRIBE_RESPONSE_SCHEMA = z.object({
-  success: z.literal(true),
-  type: z.literal('unsubscribed'),
-  market: MARKET_AVAILABEL_SCHEMA,
-  msg: z.string(),
+export const WS_SUBSCRIBE_SCHEMA = z.object({
+  method: z.enum(['SUBSCRIBE', 'UNSUBSCRIBE']),
+  params: z.array(z.string()),
+  id: z.union([z.number(), z.string()]).optional(),
 });
 
-export type marketUnsubscribeType = z.infer<typeof WS_MARKET_UNSUBSCRIBE_RESPONSE_SCHEMA>;
-
-export const WS_REQUEST_SCHEMA = z.union([
-  z.object({
-    type: z.literal('subscribe'),
-    market: MARKET_AVAILABEL_SCHEMA,
-    userId: z.string(),
-  }),
-  z.object({
-    type: z.literal('unsubscribe'),
-    market: MARKET_AVAILABEL_SCHEMA,
-    userId: z.string(),
-  }),
-]);
-
-export type requestSchema = z.infer<typeof WS_REQUEST_SCHEMA>;
+export type WS_SUBSCRIBE = z.infer<typeof WS_SUBSCRIBE_SCHEMA>;
 
 export const WS_ERROR_SCHEMA = z.object({
   error: z.string(),

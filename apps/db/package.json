@@ -1,0 +1,22 @@
+{
+  "name": "db-consumer",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@repo/db": "workspace:*",
+    "@repo/redis": "workspace:*",
+    "@repo/shared-types": "workspace:*",
+    "dotenv": "^17.4.2",
+    "redis": "^5.12.1"
+  }
+}

@@ -60,7 +60,22 @@ export default class EngineManager {
       this.sendTobackend({
         correlationId,
         type: 'create_order',
-        payload: { ...createOrder, market, kind },
+        payload: { ...createOrder, market, kind, userId, transactionTime: Date.now() },
+      });
+
+      const depth = this.matchingManger.getDepth(market);
+      const bestBid = depth.bids[0] || [0, 0];
+      const bestAsk = depth.asks[0] || [0, 0];
+      this.sendTobackend({
+        type: 'bookticker_updated',
+        payload: {
+          market,
+          bestBidPrice: bestBid[0],
+          bestBidQty: bestBid[1],
+          bestAskPrice: bestAsk[0],
+          bestAskQty: bestAsk[1],
+          transactionTime: Date.now(),
+        },
       });
     } else if (request.type === 'add_balance') {
       const { correlationId } = request;
@@ -92,6 +107,23 @@ export default class EngineManager {
           totalQty: cancelled.totalQty!,
           filledQty: cancelled.filledQty!,
           margin: cancelled.margin,
+          transactionTime: Date.now(),
+        },
+      });
+
+      const market = cancelled.market;
+      const depth = this.matchingManger.getDepth(market);
+      const bestBid = depth.bids[0] || [0, 0];
+      const bestAsk = depth.asks[0] || [0, 0];
+      this.sendTobackend({
+        type: 'bookticker_updated',
+        payload: {
+          market,
+          bestBidPrice: bestBid[0],
+          bestBidQty: bestBid[1],
+          bestAskPrice: bestAsk[0],
+          bestAskQty: bestAsk[1],
+          transactionTime: Date.now(),
         },
       });
     } else if (request.type === 'get_position') {
@@ -151,6 +183,12 @@ export default class EngineManager {
     } else if (request.type === 'markprice_updated') {
       console.log('liquidation started');
       const { price, market } = request.payload;
+
+      this.sendTobackend({
+        type: 'markprice_updated',
+        payload: { market, price, transactionTime: Date.now() },
+      });
+
       this.positionManager.updateMarkpriceMap(market, price);
       const userToLiquidate = this.positionManager.calculateLiquidation(market, price);
       userToLiquidate?.forEach((user) => {
@@ -176,6 +214,22 @@ export default class EngineManager {
             totalQty: liquidationOrder.totalQty,
             totalSpent: liquidationOrder.totalSpent,
             fills: liquidationOrder.fills,
+            transactionTime: Date.now(),
+          },
+        });
+
+        const depth = this.matchingManger.getDepth(market);
+        const bestBid = depth.bids[0] || [0, 0];
+        const bestAsk = depth.asks[0] || [0, 0];
+        this.sendTobackend({
+          type: 'bookticker_updated',
+          payload: {
+            market,
+            bestBidPrice: bestBid[0],
+            bestBidQty: bestBid[1],
+            bestAskPrice: bestAsk[0],
+            bestAskQty: bestAsk[1],
+            transactionTime: Date.now(),
           },
         });
       });
@@ -256,6 +310,10 @@ export default class EngineManager {
     await connectRedisClient(this.redisClient, "MatchingEngine");
     console.log("Redis connected successfully.");
 
+    console.log('waiting for binance to connect...');
+    await this.binanceListner.intialize();
+    console.log('connected to binance');
+
     // load snapshot if avaialbel
     console.log('loading snapshot...');
 
@@ -272,11 +330,6 @@ export default class EngineManager {
       },
       8000, // 8 seconds
     );
-
-    console.log('waiting for binance...');
-    // write now we are supposing error wont come
-    await this.binanceListner.intialize();
-    console.log('connected to binance');
 
     console.log('subscribing to stream...');
 

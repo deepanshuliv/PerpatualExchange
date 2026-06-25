@@ -17,6 +17,7 @@ export default class OrderBookManager {
   private orders: Order;
   private exchangeProfit: number;
   private fundingInsurance: number;
+  private lastOrderId: number;
 
   constructor() {
     this.orderBook = {};
@@ -24,6 +25,7 @@ export default class OrderBookManager {
     this.orders = new Map();
     this.exchangeProfit = 0;
     this.fundingInsurance = 0;
+    this.lastOrderId = 0;
   }
 
   createSnapShot() {
@@ -33,6 +35,7 @@ export default class OrderBookManager {
       orders: JSON.stringify(this.orders),
       fundingInsurance: this.fundingInsurance,
       exchangeProfit: this.exchangeProfit,
+      lastOrderId: this.lastOrderId,
     };
   }
 
@@ -47,6 +50,7 @@ export default class OrderBookManager {
 
     this.fundingInsurance = orderManagerSnapShotInstance.fundingInsurance;
     this.exchangeProfit = orderManagerSnapShotInstance.exchangeProfit;
+    this.lastOrderId = orderManagerSnapShotInstance.lastOrderId ?? 0;
   }
 
   getFundingInsurance() {
@@ -101,6 +105,7 @@ export default class OrderBookManager {
     );
 
     let fillInfo: FillInfo[] = [];
+    const generatedFills: Fills[] = [];
 
     const oppSide = this.getOppositeSide(market, kind);
     let remianingQty = qty;
@@ -125,7 +130,7 @@ export default class OrderBookManager {
 
           fillInfo.push({ price: bestPrice, qty: priceLevelMaxFill });
           if (remianingQty === 0) {
-            this.addToFills(
+            const f = this.addToFills(
               userId,
               topOrder.userId,
               priceLevelMaxFill,
@@ -135,9 +140,10 @@ export default class OrderBookManager {
               currentOrder.data.kind,
               "FILLED",
             );
+            generatedFills.push(f);
             this.changeOrderStatus(userId, currentOrder.orderId, "FILLED");
           } else {
-            this.addToFills(
+            const f = this.addToFills(
               userId,
               topOrder.userId,
               priceLevelMaxFill,
@@ -147,6 +153,7 @@ export default class OrderBookManager {
               currentOrder.data.kind,
               "PARTIALLY_FILLED",
             );
+            generatedFills.push(f);
             this.changeOrderStatus(
               userId,
               currentOrder.orderId,
@@ -154,7 +161,7 @@ export default class OrderBookManager {
             );
           }
           if (topOrder.filledQty === topOrder.totalQty) {
-            this.addToFills(
+            const f = this.addToFills(
               userId,
               topOrder.userId,
               priceLevelMaxFill,
@@ -164,10 +171,11 @@ export default class OrderBookManager {
               currentOrder.data.kind,
               "FILLED",
             );
+            generatedFills.push(f);
             this.changeOrderStatus(topOrder.userId, topOrder.orderId, "FILLED");
             PriceLevel.openOrder.shift();
           } else {
-            this.addToFills(
+            const f = this.addToFills(
               userId,
               topOrder.userId,
               priceLevelMaxFill,
@@ -177,6 +185,7 @@ export default class OrderBookManager {
               currentOrder.data.kind,
               "PARTIALLY_FILLED",
             );
+            generatedFills.push(f);
             this.changeOrderStatus(
               userId,
               topOrder.orderId,
@@ -199,7 +208,11 @@ export default class OrderBookManager {
         filledQty: totalQty,
         totalQty: qty,
         totalSpent,
-        fills: fillInfo,
+        fills: generatedFills,
+        price: currentOrder.data.price,
+        type: currentOrder.data.type,
+        margin: currentOrder.data.margin,
+        status: currentOrder.data.status,
       };
     }
     if (type === "LIMIT") {
@@ -235,7 +248,11 @@ export default class OrderBookManager {
       orderId: currentOrder.orderId,
       totalQty: currentOrder.data.qty,
       totalSpent,
-      fills: fillInfo,
+      fills: generatedFills,
+      price: currentOrder.data.price,
+      type: currentOrder.data.type,
+      margin: currentOrder.data.margin,
+      status: currentOrder.data.status,
     };
   }
 
@@ -258,6 +275,7 @@ export default class OrderBookManager {
       price,
     );
     const fillInfo: FillInfo[] = [];
+    const generatedFills: Fills[] = [];
 
     const oppSide = this.getOppositeSide(market, kind);
 
@@ -280,12 +298,13 @@ export default class OrderBookManager {
           );
           remianingQty -= maxQtyFillPriceLevel;
           topOrder.filledQty += maxQtyFillPriceLevel;
+          this.orderBook[market]!.lastTradedPrice = bestPrice;
           fillInfo.push({
             price: bestPrice,
             qty: maxQtyFillPriceLevel,
           });
           if (topOrder.filledQty === topOrder.totalQty) {
-            this.addToFills(
+            const f = this.addToFills(
               topOrder.userId,
               currrentOrder.data.userId,
               maxQtyFillPriceLevel,
@@ -295,10 +314,11 @@ export default class OrderBookManager {
               "LONG",
               "FILLED",
             );
+            generatedFills.push(f);
             this.changeOrderStatus(topOrder.userId, topOrder.orderId, "FILLED");
             PriceLevel.openOrder.shift();
           } else {
-            this.addToFills(
+            const f = this.addToFills(
               topOrder.userId,
               currrentOrder.data.userId,
               maxQtyFillPriceLevel,
@@ -308,6 +328,7 @@ export default class OrderBookManager {
               "LONG",
               "PARTIALLY_FILLED",
             );
+            generatedFills.push(f);
             this.changeOrderStatus(
               topOrder.userId,
               topOrder.orderId,
@@ -315,7 +336,7 @@ export default class OrderBookManager {
             );
           }
           if (remianingQty === 0) {
-            this.addToFills(
+            const f = this.addToFills(
               topOrder.userId,
               currrentOrder.data.userId,
               currrentOrder.data.qty,
@@ -325,13 +346,14 @@ export default class OrderBookManager {
               "SHORT",
               "FILLED",
             );
+            generatedFills.push(f);
             this.changeOrderStatus(
               currrentOrder.data.userId,
               currrentOrder.orderId,
               "FILLED",
             );
           } else {
-            this.addToFills(
+            const f = this.addToFills(
               topOrder.userId,
               currrentOrder.data.userId,
               currrentOrder.data.qty,
@@ -341,6 +363,7 @@ export default class OrderBookManager {
               "SHORT",
               "PARTIALLY_FILLED",
             );
+            generatedFills.push(f);
             this.changeOrderStatus(
               currrentOrder.data.userId,
               currrentOrder.orderId,
@@ -365,7 +388,11 @@ export default class OrderBookManager {
         orderId: currrentOrder.orderId,
         totalQty: currrentOrder.data.qty,
         totalSpent,
-        fills: fillInfo,
+        fills: generatedFills,
+        price: currrentOrder.data.price,
+        type: currrentOrder.data.type,
+        margin: currrentOrder.data.margin,
+        status: currrentOrder.data.status,
       };
     }
 
@@ -400,7 +427,11 @@ export default class OrderBookManager {
       orderId: currrentOrder.orderId,
       totalQty: currrentOrder.data.qty,
       totalSpent,
-      fills: fillInfo,
+      fills: generatedFills,
+      price: currrentOrder.data.price,
+      type: currrentOrder.data.type,
+      margin: currrentOrder.data.margin,
+      status: currrentOrder.data.status,
     };
   }
   /*
@@ -528,7 +559,8 @@ export default class OrderBookManager {
     market: Shared.MARKET_AVAILABEL,
     price?: number,
   ) {
-    const orderId = crypto.randomUUID();
+    this.lastOrderId++;
+    const orderId = String(this.lastOrderId);
     const OrderToPush: Orderdetails = {
       userId,
       type,
@@ -636,8 +668,10 @@ export default class OrderBookManager {
       qty,
       status,
       createdAt: new Date(),
+      transactionTime: Date.now(),
     };
     this.fills.push(fillDetail);
+    return fillDetail;
   }
 
   getOrder(userId: string, orderId: string) {

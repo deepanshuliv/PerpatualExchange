@@ -48,36 +48,37 @@ model user {
 }
 
 model order {
-  id        String   @id // Ever-increasing sequential order ID from engine
-  userId    String
-  user      user     @relation(fields: [userId], references: [id])
-  type      Type
-  totalQty       Float
-  filledQty Float
-  price     Float
-  status    Status
-  margin    Float
-  kind      Kind
-  market    Market
-  fills     fill[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id // Ever-increasing sequential order ID from engine
+  userId          String
+  user            user     @relation(fields: [userId], references: [id])
+  type            Type
+  totalQty        Float
+  filledQty       Float
+  price           Float
+  status          Status
+  margin          Float
+  kind            Kind
+  market          Market
+  fills           fill[]
+  transactionTime DateTime @default(now())
+  createdAt       DateTime @default(now())
 }
 
 model fill {
-  id        String   @id @default(uuid())
-  orderId   String
-  order     order    @relation(fields: [orderId], references: [id])
-  buyerId   String
-  buyer     user     @relation("BuyerFills", fields: [buyerId], references: [id])
-  sellerId  String
-  seller    user     @relation("SellerFills", fields: [sellerId], references: [id])
-  price     Float
-  qty       Float
-  type      Type
-  kind      Kind
-  status    Status
-  createdAt DateTime @default(now())
+  id              String   @id @default(uuid())
+  orderId         String
+  order           order    @relation(fields: [orderId], references: [id])
+  buyerId         String
+  buyer           user     @relation("BuyerFills", fields: [buyerId], references: [id])
+  sellerId        String
+  seller          user     @relation("SellerFills", fields: [sellerId], references: [id])
+  price           Float
+  qty             Float
+  type            Type
+  kind            Kind
+  status          Status
+  transactionTime DateTime @default(now())
+  createdAt       DateTime @default(now())
 }
 
 model market {

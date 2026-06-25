@@ -15,6 +15,20 @@ const FILL_INFO_SCHEMA = z.object({
 });
 type FILL_INFO = z.infer<typeof FILL_INFO_SCHEMA>;
 
+const FILL_DETAIL_SCHEMA = z.object({
+  buyerId: z.string(),
+  sellerId: z.string(),
+  price: z.number(),
+  orderId: z.string(),
+  type: TYPE_SCHEMA,
+  kind: KIND_SCHEMA,
+  qty: z.number(),
+  status: z.string(),
+  createdAt: z.date().or(z.string()),
+  transactionTime: z.number(),
+});
+type FILL_DETAIL = z.infer<typeof FILL_DETAIL_SCHEMA>;
+
 const CREATE_ORDER_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("create_order"),
   payload: z.object({
@@ -24,7 +38,13 @@ const CREATE_ORDER_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
     filledQty: z.number(),
     totalQty: z.number(),
     totalSpent: z.number(),
-    fills: z.array(FILL_INFO_SCHEMA),
+    fills: z.array(FILL_DETAIL_SCHEMA),
+    userId: z.string(),
+    price: z.number(),
+    type: TYPE_SCHEMA,
+    margin: z.number(),
+    status: z.string(),
+    transactionTime: z.number(),
   }),
 });
 type CREATE_ORDER_RESPONSE = z.infer<typeof CREATE_ORDER_RESPONSE_SCHEMA>;
@@ -40,6 +60,7 @@ const CANCEL_ORDER_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
     totalQty: z.number(),
     filledQty: z.number(),
     margin: z.number(),
+    transactionTime: z.number(),
   }),
 });
 type CANCEL_ORDER_RESPONSE = z.infer<typeof CANCEL_ORDER_RESPONSE_SCHEMA>;
@@ -74,7 +95,8 @@ const LIQUIDATION_EVENT_SCHEMA = z.object({
     filledQty: z.number(),
     totalQty: z.number(),
     totalSpent: z.number(),
-    fills: z.array(FILL_INFO_SCHEMA),
+    fills: z.array(FILL_DETAIL_SCHEMA),
+    transactionTime: z.number(),
   }),
 });
 type LIQUIDATION_EVENT = z.infer<typeof LIQUIDATION_EVENT_SCHEMA>;
@@ -120,18 +142,6 @@ const GET_CLOSED_ORDERS_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
 });
 type GET_CLOSED_ORDERS_RESPONSE = z.infer<typeof GET_CLOSED_ORDERS_RESPONSE_SCHEMA>;
 
-const FILL_DETAIL_SCHEMA = z.object({
-  buyerId: z.string(),
-  sellerId: z.string(),
-  price: z.number(),
-  orderId: z.string(),
-  type: TYPE_SCHEMA,
-  kind: KIND_SCHEMA,
-  qty: z.number(),
-  status: z.string(),
-  createdAt: z.date().or(z.string()),
-});
-type FILL_DETAIL = z.infer<typeof FILL_DETAIL_SCHEMA>;
 
 const GET_FILLS_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("get_fills"),
@@ -148,7 +158,31 @@ const GET_DEPTH_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
 });
 type GET_DEPTH_RESPONSE = z.infer<typeof GET_DEPTH_RESPONSE_SCHEMA>;
 
-const ENGINE_RESPONSE_SCHEMA = z.discriminatedUnion("type", [
+const MARKPRICE_UPDATED_RESPONSE_SCHEMA = z.object({
+  type: z.literal('markprice_updated'),
+  payload: z.object({
+    market: MARKET_AVAILABEL_SCHEMA,
+    price: z.string().or(z.number()),
+    transactionTime: z.number(),
+  }),
+});
+type MARKPRICE_UPDATED_RESPONSE = z.infer<typeof MARKPRICE_UPDATED_RESPONSE_SCHEMA>;
+
+
+const BOOKTICKER_UPDATED_RESPONSE_SCHEMA = z.object({
+  type: z.literal('bookticker_updated'),
+  payload: z.object({
+    market: MARKET_AVAILABEL_SCHEMA,
+    bestBidPrice: z.number(),
+    bestBidQty: z.number(),
+    bestAskPrice: z.number(),
+    bestAskQty: z.number(),
+    transactionTime: z.number(),
+  }),
+});
+type BOOKTICKER_UPDATED_RESPONSE = z.infer<typeof BOOKTICKER_UPDATED_RESPONSE_SCHEMA>;
+
+const ENGINE_RESPONSE_SCHEMA = z.discriminatedUnion('type', [
   CREATE_ORDER_RESPONSE_SCHEMA,
   CANCEL_ORDER_RESPONSE_SCHEMA,
   GET_BALANCE_RESPONSE_SCHEMA,
@@ -160,6 +194,8 @@ const ENGINE_RESPONSE_SCHEMA = z.discriminatedUnion("type", [
   GET_CLOSED_ORDERS_RESPONSE_SCHEMA,
   GET_FILLS_RESPONSE_SCHEMA,
   GET_DEPTH_RESPONSE_SCHEMA,
+  MARKPRICE_UPDATED_RESPONSE_SCHEMA,
+  BOOKTICKER_UPDATED_RESPONSE_SCHEMA,
 ]);
 
 type ENGINE_RESPONSE = z.infer<typeof ENGINE_RESPONSE_SCHEMA>;
@@ -193,4 +229,8 @@ export {
   type GET_FILLS_RESPONSE,
   GET_DEPTH_RESPONSE_SCHEMA,
   type GET_DEPTH_RESPONSE,
+  MARKPRICE_UPDATED_RESPONSE_SCHEMA,
+  type MARKPRICE_UPDATED_RESPONSE,
+  BOOKTICKER_UPDATED_RESPONSE_SCHEMA,
+  type BOOKTICKER_UPDATED_RESPONSE,
 };
