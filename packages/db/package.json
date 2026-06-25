@@ -3,9 +3,6 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
-  "exports": {
-    ".": "./index.ts"
-  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/pg": "^8.20.0",
@@ -15,11 +12,9 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@prisma/adapter-libsql": "^7.8.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
-    "@prisma/extension-accelerate": "^3.0.1",
     "dotenv": "^17.4.2",
-    "pg": "^8.21.0"
+    "pg": "^8.22.0"
   }
 }

@@ -12,22 +12,76 @@ datasource db {
   provider = "postgresql"
 }
 
-model user{
-  id          String @id @default(uuid())
-  username    String 
-  password    String 
+enum Kind {
+  LONG
+  SHORT
 }
 
-
-
-
-
-model Fill{
-  id    String @id   @default(uuid())
+enum Type {
+  LIMIT
+  MARKET
 }
 
-model market{
-  id    String @id   @default(uuid())
-  slug  String
+enum Status {
+  OPEN
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+}
+
+enum Market {
+  BTCUSD
+  ETHUSD
+  SOLUSD
+  USD
+}
+
+model user {
+  id        String   @id // Keep this as String for flexibility (or UUID)
+  username  String   @unique
+  password  String
+  orders    order[]
+  buyFills  fill[]   @relation("BuyerFills")
+  sellFills fill[]   @relation("SellerFills")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model order {
+  id        String   @id // Ever-increasing sequential order ID from engine
+  userId    String
+  user      user     @relation(fields: [userId], references: [id])
+  type      Type
+  totalQty       Float
+  filledQty Float
+  price     Float
+  status    Status
+  margin    Float
+  kind      Kind
+  market    Market
+  fills     fill[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model fill {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     order    @relation(fields: [orderId], references: [id])
+  buyerId   String
+  buyer     user     @relation("BuyerFills", fields: [buyerId], references: [id])
+  sellerId  String
+  seller    user     @relation("SellerFills", fields: [sellerId], references: [id])
+  price     Float
+  qty       Float
+  type      Type
+  kind      Kind
+  status    Status
+  createdAt DateTime @default(now())
+}
+
+model market {
+  id       String @id @default(uuid())
+  slug     String
   imageUrl String
 }
