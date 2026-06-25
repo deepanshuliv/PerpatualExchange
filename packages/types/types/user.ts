@@ -15,5 +15,19 @@ export interface Orderdetails{
     market:Shared.MARKET_AVAILABEL,
     createdAt : Date
 }
-export type Order= Map<string , Orderdetails>
+export type UserOrdersMap = Map<string , Orderdetails>
 export type User = Record<string, Collateral>
+
+export interface Order {
+  id: string;
+  userId: string;
+  type: string;
+  totalQty: number;
+  filledQty: number;
+  price: number;
+  status: string;
+  margin: number;
+  kind: "LONG" | "SHORT";
+  market: string;
+  transactionTime: string;
+}

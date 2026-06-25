@@ -21,3 +21,9 @@ export type OrderBook = Partial<Record<Shared.MARKET_AVAILABEL, {
     bids: OrderedMap<number, Bids>,
     lastTradedPrice:number
 }>>
+
+export interface OrderBookRow {
+  price: number;
+  size: number;
+  total: number;
+}

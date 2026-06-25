@@ -27,6 +27,7 @@ out/
 build
 dist
 snapshot/
+apps/engine/snapshots/
 
 # Debug
 npm-debug.log*

@@ -1,12 +1,16 @@
-import express from "express"
+import 'dotenv/config';
+import express from "express";
+import cors from "cors";
 import appRouter from "./routes";
 import { initializeRedis } from "./utils/toEngine";
 
 const app = express();
 
+// Allow requests from any origin in development (frontend runs on different port)
+app.use(cors());
 app.use(express.json());
 
-app.use(appRouter)
+app.use(appRouter);
 
 async function startServer() {
   try {

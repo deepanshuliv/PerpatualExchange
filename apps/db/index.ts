@@ -1,11 +1,10 @@
-import "dotenv/config";
 import { prisma } from "@repo/db";
 import { redisClient, connectRedisClient } from "@repo/redis";
 import { EngineResponse, type RedisStreamResponse } from '@repo/shared-types';
 import crypto from "crypto";
 
-const CONSUMER_GROUP = "db-consumer-group";
-const STREAM_KEY = "to-backend";
+const CONSUMER_GROUP = process.env.DB_CONSUMER_GROUP!;
+const STREAM_KEY = process.env.BACKEND_STREAM!;
 
 async function startConsumerWorker(consumerName: string) {
   const subscriber = redisClient.duplicate();

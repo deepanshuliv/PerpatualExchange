@@ -9,7 +9,7 @@
 
 ## Current Behavior
 
-- Orders can be stored in an array, a deque, or a doubly linked list (both have similar complexity profiles).
+- Orders are storing in an array, can be stored in a deque, or a doubly linked list (both have similar complexity profiles).
 - From the frontend, the market order price comes along with the quantity. However, the price has a slippage calculated on the frontend, and it should come after applying this slippage.
 - In the fills data structure (DS), we are storing a separate entry for `maker_order_id` and `seller_order_id`, but in a single fill entry, we store both `seller_user_id` and `buyer_user_id`.
 - Currently, canceling an open order takes $O(n)$ time. With lazy deleting, it can become $O(1)$.
@@ -21,6 +21,8 @@
 - The database stores `transactionTime` (matching engine processed timestamp) and `createdAt` (database insertion timestamp), while the WebSocket server broadcasts both `transactionTime` and `executionTime` (live broadcast timestamp) to measure end-to-end latency.
 - The backend exposes `GET /ticker/price/:marketId` to retrieve the current Last Traded Price from the database on initial client load (cold starts), while subsequent price ticks are streamed live via WebSockets.
 - The Last Traded Price is dynamically calculated at the WebSocket server level from the last element of the fills array in `create_order` and `liquidation` events.
+- Funding rate is computed per period as `fundingRate = clamp((localPrice − externalPrice) / externalPrice, −0.05%, +0.05%)`, applied as `margin ± (qty × externalPrice × fundingRate)` — longs pay shorts when the local futures price trades at a premium, and shorts pay longs when it trades at a discount.
+- Three distinct prices are tracked in the UI: **Last Price** (price of the most recent matched trade on the local exchange, from fills) only updates when a real trade occurs; **Mark Price** and **Index Price** both stream live from the Binance Futures mark price feed and represent the external fair valuation used for margins, PnL, and liquidation calculations.
 
 ---
 

@@ -88,6 +88,44 @@ exchangeRoutes.post("/order", isAuth, async (req, res) => {
     });
 });
 
+exchangeRoutes.post("/order/cancel", isAuth, async (req, res) => {
+    const { success, data } = BackendRequest.CANCEL_ORDER_SCHEMA.safeParse(req.body);
+    if (!success) {
+        return res.status(411).json({
+            msg: "invalid input fields"
+        });
+    }
+
+    const { orderId } = data.data;
+
+    const engineRequest: EngineRequest.CANCEL_ORDER = {
+        correlationId: crypto.randomUUID(),
+        type: "cancel_order",
+        payload: {
+            userId: req.userId!,
+            orderId
+        }
+    };
+    const engineResponse = await sendToEngine(engineRequest);
+
+    if (!engineResponse) {
+        return res.status(403).json({
+            msg: "some error occured"
+        });
+    }
+
+    if (engineResponse.type === "error") {
+        return res.status(400).json({
+            msg: engineResponse.payload.error
+        });
+    }
+
+    return res.status(200).json({
+        ok: true,
+        data: engineResponse.payload
+    });
+});
+
 exchangeRoutes.get("/equity/available", isAuth, async (req, res) => {
     const marketRaw = req.query.market as string | undefined;
     let market: Shared.MARKET_AVAILABEL | undefined;
@@ -348,46 +386,42 @@ exchangeRoutes.get("/depth/:marketId", async (req, res) => {
     }
     const market = parsed.data;
 
-    const engineRequest: EngineRequest.GET_DEPTH = {
-        correlationId: crypto.randomUUID(),
-        type: "get_depth",
-        payload: {
-            market
+    try {
+        const engineRequest: EngineRequest.GET_DEPTH = {
+            correlationId: crypto.randomUUID(),
+            type: "get_depth",
+            payload: { market }
+        };
+
+        const engineResponse = await sendToEngine(engineRequest);
+        if (!engineResponse) {
+            return res.status(503).json({ msg: "engine unavailable" });
         }
-    };
 
-    const engineResponse = await sendToEngine(engineRequest);
-    if (!engineResponse) {
-        return res.status(403).json({
-            msg: "some error occured"
-        });
+        if (engineResponse.type === "error") {
+            return res.status(400).json({ msg: engineResponse.payload.error });
+        }
+
+        if (engineResponse.type === "get_depth") {
+            return res.status(200).json({ ok: true, data: engineResponse.payload });
+        }
+
+        return res.status(500).json({ msg: "unexpected engine response type" });
+    } catch (err: any) {
+        // Engine timeout or Redis connection failure — return empty depth so the UI stays clean
+        if (err?.message === "Timeout") {
+            return res.status(200).json({ ok: true, data: { bids: {}, asks: {} } });
+        }
+        console.error("[depth] Unexpected error:", err);
+        return res.status(503).json({ msg: "engine unavailable" });
     }
-
-    if (engineResponse.type === "error") {
-        return res.status(400).json({
-            msg: engineResponse.payload.error
-        });
-    }
-
-    if (engineResponse.type === "get_depth") {
-        return res.status(200).json({
-            ok: true,
-            data: engineResponse.payload
-        });
-    }
-
-    res.status(500).json({
-        msg: "invalid response type"
-    });
 });
 
 exchangeRoutes.get("/ticker/price/:marketId", async (req, res) => {
     const marketId = req.params.marketId;
     const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
     if (!parsed.success) {
-        return res.status(400).json({
-            msg: "invalid market"
-        });
+        return res.status(400).json({ msg: "invalid market" });
     }
     const market = parsed.data;
 
@@ -408,13 +442,13 @@ exchangeRoutes.get("/ticker/price/:marketId", async (req, res) => {
 
         return res.status(200).json({
             ok: true,
+            // Returns 0 when no trades have occurred yet on this market
             price: lastFill ? lastFill.price : 0
         });
     } catch (error) {
-        console.error("Error fetching last traded price:", error);
-        return res.status(500).json({
-            msg: "failed to fetch last traded price"
-        });
+        console.error("[ticker/price] DB error:", error);
+        // Return 0 price instead of 500 so the frontend degrades gracefully
+        return res.status(200).json({ ok: true, price: 0 });
     }
 });
 

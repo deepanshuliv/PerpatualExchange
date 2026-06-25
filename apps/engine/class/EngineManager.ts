@@ -261,21 +261,25 @@ export default class EngineManager {
     //
     const pathLocation = await this.getSnapShotFolderPath();
 
-    let latestFile = '';
-
-    // files is an array of strings representing names of files and folders
     const files = await fs.readdir(pathLocation);
-
-    console.log(files);
     if (files.length === 0) {
       return null;
     }
 
+    let latestFile = '';
+    let latestTimestamp = 0;
+
     for (const file of files) {
       const stringDate = file.split('.')[0];
-      if (Number(latestFile) < Number(stringDate)) {
-        latestFile = stringDate!;
+      const timestamp = Number(stringDate);
+      if (!isNaN(timestamp) && latestTimestamp < timestamp) {
+        latestTimestamp = timestamp;
+        latestFile = file;
       }
+    }
+
+    if (!latestFile) {
+      return null;
     }
 
     const latestFilePathName = path.join(pathLocation, latestFile);
@@ -292,15 +296,15 @@ export default class EngineManager {
 
   async getSnapShotFolderPath() {
     const currentFilePath = import.meta.dir;
-    const rootFolder = path.join(currentFilePath, '..', '..');
-    const destinationFolder = path.join(rootFolder, 'snapshot');
+    const rootFolder = path.join(currentFilePath, '..');
+    const destinationFolder = path.join(rootFolder, 'snapshots');
     try {
       await fs.stat(destinationFolder);
     } catch (error) {
       await fs.mkdir(destinationFolder, { recursive: true });
       console.log('created a folder');
     }
-    console.log('directroy created');
+    console.log('directory created');
 
     return destinationFolder;
   }

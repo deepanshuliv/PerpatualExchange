@@ -1,4 +1,3 @@
-import 'dotenv/config'
 import { EngineResponse, type EngineRequest, type RedisStreamResponse } from "@repo/shared-types"
 import { connectRedisClient, redisClient } from "@repo/redis"
 
@@ -48,7 +47,7 @@ async function engineToBackendLoop() {
   while (1) {
 
     const response = await subscriber.xRead([{
-      key: "to-backend",
+      key: process.env.BACKEND_STREAM!,
       id: lastId
     }], {
       COUNT: 100,

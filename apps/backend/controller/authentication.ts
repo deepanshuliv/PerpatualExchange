@@ -22,9 +22,13 @@ export async function signIn(req: Request, res: Response) {
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!);
 
-    res.status(201).json({
+    res.status(200).json({
         token,
         userId: user.id,
+        user: {
+            id: user.id,
+            username: user.username
+        }
     })
 }
 
@@ -58,6 +62,10 @@ export async function signUp(req: Request, res: Response) {
 
     res.status(201).json({
         token,
-        userId: newUser.id
+        userId: newUser.id,
+        user: {
+            id: newUser.id,
+            username: newUser.username
+        }
     })
 }

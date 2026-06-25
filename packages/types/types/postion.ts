@@ -23,3 +23,12 @@ export type MarketMarkPrice = Map<Shared.MARKET_AVAILABEL , number>
 export type Positions = Map<string, PositionDetails[]>;
 
 export type MarketIndex = Map<Shared.MARKET_AVAILABEL, Set<string>>;
+
+export interface Position {
+  userId: string;
+  market: string;
+  qty: number;
+  entryPrice: number;
+  margin: number;
+  pnl?: number;
+}

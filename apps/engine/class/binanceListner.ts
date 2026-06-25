@@ -2,8 +2,8 @@ import type { RedisClientType } from "redis";
 import WebSocket from "ws";
 import { connectRedisClient } from "@repo/redis";
 
-// stream.binancefuture.com works from all regions (fstream.binance.com is geo-blocked)
 const STREAM_URL =
+    process.env.BINANCE_STREAM_URL ||
     "wss://stream.binancefuture.com/stream?streams=btcusdt@markPrice@1s/solusdt@markPrice@1s/ethusdt@markPrice@1s";
 
 export default class BinanceClassListner {
@@ -44,15 +44,28 @@ export default class BinanceClassListner {
 
         ws.on("message", async (raw) => {
             // combined stream wraps payload in { stream, data }
-            const { data } = JSON.parse(raw.toString());
-            // data.s = symbol, data.p = mark price
-            console.log("price update from binance", data.p, data.s);
-            await this.redisClient.xAdd("to-engine", "*", {
-                data: JSON.stringify({
-                    type: "markprice_updated",
-                    payload: { price: data.p, market: data.s },
-                }),
-            });
+            try {
+                const parsed = JSON.parse(raw.toString());
+                const data = parsed.data || {};
+                if (!data.s || !data.p) return;
+                
+                const rawSymbol = String(data.s).toUpperCase();
+                let market = "";
+                if (rawSymbol === "BTCUSDT") market = "BTCUSD";
+                else if (rawSymbol === "ETHUSDT") market = "ETHUSD";
+                else if (rawSymbol === "SOLUSDT") market = "SOLUSD";
+                else market = rawSymbol;
+
+                console.log("price update from binance", data.p, market);
+                await this.redisClient.xAdd("to-engine", "*", {
+                    data: JSON.stringify({
+                        type: "markprice_updated",
+                        payload: { price: Number(data.p), market },
+                    }),
+                });
+            } catch (err) {
+                console.error("Failed to parse or process Binance message:", err);
+            }
         });
     }
 }

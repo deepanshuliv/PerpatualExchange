@@ -1,4 +1,4 @@
-import type { Kind, Status, Type } from "./orderbook"
+import type { Shared } from "@repo/shared-types";
 
 export type Fills = {
     sellerId: string ,
@@ -6,9 +6,9 @@ export type Fills = {
     qty : number , 
     price : number , 
     orderId : string , 
-    type: Type, 
-    kind : Kind , 
-    status:Status,
+    type: Shared.TYPE, 
+    kind : Shared.KIND , 
+    status: Shared.STATUS,
     createdAt : Date
  }
 
@@ -16,3 +16,16 @@ export type Fills = {
     price : number , 
     qty:number
  }
+
+export interface Fill {
+  id: string;
+  orderId: string;
+  buyerId: string;
+  sellerId: string;
+  price: number;
+  qty: number;
+  type: string;
+  kind: string;
+  status: string;
+  transactionTime: string;
+}

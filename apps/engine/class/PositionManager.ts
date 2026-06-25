@@ -144,82 +144,68 @@ export default class PostionManager {
   }
 
   claculateFundingRate(
-    markPrice: number,
-    indexPrice: number,
+    externalPrice: number,
+    localPrice: number,
     market: Shared.MARKET_AVAILABEL,
   ) {
-    // get all user for a market
+    // Guard: both prices must be valid
+    if (!externalPrice || !localPrice) return null;
+
     const marketUser = this.markteIndex.get(market);
-    if (!marketUser) {
-      return null;
-    }
-    let longUser: PositionDetails[] = [];
-    let shortUser: PositionDetails[] = [];
+    if (!marketUser) return null;
+
+    const longUser: PositionDetails[] = [];
+    const shortUser: PositionDetails[] = [];
+
     marketUser.forEach((userId) => {
-      const userPositions = this.positions.get(userId)!;
-      let templongUser = userPositions.find((pos) => {
-        return pos.market === market && pos.kind === "LONG";
-      })!;
-      let tempshortUser = userPositions.find((pos) => {
-        return pos.market === market && pos.kind === "SHORT";
-      });
-      if (!templongUser || !tempshortUser) return;
-
-      longUser.push(templongUser);
-      shortUser.push(tempshortUser);
+      const userPositions = this.positions.get(userId);
+      if (!userPositions) return;
+      const longPos = userPositions.find((pos) => pos.market === market && pos.kind === 'LONG');
+      const shortPos = userPositions.find((pos) => pos.market === market && pos.kind === 'SHORT');
+      // Both sides must exist for funding to apply (internal zero-sum)
+      if (longPos) longUser.push(longPos);
+      if (shortPos) shortUser.push(shortPos);
     });
-    if (!shortUser || !longUser) return null;
 
-    const fundingRatio = markPrice / indexPrice;
+    if (longUser.length === 0 || shortUser.length === 0) return null;
 
-    if (markPrice > indexPrice) {
-      // short  should pay to long
-      // find out show
-      const shortTotalMargin = shortUser.reduce((acc, curr) => {
-        return acc + curr.margin;
-      }, 0);
+    // --- Industry-standard funding rate formula ---
+    // 1. Funding Basis: how much the local futures price deviates from external index
+    const fundingBasis = localPrice - externalPrice;
 
-      const fundingRateAmount = shortTotalMargin * fundingRatio;
-      const longUsersTotalQty = longUser.reduce(
-        (acc, curr) => acc + curr.qty,
-        0,
-      );
+    // 2. Funding Rate as a %: basis relative to external price
+    //    Capped at ±0.05% per period (industry standard cap, e.g. Binance uses ±0.05%)
+    const MAX_FUNDING_RATE = 0.0005; // 0.05%
+    const rawFundingRate = fundingBasis / externalPrice;
+    const fundingRate = Math.max(-MAX_FUNDING_RATE, Math.min(MAX_FUNDING_RATE, rawFundingRate));
 
-      longUser.forEach((userPos) => {
-        {
-          userPos.margin +=
-            (userPos.qty / longUsersTotalQty) * fundingRateAmount;
-        }
+    // 3. Per-position payment: positionNotionalValue × fundingRate
+    //    notionalValue = qty × externalPrice (valued at fair external price)
+    //    Positive fundingRate → longs pay shorts (local premium, incentivise selling)
+    //    Negative fundingRate → shorts pay longs (local discount, incentivise buying)
+
+    if (fundingRate > 0) {
+      // Longs pay shorts
+      longUser.forEach((pos) => {
+        const notional = pos.qty * externalPrice;
+        pos.margin -= notional * fundingRate;
       });
-
-      shortUser.forEach((userPos) => {
-        userPos.margin -= (userPos.qty / longUsersTotalQty) * fundingRateAmount;
+      shortUser.forEach((pos) => {
+        const notional = pos.qty * externalPrice;
+        pos.margin += notional * fundingRate;
       });
-    }
-    if (indexPrice > markPrice) {
-      // long should pay short
-      const longTotalMargin = longUser.reduce((acc, curr) => {
-        return acc + curr.margin;
-      }, 0);
-
-      const fundingRateAmount = longTotalMargin * fundingRatio;
-      const shortUsersTotalQty = shortUser.reduce(
-        (acc, curr) => acc + curr.qty,
-        0,
-      );
-
-      shortUser.forEach((userPos) => {
-        {
-          userPos.margin +=
-            (userPos.qty / shortUsersTotalQty) * fundingRateAmount;
-        }
+    } else if (fundingRate < 0) {
+      // Shorts pay longs (fundingRate is negative, so flip sign for debit)
+      shortUser.forEach((pos) => {
+        const notional = pos.qty * externalPrice;
+        pos.margin -= notional * Math.abs(fundingRate);
       });
-
-      longUser.forEach((userPos) => {
-        userPos.margin -=
-          (userPos.qty / shortUsersTotalQty) * fundingRateAmount;
+      longUser.forEach((pos) => {
+        const notional = pos.qty * externalPrice;
+        pos.margin += notional * Math.abs(fundingRate);
       });
     }
+    // If fundingRate === 0, prices are equal — no payment needed
   }
 
   updateMarkpriceMap(market: Shared.MARKET_AVAILABEL, price: number) {
