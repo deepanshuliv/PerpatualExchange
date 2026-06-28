@@ -1,178 +1,160 @@
-import z, { boolean } from "zod";
-import { KIND_SCHEMA, MARKET_AVAILABEL_SCHEMA, TYPE_SCHEMA } from "../shared";
-
+import z from 'zod';
+import { KIND_SCHEMA, MARKET_AVAILABEL_SCHEMA, TYPE_SCHEMA } from '../shared';
 
 const BASE_ENGINE_SCHEMA = z.object({
-    correlationId: z.string()
-})
+  correlationId: z.string(),
+});
 
-const ENGINE_PAYLOAD_SCHEMA = z.object({ userId: z.string() })
+const ENGINE_PAYLOAD_SCHEMA = z.object({ userId: z.string() });
 
 const CREATE_ORDER_SCHEMA = BASE_ENGINE_SCHEMA.extend({
-    type: z.literal("create_order"),
-    payload: ENGINE_PAYLOAD_SCHEMA.extend({
-        qty: z.number(),
-        price: z.number(),
-        market: MARKET_AVAILABEL_SCHEMA,
-        type: TYPE_SCHEMA,
-        kind: KIND_SCHEMA,
-        margin: z.number()
-    })
-})
+  type: z.literal('create_order'),
+  payload: ENGINE_PAYLOAD_SCHEMA.extend({
+    qty: z.number(),
+    price: z.number(),
+    market: MARKET_AVAILABEL_SCHEMA,
+    type: TYPE_SCHEMA,
+    kind: KIND_SCHEMA,
+    margin: z.number(),
+  }),
+});
 type CREATE_ORDER = z.infer<typeof CREATE_ORDER_SCHEMA>;
 
 const GET_BALANCE_SCHEMA = BASE_ENGINE_SCHEMA.extend({
-    type: z.literal("get_balance"),
-    paylaod: ENGINE_PAYLOAD_SCHEMA.extend({
-        market: MARKET_AVAILABEL_SCHEMA.optional()
-    })
-})
+  type: z.literal('get_balance'),
+  payload: ENGINE_PAYLOAD_SCHEMA.extend({
+    market: MARKET_AVAILABEL_SCHEMA.optional(),
+  }),
+});
 
-type GET_BALANCE = z.infer<typeof GET_BALANCE_SCHEMA>
+type GET_BALANCE = z.infer<typeof GET_BALANCE_SCHEMA>;
 
 const CANCEL_ORDER_SCHEMA = BASE_ENGINE_SCHEMA.extend({
-    type: z.literal("cancel_order"),
-    payload: ENGINE_PAYLOAD_SCHEMA.extend({
-        orderId: z.string()
-    })
-})
+  type: z.literal('cancel_order'),
+  payload: ENGINE_PAYLOAD_SCHEMA.extend({
+    orderId: z.string(),
+  }),
+});
 
-type CANCEL_ORDER = z.infer<typeof CANCEL_ORDER_SCHEMA>
+type CANCEL_ORDER = z.infer<typeof CANCEL_ORDER_SCHEMA>;
 
 const ADD_BALANCE_SCHEMA = BASE_ENGINE_SCHEMA.extend({
-    type: z.literal("add_balance"),
-    payload: ENGINE_PAYLOAD_SCHEMA.extend({
-        amount: z.number(),
-    })
-})
+  type: z.literal('add_balance'),
+  payload: ENGINE_PAYLOAD_SCHEMA.extend({
+    amount: z.number(),
+  }),
+});
 
 type ADD_BALANCE = z.infer<typeof ADD_BALANCE_SCHEMA>;
 
 const GET_POSITION_SCHEMA = BASE_ENGINE_SCHEMA.extend({
-    type: z.literal("get_position"),
-    payload: ENGINE_PAYLOAD_SCHEMA.extend({
-        market: MARKET_AVAILABEL_SCHEMA.optional()
-    })
-})
-type GET_POSITION = z.infer<typeof GET_POSITION_SCHEMA>
+  type: z.literal('get_position'),
+  payload: ENGINE_PAYLOAD_SCHEMA.extend({
+    market: MARKET_AVAILABEL_SCHEMA.optional(),
+  }),
+});
+type GET_POSITION = z.infer<typeof GET_POSITION_SCHEMA>;
 
 const GET_OPEN_ORDERS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
-    type: z.literal("get_open_orders"),
-    payload: ENGINE_PAYLOAD_SCHEMA.extend({
-        market: MARKET_AVAILABEL_SCHEMA.optional()
-    })
-})
-type GET_OPEN_ORDERS = z.infer<typeof GET_OPEN_ORDERS_SCHEMA>
+  type: z.literal('get_open_orders'),
+  payload: ENGINE_PAYLOAD_SCHEMA.extend({
+    market: MARKET_AVAILABEL_SCHEMA.optional(),
+  }),
+});
+type GET_OPEN_ORDERS = z.infer<typeof GET_OPEN_ORDERS_SCHEMA>;
 
 const GET_CLOSED_ORDERS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
-    type: z.literal("get_closed_orders"),
-    payload: ENGINE_PAYLOAD_SCHEMA.extend({
-        market: MARKET_AVAILABEL_SCHEMA.optional()
-    })
-})
-type GET_CLOSED_ORDERS = z.infer<typeof GET_CLOSED_ORDERS_SCHEMA>
+  type: z.literal('get_closed_orders'),
+  payload: ENGINE_PAYLOAD_SCHEMA.extend({
+    market: MARKET_AVAILABEL_SCHEMA.optional(),
+  }),
+});
+type GET_CLOSED_ORDERS = z.infer<typeof GET_CLOSED_ORDERS_SCHEMA>;
 
 const GET_FILLS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
-    type: z.literal("get_fills"),
-    payload: ENGINE_PAYLOAD_SCHEMA
-})
-type GET_FILLS = z.infer<typeof GET_FILLS_SCHEMA>
+  type: z.literal('get_fills'),
+  payload: ENGINE_PAYLOAD_SCHEMA,
+});
+type GET_FILLS = z.infer<typeof GET_FILLS_SCHEMA>;
 
-const GET_MARKET_PRICE_SCHEMA = z.object({
-    type: z.literal("markprice_updated"),
-    payload: z.object({
-        price: z.number(),
-        market: MARKET_AVAILABEL_SCHEMA
-    })
-})
 const GET_DEPTH_SCHEMA = BASE_ENGINE_SCHEMA.extend({
-    type: z.literal("get_depth"),
-    payload: z.object({
-        market: MARKET_AVAILABEL_SCHEMA
-    })
-})
+  type: z.literal('get_depth'),
+  payload: z.object({
+    market: MARKET_AVAILABEL_SCHEMA,
+  }),
+});
 type GET_DEPTH = z.infer<typeof GET_DEPTH_SCHEMA>;
 
+// without correlationId
+const GET_MARKET_PRICE_SCHEMA = z.object({
+  type: z.literal('markprice_updated'),
+  payload: z.object({
+    price: z.number(),
+    market: MARKET_AVAILABEL_SCHEMA,
+  }),
+});
 const RUN_FUNDING_RATE_SCHEMA = z.object({
-    type: z.literal("run_funding_rate"),
-})
+  type: z.literal('run_funding_rate'),
+});
 
-type GET_MARKET_PRICE = z.infer<typeof GET_MARKET_PRICE_SCHEMA>
-
-
-const GET_ORDER_SCHEMA = z.object({
-    orderId: z.string()
-})
-
-const DB_REQUEST_SCHEMA = z.union([GET_ORDER_SCHEMA])
+type GET_MARKET_PRICE = z.infer<typeof GET_MARKET_PRICE_SCHEMA>;
 
 const BACKEND_ENGINE_REQUEST_SCHEMA = z.union([
-    GET_BALANCE_SCHEMA,
-    CREATE_ORDER_SCHEMA,
-    ADD_BALANCE_SCHEMA,
-    CANCEL_ORDER_SCHEMA,
-    GET_POSITION_SCHEMA,
-    GET_OPEN_ORDERS_SCHEMA,
-    GET_CLOSED_ORDERS_SCHEMA,
-    GET_FILLS_SCHEMA,
-    GET_DEPTH_SCHEMA,
-])
+  GET_BALANCE_SCHEMA,
+  CREATE_ORDER_SCHEMA,
+  ADD_BALANCE_SCHEMA,
+  CANCEL_ORDER_SCHEMA,
+  GET_POSITION_SCHEMA,
+  GET_OPEN_ORDERS_SCHEMA,
+  GET_CLOSED_ORDERS_SCHEMA,
+  GET_DEPTH_SCHEMA,
+]);
 type BACKEND_ENGINE_REQUEST = z.infer<typeof BACKEND_ENGINE_REQUEST_SCHEMA>;
 
 const ENGINE_REQUEST_SCHEMA = z.union([
-    GET_BALANCE_SCHEMA,
-    CREATE_ORDER_SCHEMA,
-    ADD_BALANCE_SCHEMA,
-    CANCEL_ORDER_SCHEMA,
-    GET_POSITION_SCHEMA,
-    GET_OPEN_ORDERS_SCHEMA,
-    GET_CLOSED_ORDERS_SCHEMA,
-    GET_FILLS_SCHEMA,
-    GET_MARKET_PRICE_SCHEMA,
-    RUN_FUNDING_RATE_SCHEMA,
-    GET_DEPTH_SCHEMA,
-])
+  GET_BALANCE_SCHEMA,
+  CREATE_ORDER_SCHEMA,
+  ADD_BALANCE_SCHEMA,
+  CANCEL_ORDER_SCHEMA,
+  GET_POSITION_SCHEMA,
+
+  GET_OPEN_ORDERS_SCHEMA,
+  GET_CLOSED_ORDERS_SCHEMA,
+
+  RUN_FUNDING_RATE_SCHEMA,
+  GET_DEPTH_SCHEMA,
+]);
 
 type ENGINE_REQUEST = z.infer<typeof ENGINE_REQUEST_SCHEMA>;
 
-type DB_REQUEST = z.infer<typeof DB_REQUEST_SCHEMA>;
-
 const isEngineRequest = (request: unknown): request is ENGINE_REQUEST => {
-    return ENGINE_REQUEST_SCHEMA.safeParse(request).success
-}
-
-const isDbRequest = (request: unknown): request is DB_REQUEST => {
-    return DB_REQUEST_SCHEMA.safeParse(request).success
-}
-
+  return ENGINE_REQUEST_SCHEMA.safeParse(request).success;
+};
 
 export {
-    GET_BALANCE_SCHEMA,
-    type GET_BALANCE,
-    GET_ORDER_SCHEMA,
-    ADD_BALANCE_SCHEMA,
-    type ADD_BALANCE,
-    CREATE_ORDER_SCHEMA,
-    type CREATE_ORDER,
-    CANCEL_ORDER_SCHEMA,
-    type CANCEL_ORDER,
-    type GET_MARKET_PRICE,
-    GET_MARKET_PRICE_SCHEMA,
-    GET_POSITION_SCHEMA,
-    type GET_POSITION,
-    GET_OPEN_ORDERS_SCHEMA,
-    type GET_OPEN_ORDERS,
-    GET_CLOSED_ORDERS_SCHEMA,
-    type GET_CLOSED_ORDERS,
-    GET_FILLS_SCHEMA,
-    type GET_FILLS,
-    GET_DEPTH_SCHEMA,
-    type GET_DEPTH,
-    ENGINE_REQUEST_SCHEMA,
-    isDbRequest,
-    isEngineRequest,
-    type DB_REQUEST,
-    type ENGINE_REQUEST,
-    BACKEND_ENGINE_REQUEST_SCHEMA,
-    type BACKEND_ENGINE_REQUEST,
-}
+  ADD_BALANCE_SCHEMA,
+  BACKEND_ENGINE_REQUEST_SCHEMA,
+  CANCEL_ORDER_SCHEMA,
+  CREATE_ORDER_SCHEMA,
+  ENGINE_REQUEST_SCHEMA,
+  GET_BALANCE_SCHEMA,
+  GET_CLOSED_ORDERS_SCHEMA,
+  GET_DEPTH_SCHEMA,
+  GET_FILLS_SCHEMA,
+  GET_MARKET_PRICE_SCHEMA,
+  GET_OPEN_ORDERS_SCHEMA,
+  GET_POSITION_SCHEMA,
+  isEngineRequest,
+  type ADD_BALANCE,
+  type BACKEND_ENGINE_REQUEST,
+  type CANCEL_ORDER,
+  type CREATE_ORDER,
+  type ENGINE_REQUEST,
+  type GET_BALANCE,
+  type GET_CLOSED_ORDERS,
+  type GET_DEPTH,
+  type GET_FILLS,
+  type GET_MARKET_PRICE,
+  type GET_OPEN_ORDERS,
+  type GET_POSITION,
+};

@@ -19,7 +19,11 @@ export async function signIn(req: Request, res: Response) {
             msg: "user is not present please go to signup "
         })
     }
-
+    if (user.password !== password) {
+        return res.status(411).json({
+            msg: "invalid password  "
+        })
+    }
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!);
 
     res.status(200).json({

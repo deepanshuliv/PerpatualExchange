@@ -1,4 +1,4 @@
-import { OrderedMap } from "js-sdsl";
+import { Shared } from '@repo/shared-types';
 import type {
   Bids,
   FillInfo,
@@ -8,8 +8,8 @@ import type {
   OrderBook,
   Orderdetails,
   OrderManagerSnapShotInstance,
-} from "@repo/shared-types/internal-types";
-import { Shared } from "@repo/shared-types";
+} from '@repo/shared-types/internal-types';
+import { OrderedMap } from 'js-sdsl';
 
 export default class OrderBookManager {
   private orderBook: OrderBook;
@@ -32,7 +32,7 @@ export default class OrderBookManager {
     return {
       orderbook: JSON.stringify(this.orderBook),
       fills: JSON.stringify(this.fills),
-      orders: JSON.stringify(this.orders),
+      orders: JSON.stringify(Array.from(this.orders.entries())),
       fundingInsurance: this.fundingInsurance,
       exchangeProfit: this.exchangeProfit,
       lastOrderId: this.lastOrderId,
@@ -40,16 +40,23 @@ export default class OrderBookManager {
   }
 
   loadSnapShot(orderManagerSnapShotInstance: OrderManagerSnapShotInstance) {
-    const orderbookData = JSON.parse(orderManagerSnapShotInstance.orderbook);
-    const fillsData = JSON.parse(orderManagerSnapShotInstance.fills);
-    const orderData = JSON.parse(orderManagerSnapShotInstance.orders);
+    if (!orderManagerSnapShotInstance) return;
 
-    this.orderBook = orderbookData;
-    this.fills = fillsData;
-    this.orders = orderData;
+    const parsedBook = JSON.parse(orderManagerSnapShotInstance.orderbook || '{}');
+    this.orderBook = {};
+    for (const [market, bookData] of Object.entries(parsedBook) as [Shared.MARKET_AVAILABEL, any][]) {
+      this.orderBook[market] = {
+        asks: new OrderedMap(bookData.asks || [], (a: number, b: number) => a - b),
+        bids: new OrderedMap(bookData.bids || [], (a: number, b: number) => b - a),
+        lastTradedPrice: bookData.lastTradedPrice || 0,
+      };
+    }
 
-    this.fundingInsurance = orderManagerSnapShotInstance.fundingInsurance;
-    this.exchangeProfit = orderManagerSnapShotInstance.exchangeProfit;
+    this.fills = JSON.parse(orderManagerSnapShotInstance.fills || '[]');
+    this.orders = new Map(JSON.parse(orderManagerSnapShotInstance.orders || '[]'));
+
+    this.fundingInsurance = orderManagerSnapShotInstance.fundingInsurance ?? 0;
+    this.exchangeProfit = orderManagerSnapShotInstance.exchangeProfit ?? 0;
     this.lastOrderId = orderManagerSnapShotInstance.lastOrderId ?? 0;
   }
 
@@ -94,15 +101,7 @@ export default class OrderBookManager {
     margin: number,
     market: Shared.MARKET_AVAILABEL,
   ) {
-    const currentOrder = this.createUserOrder(
-      userId,
-      kind,
-      type,
-      qty,
-      margin,
-      market,
-      price,
-    );
+    const currentOrder = this.createUserOrder(userId, kind, type, qty, margin, market, price);
 
     let fillInfo: FillInfo[] = [];
     const generatedFills: Fills[] = [];
@@ -118,10 +117,7 @@ export default class OrderBookManager {
         while (PriceLevel.openOrder.length > 0 && remianingQty > 0) {
           let topOrder = PriceLevel.openOrder[0]!;
           const priceLevelRemianingQty = topOrder.totalQty - topOrder.filledQty;
-          const priceLevelMaxFill = Math.min(
-            priceLevelRemianingQty,
-            remianingQty,
-          );
+          const priceLevelMaxFill = Math.min(priceLevelRemianingQty, remianingQty);
           remianingQty -= priceLevelMaxFill;
           topOrder.filledQty += priceLevelMaxFill;
 
@@ -138,10 +134,10 @@ export default class OrderBookManager {
               currentOrder.orderId,
               currentOrder.data.type,
               currentOrder.data.kind,
-              "FILLED",
+              'FILLED',
             );
             generatedFills.push(f);
-            this.changeOrderStatus(userId, currentOrder.orderId, "FILLED");
+            this.changeOrderStatus(userId, currentOrder.orderId, 'FILLED');
           } else {
             const f = this.addToFills(
               userId,
@@ -151,14 +147,10 @@ export default class OrderBookManager {
               currentOrder.orderId,
               currentOrder.data.type,
               currentOrder.data.kind,
-              "PARTIALLY_FILLED",
+              'PARTIALLY_FILLED',
             );
             generatedFills.push(f);
-            this.changeOrderStatus(
-              userId,
-              currentOrder.orderId,
-              "PARTIALLY_FILLED",
-            );
+            this.changeOrderStatus(userId, currentOrder.orderId, 'PARTIALLY_FILLED');
           }
           if (topOrder.filledQty === topOrder.totalQty) {
             const f = this.addToFills(
@@ -169,10 +161,10 @@ export default class OrderBookManager {
               topOrder.orderId,
               currentOrder.data.type,
               currentOrder.data.kind,
-              "FILLED",
+              'FILLED',
             );
             generatedFills.push(f);
-            this.changeOrderStatus(topOrder.userId, topOrder.orderId, "FILLED");
+            this.changeOrderStatus(topOrder.userId, topOrder.orderId, 'FILLED');
             PriceLevel.openOrder.shift();
           } else {
             const f = this.addToFills(
@@ -183,14 +175,10 @@ export default class OrderBookManager {
               topOrder.orderId,
               currentOrder.data.type,
               currentOrder.data.kind,
-              "PARTIALLY_FILLED",
+              'PARTIALLY_FILLED',
             );
             generatedFills.push(f);
-            this.changeOrderStatus(
-              userId,
-              topOrder.orderId,
-              "PARTIALLY_FILLED",
-            );
+            this.changeOrderStatus(userId, topOrder.orderId, 'PARTIALLY_FILLED');
           }
           PriceLevel.totalqty -= priceLevelMaxFill;
         }
@@ -215,7 +203,7 @@ export default class OrderBookManager {
         status: currentOrder.data.status,
       };
     }
-    if (type === "LIMIT") {
+    if (type === 'LIMIT') {
       // sit on same side
       const sameSide = this.getSameSide(market, kind);
       const sameSideOpenOrderDetail: openOrder = {
@@ -224,9 +212,7 @@ export default class OrderBookManager {
         orderId: currentOrder.orderId,
         userId: currentOrder.data.userId,
       };
-      const alreadyPriceOrder = sameSide?.getElementByKey(
-        currentOrder.data.price,
-      );
+      const alreadyPriceOrder = sameSide?.getElementByKey(currentOrder.data.price);
       if (alreadyPriceOrder) {
         alreadyPriceOrder.totalqty += remianingQty;
         alreadyPriceOrder.openOrder.push(sameSideOpenOrderDetail);
@@ -265,15 +251,7 @@ export default class OrderBookManager {
     margin: number,
     market: Shared.MARKET_AVAILABEL,
   ) {
-    const currrentOrder = this.createUserOrder(
-      userId,
-      kind,
-      type,
-      qty,
-      margin,
-      market,
-      price,
-    );
+    const currrentOrder = this.createUserOrder(userId, kind, type, qty, margin, market, price);
     const fillInfo: FillInfo[] = [];
     const generatedFills: Fills[] = [];
 
@@ -292,10 +270,7 @@ export default class OrderBookManager {
         while (PriceLevel.openOrder.length > 0 && remianingQty > 0) {
           const topOrder = PriceLevel.openOrder[0]!;
           const remainingPriceLevelQty = topOrder.totalQty - topOrder.filledQty;
-          const maxQtyFillPriceLevel = Math.min(
-            remainingPriceLevelQty,
-            remianingQty,
-          );
+          const maxQtyFillPriceLevel = Math.min(remainingPriceLevelQty, remianingQty);
           remianingQty -= maxQtyFillPriceLevel;
           topOrder.filledQty += maxQtyFillPriceLevel;
           this.orderBook[market]!.lastTradedPrice = bestPrice;
@@ -311,11 +286,11 @@ export default class OrderBookManager {
               bestPrice,
               topOrder.orderId,
               currrentOrder.data.type,
-              "LONG",
-              "FILLED",
+              'LONG',
+              'FILLED',
             );
             generatedFills.push(f);
-            this.changeOrderStatus(topOrder.userId, topOrder.orderId, "FILLED");
+            this.changeOrderStatus(topOrder.userId, topOrder.orderId, 'FILLED');
             PriceLevel.openOrder.shift();
           } else {
             const f = this.addToFills(
@@ -325,15 +300,11 @@ export default class OrderBookManager {
               bestPrice,
               topOrder.orderId,
               currrentOrder.data.type,
-              "LONG",
-              "PARTIALLY_FILLED",
+              'LONG',
+              'PARTIALLY_FILLED',
             );
             generatedFills.push(f);
-            this.changeOrderStatus(
-              topOrder.userId,
-              topOrder.orderId,
-              "PARTIALLY_FILLED",
-            );
+            this.changeOrderStatus(topOrder.userId, topOrder.orderId, 'PARTIALLY_FILLED');
           }
           if (remianingQty === 0) {
             const f = this.addToFills(
@@ -343,15 +314,11 @@ export default class OrderBookManager {
               currrentOrder.data.price,
               currrentOrder.orderId,
               currrentOrder.data.type,
-              "SHORT",
-              "FILLED",
+              'SHORT',
+              'FILLED',
             );
             generatedFills.push(f);
-            this.changeOrderStatus(
-              currrentOrder.data.userId,
-              currrentOrder.orderId,
-              "FILLED",
-            );
+            this.changeOrderStatus(currrentOrder.data.userId, currrentOrder.orderId, 'FILLED');
           } else {
             const f = this.addToFills(
               topOrder.userId,
@@ -360,14 +327,14 @@ export default class OrderBookManager {
               currrentOrder.data.price,
               currrentOrder.orderId,
               currrentOrder.data.type,
-              "SHORT",
-              "PARTIALLY_FILLED",
+              'SHORT',
+              'PARTIALLY_FILLED',
             );
             generatedFills.push(f);
             this.changeOrderStatus(
               currrentOrder.data.userId,
               currrentOrder.orderId,
-              "PARTIALLY_FILLED",
+              'PARTIALLY_FILLED',
             );
           }
 
@@ -397,7 +364,7 @@ export default class OrderBookManager {
     }
 
     // sit on same side
-    if (type === "LIMIT") {
+    if (type === 'LIMIT') {
       const sameSide = this.getSameSide(market, kind);
 
       const priceOrder = sameSide?.getElementByKey(price);
@@ -566,7 +533,7 @@ export default class OrderBookManager {
       type,
       qty,
       price: price === undefined ? 0 : price,
-      status: "OPEN",
+      status: 'OPEN',
       margin,
       kind,
       market,
@@ -582,7 +549,7 @@ export default class OrderBookManager {
     if (!marketPresent) {
       return null;
     }
-    const oppPos = kind === "LONG" ? "asks" : "bids";
+    const oppPos = kind === 'LONG' ? 'asks' : 'bids';
 
     return marketPresent[oppPos];
   }
@@ -592,7 +559,7 @@ export default class OrderBookManager {
     if (!marketPresent) {
       return null;
     }
-    const samePos = kind === "LONG" ? "bids" : "asks";
+    const samePos = kind === 'LONG' ? 'bids' : 'asks';
 
     return marketPresent[samePos];
   }
@@ -618,7 +585,7 @@ export default class OrderBookManager {
       return null;
     }
     // changed order status
-    this.changeOrderStatus(userId, orderId, "CANCELLED");
+    this.changeOrderStatus(userId, orderId, 'CANCELLED');
 
     const kind = userOrderDetails.kind;
     const market = userOrderDetails.market;
@@ -675,6 +642,10 @@ export default class OrderBookManager {
   }
 
   getOrder(userId: string, orderId: string) {
+    if (!this.orders || typeof this.orders.get !== 'function') {
+      this.orders = new Map();
+      return null;
+    }
     const userOrder = this.orders.get(orderId);
     if (!userOrder) {
       return null;
@@ -683,6 +654,10 @@ export default class OrderBookManager {
   }
 
   changeOrderStatus(userId: string, orderId: string, status: Shared.STATUS) {
+    if (!this.orders || typeof this.orders.get !== 'function') {
+      this.orders = new Map();
+      return null;
+    }
     const tempOrder = this.orders.get(orderId);
     if (tempOrder?.userId !== userId) {
       return null;
@@ -702,9 +677,7 @@ export default class OrderBookManager {
     // delete entry from fills table
   }
   getFills(userId: string) {
-    return this.fills.filter(
-      (fill) => fill.buyerId === userId || fill.sellerId === userId
-    );
+    return this.fills.filter((fill) => fill.buyerId === userId || fill.sellerId === userId);
   }
 
   getOpenOrders(userId: string, market?: Shared.MARKET_AVAILABEL) {
@@ -712,7 +685,7 @@ export default class OrderBookManager {
     this.orders.forEach((order, orderId) => {
       if (
         order.userId === userId &&
-        order.status === "OPEN" &&
+        order.status === 'OPEN' &&
         (!market || order.market === market)
       ) {
         openOrders.push({ ...order, orderId });
@@ -726,7 +699,7 @@ export default class OrderBookManager {
     this.orders.forEach((order, orderId) => {
       if (
         order.userId === userId &&
-        order.status !== "OPEN" &&
+        order.status !== 'OPEN' &&
         (!market || order.market === market)
       ) {
         closedOrders.push({ ...order, orderId });
@@ -740,7 +713,7 @@ export default class OrderBookManager {
     if (!marketBook) {
       return {
         bids: [],
-        asks: []
+        asks: [],
       };
     }
 
@@ -757,7 +730,7 @@ export default class OrderBookManager {
 
     return {
       bids,
-      asks
+      asks,
     };
   }
 }

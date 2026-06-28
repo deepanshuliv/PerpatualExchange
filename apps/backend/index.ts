@@ -12,14 +12,20 @@ app.use(express.json());
 
 app.use(appRouter);
 
+// Global Express error handler to guarantee clean JSON error responses
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Unhandled API error:", err);
+  res.status(500).json({ msg: err?.message || "Internal server error" });
+});
+
 async function startServer() {
   try {
     console.log("Connecting to Redis...");
     await initializeRedis();
     console.log("Redis connected successfully.");
 
-    app.listen(3000, () => {
-        console.log("server is running on port ", 3000)
+    app.listen(3001, () => {
+      console.log("server is running on port ", 3001);
     });
   } catch (error) {
     console.error("Failed to initialize Redis streams:", error);

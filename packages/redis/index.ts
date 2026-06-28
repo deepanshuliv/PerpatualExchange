@@ -7,19 +7,22 @@ redisClient.on("error", (err) => {
 });
 
 export async function connectRedisClient(client: any, serviceName: string): Promise<any> {
-  const handleDisconnect = (err: any) => {
-    console.error(`[${serviceName}] Redis connection went down, exiting process:`, err);
-    process.exit(1);
-  };
+  if (!client._listenersAttached) {
+    client._listenersAttached = true;
+    const handleDisconnect = (err: any) => {
+      console.error(`[${serviceName}] Redis connection went down, exiting process:`, err);
+      process.exit(1);
+    };
 
-  client.on('error', (err: any) => {
-    console.error(`[${serviceName}] Redis error:`, err);
-    handleDisconnect(err);
-  });
+    client.on('error', (err: any) => {
+      console.error(`[${serviceName}] Redis error:`, err);
+      handleDisconnect(err);
+    });
 
-  client.on('end', () => {
-    handleDisconnect(new Error("Connection ended by Redis server"));
-  });
+    client.on('end', () => {
+      handleDisconnect(new Error("Connection ended by Redis server"));
+    });
+  }
 
   if (!client.isOpen) {
     await client.connect();

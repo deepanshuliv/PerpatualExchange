@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 
 import type { OrderBookRow, Position, Order, Fill } from "types";
+import { useApi } from "../hooks/useApi";
+import { log } from "console";
 
 interface TradingContextType {
   market: "BTCUSD" | "ETHUSD" | "SOLUSD";
@@ -43,10 +45,10 @@ export const useTrading = () => {
   return context;
 };
 
-const API_BASE = "http://localhost:3000";
 const WS_BASE = "ws://localhost:8080";
 
 export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const api = useApi();
   const [market, setMarket] = useState<"BTCUSD" | "ETHUSD" | "SOLUSD">("BTCUSD");
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<{ id: string; username: string } | null>(null);
@@ -70,8 +72,13 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [authModalMode, setAuthModalMode] = useState<"login" | "signup" | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const tokenRef = useRef<string | null>(token);
   // Track whether the backend API is reachable; suppresses console noise on startup
   const backendAvailable = useRef<boolean>(false);
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
 
   // Load auth state from localStorage on mount
   useEffect(() => {
@@ -93,15 +100,6 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setOpenInterest(0);
   }, [market]);
 
-  // Fetch data on token or market change
-  useEffect(() => {
-    fetchDepth();
-    fetchLastPrice();
-    if (token) {
-      refreshUserData();
-    }
-  }, [market, token]);
-
   // Periodic user data refresh
   useEffect(() => {
     if (!token) return;
@@ -111,15 +109,6 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => clearInterval(interval);
   }, [market, token]);
 
-  // Periodic depth fallback — runs every 10s as a safety net;
-  // the WS depth stream handles real-time updates so this rate is sufficient.
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchDepth();
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [market]);
-
   // WebSocket connection management
   useEffect(() => {
     console.log(`Connecting to WebSocket: ${WS_BASE}`);
@@ -128,8 +117,14 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     ws.onopen = () => {
       console.log("WebSocket connected successfully");
-      // Subscribe to streams for the current market
+      // 1. Subscribe to streams for the current market
       subscribeToMarket(ws, market);
+      // 2. Perform one-time initial HTTP requests after WS is set up
+      fetchDepth();
+      fetchLastPrice();
+      if (tokenRef.current) {
+        refreshUserData();
+      }
     };
 
     ws.onmessage = (event) => {
@@ -144,9 +139,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             // Last Price: price of the most recent trade on OUR local exchange (from fills)
             setLastPrice(Number(data.price));
           } else if (stream.startsWith("markPrice")) {
-            // Mark Price / Index Price: Binance Futures mark price, used as the external
-            // fair valuation price. This is NOT the same as Last Price.
-            // It updates continuously from Binance regardless of local trading activity.
+            // Mark Price / Index Price: Binance Futures mark price
             const price = Number(data.price);
             setMarkPrice(price);
             // Derive approximate 24h stats from live mark price
@@ -154,15 +147,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setLow24h(price * 0.957);
             setVolume24h(price * 2345.67);
             setOpenInterest(price * 0.0071);
-            // NOTE: Do NOT set lastPrice here — lastPrice must only reflect
-            // locally matched trades. Showing Binance price as lastPrice
-            // would be semantically incorrect.
           } else if (stream.startsWith("bookTicker")) {
-            // bookTicker carries best bid/ask from the local order book.
-            // Not used for lastPrice — only relevant for spread display if needed.
-          } else if (stream.startsWith("depth")) {
-            // Trigger a quick depth update when a fill occurs
-            fetchDepth();
+            // bookTicker carries best bid/ask from local order book
           }
         }
       } catch (err) {
@@ -223,8 +209,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // API Call: Fetch Order Book Depth
   const fetchDepth = async () => {
     try {
-      const res = await fetch(`${API_BASE}/depth/${market}`);
-      const json = await res.json();
+      const json = await api.getDepth(market);
       backendAvailable.current = true;
       if (json.ok && json.data) {
         const rawBids = json.data.bids || {};
@@ -269,8 +254,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // API Call: Fetch Last Traded Price (from local fills — only updates when a real trade occurs)
   const fetchLastPrice = async () => {
     try {
-      const res = await fetch(`${API_BASE}/ticker/price/${market}`);
-      const json = await res.json();
+      const json = await api.getTickerPrice(market);
       backendAvailable.current = true;
       if (json.ok && json.price && Number(json.price) > 0) {
         setLastPrice(Number(json.price));
@@ -284,20 +268,17 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // API Call: Refresh user balance, positions, open orders, and fills
   const refreshUserData = async () => {
     if (!token) return;
-    const headers = { Authorization: `Bearer ${token}` };
 
     try {
       // 1. Fetch balance (available equity)
-      const balanceRes = await fetch(`${API_BASE}/equity/available?market=${market}`, { headers });
-      const balanceJson = await balanceRes.json();
+      const balanceJson = await api.getAvailableEquity(token, market);
       if (balanceJson.ok && balanceJson.data) {
         // available balance is in balanceJson.data
         setBalance(balanceJson.data.availableBalance || 0);
       }
 
       // 2. Fetch open positions
-      const positionsRes = await fetch(`${API_BASE}/positions/open/all`, { headers });
-      const positionsJson = await positionsRes.json();
+      const positionsJson = await api.getOpenPositions(token);
       if (positionsJson.ok && positionsJson.data) {
         // format values from engine: {"positions": {...}} or similar
         const positionsMap = positionsJson.data.positions || {};
@@ -320,8 +301,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       // 3. Fetch open orders
-      const ordersRes = await fetch(`${API_BASE}/orders/open/all`, { headers });
-      const ordersJson = await ordersRes.json();
+      const ordersJson = await api.getOpenOrders(token);
       if (ordersJson.ok && ordersJson.data) {
         const formattedOrders: Order[] = ordersJson.data.map((ord: any) => ({
           id: ord.orderId || ord.id,
@@ -340,8 +320,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       // 4. Fetch fills
-      const fillsRes = await fetch(`${API_BASE}/fills`, { headers });
-      const fillsJson = await fillsRes.json();
+      const fillsJson = await api.getFills(token);
       if (fillsJson.ok && fillsJson.data) {
         const formattedFills: Fill[] = fillsJson.data.map((f: any) => ({
           id: f.id || f.orderId,
@@ -366,13 +345,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Action: Register/Signup
   const signup = async (username: string, password?: string): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_BASE}/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password: password || "password" })
-      });
-      const json = await res.json();
-      if (res.status === 201 && json.token && json.user) {
+      const json = await api.signup(username, password);
+      if (json.status === 201 && json.token && json.user) {
         setToken(json.token);
         setUser(json.user);
         localStorage.setItem("perp_token", json.token);
@@ -392,13 +366,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Action: Login/Signin
   const login = async (username: string, password?: string): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_BASE}/signin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password: password || "password" })
-      });
-      const json = await res.json();
-      if (res.status === 200 && json.token && json.user) {
+      const json = await api.signin(username, password);
+      if (json.status === 200 && json.token && json.user) {
         setToken(json.token);
         setUser(json.user);
         localStorage.setItem("perp_token", json.token);
@@ -427,19 +396,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Helper deposit function
   const performOnramp = async (authToken: string, amount: number): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_BASE}/onramp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          correlationId: crypto.randomUUID(),
-          data: { amount }
-        })
-      });
-      const json = await res.json();
-      if (res.status === 201 && json.ok) {
+      const json = await api.onramp(authToken, amount);
+      if (json.status === 201 && json.ok) {
         refreshUserData();
         return true;
       }
@@ -468,36 +426,26 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       throw new Error("User must be logged in to trade");
     }
 
+    
     try {
-      const res = await fetch(`${API_BASE}/order`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          correlationId: crypto.randomUUID(),
-          data: {
-            qty,
-            price,
-            market,
-            type,
-            kind,
-            margin
-          }
-        })
+      const json = await api.placeOrder(token, {
+        qty,
+        price,
+        market,
+        type,
+        kind,
+        margin
       });
       
-      const json = await res.json();
-      if (res.status === 200 && json.ok) {
+      if (json.status === 200 && json.ok) {
         refreshUserData();
-        fetchDepth();
+        console.log(json.data)
         return json.data;
       } else {
-        throw new Error(json.msg || "Order execution failed");
+        throw new Error(json.msg || "parse error ");
       }
     } catch (err: any) {
-      console.error("Order submission failed:", err);
+    console.error("Order submission failed:", err);
       throw err;
     }
   };
@@ -507,24 +455,10 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!token) return false;
 
     try {
-      const res = await fetch(`${API_BASE}/order/cancel`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          correlationId: crypto.randomUUID(),
-          data: {
-            orderId
-          }
-        })
-      });
+      const json = await api.cancelOrder(token, orderId);
       
-      const json = await res.json();
-      if (res.status === 200 && json.ok) {
+      if (json.status === 200 && json.ok) {
         refreshUserData();
-        fetchDepth();
         return true;
       }
       return false;
@@ -569,3 +503,4 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     </TradingContext.Provider>
   );
 };
+

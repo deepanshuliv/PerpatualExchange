@@ -1,12 +1,12 @@
-import z from "zod";
-import { OrderedMap } from "js-sdsl";
+import { OrderedMap } from 'js-sdsl';
+import z from 'zod';
 import {
   KIND_SCHEMA,
   MARKET_AVAILABEL_SCHEMA,
   STATUS_SCHEMA,
   TYPE_SCHEMA,
-} from "./shared";
-import { ADD_BALANCE_SCHEMA } from "./engine-types/engine-request";
+  type MARKET_AVAILABEL,
+} from './shared';
 
 export const ORDERMANAGERINSATNCE_SCHEMA = z.object({
   orderbook: z.string(),
@@ -17,17 +17,13 @@ export const ORDERMANAGERINSATNCE_SCHEMA = z.object({
   lastOrderId: z.number().optional().default(0),
 });
 
-export type OrderManagerSnapShotInstance = z.infer<
-  typeof ORDERMANAGERINSATNCE_SCHEMA
->;
+export type OrderManagerSnapShotInstance = z.infer<typeof ORDERMANAGERINSATNCE_SCHEMA>;
 export const POSITIONSNAPSHOTINSTANCE_SCHEMA = z.object({
   positions: z.string(),
   marketIndex: z.string(),
 });
 
-export type positonSnapshotInstanceType = z.infer<
-  typeof POSITIONSNAPSHOTINSTANCE_SCHEMA
->;
+export type positonSnapshotInstanceType = z.infer<typeof POSITIONSNAPSHOTINSTANCE_SCHEMA>;
 
 const ENGINESNAPSHOT_BASE = POSITIONSNAPSHOTINSTANCE_SCHEMA.extend(
   ORDERMANAGERINSATNCE_SCHEMA.shape,
@@ -102,7 +98,7 @@ export type Bids = z.infer<typeof BIDS_SCHEMA>;
 
 export type OrderBook = Partial<
   Record<
-    string,
+    MARKET_AVAILABEL,
     {
       asks: OrderedMap<number, Bids>;
       bids: OrderedMap<number, Bids>;
@@ -128,15 +124,13 @@ export const USER_MARKET_ORDER_TYPES_SCHEMA = z.object({
   kind: KIND_SCHEMA,
   costBasis: z.number(),
 });
-export type userMarketOrderTypes = z.infer<
-  typeof USER_MARKET_ORDER_TYPES_SCHEMA
->;
+export type userMarketOrderTypes = z.infer<typeof USER_MARKET_ORDER_TYPES_SCHEMA>;
 
 export type MarketMarkPrice = Map<string, number>;
 
 export type Positions = Map<string, PositionDetails[]>;
 
-export type MarketIndex = Map<string, Set<string>>;
+export type MarketIndex = Map<MARKET_AVAILABEL, Set<string>>;
 
 export type RedisStreamResponse = Array<{
   name: string;

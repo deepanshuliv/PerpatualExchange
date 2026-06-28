@@ -1,6 +1,5 @@
 import type {
   MarketIndex,
-  MarketMarkPrice,
   PositionDetails,
   Positions,
   userMarketOrderTypes,
@@ -8,44 +7,44 @@ import type {
 } from "@repo/shared-types/internal-types";
 import { Shared } from "@repo/shared-types";
 import { OrderedMap } from "js-sdsl";
+
 export default class PostionManager {
   private positions: Positions;
   private markteIndex: MarketIndex;
-  private marketsMarkPrice: MarketMarkPrice;
+  private marketsMarkPrice: Map<Shared.MARKET_AVAILABEL, number>;
 
   constructor() {
     this.positions = new Map();
-    this.markteIndex = new Map<Shared.MARKET_AVAILABEL, Set<string>>();
+    this.markteIndex = new Map();
     this.marketsMarkPrice = new Map();
   }
 
-  createPositionSnapshot() {
+  createSnapShot() {
     return {
-      positions: JSON.stringify(this.positions),
-      marketIndex: JSON.stringify(this.markteIndex),
+      positions: JSON.stringify(Array.from(this.positions.entries())),
+      marketIndex: JSON.stringify(
+        Array.from(this.markteIndex.entries()).map(([m, set]) => [m, Array.from(set || [])]),
+      ),
     };
   }
-  loadPositionSnapshot(positonSnapshotInstance: positonSnapshotInstanceType) {
-    this.positions = JSON.parse(positonSnapshotInstance.positions);
-    this.markteIndex = JSON.parse(positonSnapshotInstance.marketIndex);
+
+  loadSnapShot(snapshot: positonSnapshotInstanceType) {
+    if (!snapshot) return;
+    this.positions = new Map(JSON.parse(snapshot.positions || '[]'));
+    const idx = JSON.parse(snapshot.marketIndex || '[]');
+    this.markteIndex = new Map(
+      idx.map(([k, v]: [any, any[]]) => [k, new Set(v)]),
+    );
   }
 
   getPosition(userId: string, market: Shared.MARKET_AVAILABEL) {
     const userPositions = this.positions.get(userId);
-    if (!userPositions) {
-      return null;
-    }
-    const marketPos = userPositions.find((pos) => {
-      return pos.market === market;
-    });
-    if (!marketPos) {
-      return null;
-    }
-    return marketPos;
+    if (!userPositions) return null;
+    return userPositions.find((pos) => pos.market === market) || null;
   }
 
   getPositionsForUser(userId: string) {
-    return this.positions.get(userId) ?? [];
+    return this.positions.get(userId) || [];
   }
 
   changePosition(
@@ -56,23 +55,15 @@ export default class PostionManager {
     costBasis: number,
     margin: number,
   ) {
-    // create , update , positon , delete postion if - 0
     const userPos = this.getPosition(userId, market);
 
     if (!userPos) {
-      const positionDetails: PositionDetails = {
-        costBasis,
-        kind,
-        margin,
-        market,
-        qty,
-      };
+      const positionDetails: PositionDetails = { costBasis, kind, margin, market, qty };
       if (!this.markteIndex.has(market)) {
         this.markteIndex.set(market, new Set());
       }
       this.positions.set(userId, [positionDetails]);
       this.markteIndex.get(market)?.add(userId);
-
       return userPos;
     }
 
@@ -81,27 +72,19 @@ export default class PostionManager {
       userPos.costBasis += costBasis;
       userPos.margin += margin;
     } else {
-      // opposite side decrease qty of positions
       if (userPos.qty === qty) {
-        // pos = 0
-        // delete pos — filter out the position for this market
-        let userPosToChange = this.positions.get(userId);
-        userPosToChange = userPosToChange?.filter((pos) => {
-          return pos.market !== market; // remove only the position for this market
-        });
-        this.positions.set(userId, userPosToChange ?? []);
-        this.markteIndex.get(market)!.delete(userId);
+        let userPosToChange = this.positions.get(userId)?.filter((pos) => pos.market !== market);
+        this.positions.set(userId, userPosToChange || []);
+        this.markteIndex.get(market)?.delete(userId);
       } else if (userPos.qty > qty) {
-        // partial reduction — position kind stays the same
         userPos.qty -= qty;
         userPos.margin -= margin;
         userPos.costBasis -= costBasis;
-      } else if (userPos.qty < qty) {
-        // position flip — directly set the new flipped position values
+      } else {
         userPos.qty = qty;
         userPos.margin = margin;
         userPos.costBasis = costBasis;
-        userPos.kind = kind; // flip to the new direction
+        userPos.kind = kind;
       }
     }
 
@@ -109,23 +92,19 @@ export default class PostionManager {
   }
 
   calculateLiquidation(market: Shared.MARKET_AVAILABEL, markPrice: number) {
-    // go to each user calculate pnl
-    // before margin - 5% liquidate person
-    // return { qty , kind , market , userId , margin}
-    const userMarketOrder: userMarketOrderTypes[] = [];
+    if (!this.markteIndex || !this.markteIndex.get) return null;
+
     const userPosOfmarket = this.markteIndex.get(market);
-    if (!userPosOfmarket) {
-      return null;
-    }
+    if (!userPosOfmarket || userPosOfmarket.size === 0) return null;
 
+    const userMarketOrder: userMarketOrderTypes[] = [];
     userPosOfmarket.forEach((userId) => {
-      const userPostion = this.positions.get(userId);
-
-      userPostion?.forEach((pos) => {
+      const userPositions = this.positions.get(userId);
+      userPositions?.forEach((pos) => {
         if (pos.market === market) {
-          let liquidationMarginLimit = pos.margin * 0.95;
-          let priceOfPostionAccordingToMarkPrice = markPrice * pos.qty;
-          let uPnl = priceOfPostionAccordingToMarkPrice - pos.costBasis;
+          const liquidationMarginLimit = pos.margin * 0.95;
+          const priceOfPostionAccordingToMarkPrice = markPrice * pos.qty;
+          const uPnl = priceOfPostionAccordingToMarkPrice - pos.costBasis;
 
           if (uPnl + liquidationMarginLimit <= 0) {
             userMarketOrder.push({
@@ -140,6 +119,7 @@ export default class PostionManager {
         }
       });
     });
+
     return userMarketOrder;
   }
 
@@ -148,11 +128,11 @@ export default class PostionManager {
     localPrice: number,
     market: Shared.MARKET_AVAILABEL,
   ) {
-    // Guard: both prices must be valid
     if (!externalPrice || !localPrice) return null;
+    if (!this.markteIndex || !this.markteIndex.get) return null;
 
     const marketUser = this.markteIndex.get(market);
-    if (!marketUser) return null;
+    if (!marketUser || marketUser.size === 0) return null;
 
     const longUser: PositionDetails[] = [];
     const shortUser: PositionDetails[] = [];
@@ -162,50 +142,33 @@ export default class PostionManager {
       if (!userPositions) return;
       const longPos = userPositions.find((pos) => pos.market === market && pos.kind === 'LONG');
       const shortPos = userPositions.find((pos) => pos.market === market && pos.kind === 'SHORT');
-      // Both sides must exist for funding to apply (internal zero-sum)
       if (longPos) longUser.push(longPos);
       if (shortPos) shortUser.push(shortPos);
     });
 
     if (longUser.length === 0 || shortUser.length === 0) return null;
 
-    // --- Industry-standard funding rate formula ---
-    // 1. Funding Basis: how much the local futures price deviates from external index
     const fundingBasis = localPrice - externalPrice;
-
-    // 2. Funding Rate as a %: basis relative to external price
-    //    Capped at ±0.05% per period (industry standard cap, e.g. Binance uses ±0.05%)
-    const MAX_FUNDING_RATE = 0.0005; // 0.05%
+    const MAX_FUNDING_RATE = 0.0005;
     const rawFundingRate = fundingBasis / externalPrice;
     const fundingRate = Math.max(-MAX_FUNDING_RATE, Math.min(MAX_FUNDING_RATE, rawFundingRate));
 
-    // 3. Per-position payment: positionNotionalValue × fundingRate
-    //    notionalValue = qty × externalPrice (valued at fair external price)
-    //    Positive fundingRate → longs pay shorts (local premium, incentivise selling)
-    //    Negative fundingRate → shorts pay longs (local discount, incentivise buying)
-
     if (fundingRate > 0) {
-      // Longs pay shorts
       longUser.forEach((pos) => {
-        const notional = pos.qty * externalPrice;
-        pos.margin -= notional * fundingRate;
+        pos.margin -= pos.qty * externalPrice * fundingRate;
       });
       shortUser.forEach((pos) => {
-        const notional = pos.qty * externalPrice;
-        pos.margin += notional * fundingRate;
+        pos.margin += pos.qty * externalPrice * fundingRate;
       });
     } else if (fundingRate < 0) {
-      // Shorts pay longs (fundingRate is negative, so flip sign for debit)
+      const rate = Math.abs(fundingRate);
       shortUser.forEach((pos) => {
-        const notional = pos.qty * externalPrice;
-        pos.margin -= notional * Math.abs(fundingRate);
+        pos.margin -= pos.qty * externalPrice * rate;
       });
       longUser.forEach((pos) => {
-        const notional = pos.qty * externalPrice;
-        pos.margin += notional * Math.abs(fundingRate);
+        pos.margin += pos.qty * externalPrice * rate;
       });
     }
-    // If fundingRate === 0, prices are equal — no payment needed
   }
 
   updateMarkpriceMap(market: Shared.MARKET_AVAILABEL, price: number) {
@@ -216,22 +179,24 @@ export default class PostionManager {
     return this.marketsMarkPrice.get(market);
   }
 
-  calculateAndGetHigestPnl(kind: Shared.KIND, market: Shared.MARKET_AVAILABEL) {
-    const oppSide = kind === "SHORT" ? "LONG" : "SHORT";
-    const markPrice = this.marketsMarkPrice.get(market) || 0;
+  calculateAndGetHigestPnl(kind: Shared.KIND, market: Shared.MARKET_AVAILABEL, markPrice: number) {
+    const oppSide = kind === 'SHORT' ? 'LONG' : 'SHORT';
 
     const oppSideMaxPnlUsers = new OrderedMap<number, string>();
+    if (!this.markteIndex || !this.markteIndex.get) return { profitableUser: null, markPrice };
+
     this.markteIndex.get(market)?.forEach((userId) => {
       const userPositions = this.positions.get(userId);
-      const userMarketPos = userPositions?.find((pos) => {
-        return pos.kind === oppSide && pos.market === market;
-      })!;
+      const userMarketPos = userPositions?.find(
+        (pos) => pos.kind === oppSide && pos.market === market,
+      );
+      if (!userMarketPos) return;
 
       const marketPositionValue = markPrice * userMarketPos.qty;
       const uPnl = marketPositionValue - userMarketPos.costBasis;
-
       oppSideMaxPnlUsers.setElement(uPnl, userId);
     });
+
     return { profitableUser: oppSideMaxPnlUsers.front(), markPrice };
   }
 }

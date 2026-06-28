@@ -15,27 +15,18 @@ export default class MatchingEngine {
     this.positons = position;
   }
 
-  getSnapShotOfEngine() {
+  createSnapShot() {
     return {
       ...this.orderBook.createSnapShot(),
-      ...this.positons.createPositionSnapshot(),
-      balance: this.balance.createBalanceSnapShot(),
+      ...this.positons.createSnapShot(),
+      balance: this.balance.createSnapShot(),
     };
   }
 
-  loadSnapShotOfEngine(engieneSnapShotInstance: EngineSnapShotInstanceType) {
-    this.balance.loadBalanceSnapshot(engieneSnapShotInstance.balance);
-    this.orderBook.loadSnapShot({
-      exchangeProfit: engieneSnapShotInstance.exchangeProfit,
-      fills: engieneSnapShotInstance.fills,
-      fundingInsurance: engieneSnapShotInstance.fundingInsurance,
-      orderbook: engieneSnapShotInstance.orderbook,
-      orders: engieneSnapShotInstance.orders,
-    });
-    this.positons.loadPositionSnapshot({
-      marketIndex: engieneSnapShotInstance.marketIndex,
-      positions: engieneSnapShotInstance.positions,
-    });
+  loadSnapShot(engieneSnapShotInstance: EngineSnapShotInstanceType) {
+    this.balance.loadSnapShot(engieneSnapShotInstance.balance);
+    this.orderBook.loadSnapShot(engieneSnapShotInstance);
+    this.positons.loadSnapShot(engieneSnapShotInstance);
   }
   getLastTradedPriceOFMarket(market: Shared.MARKET_AVAILABEL) {
     return this.orderBook.getLastTradedPriceOFMarket(market);
@@ -307,6 +298,7 @@ export default class MatchingEngine {
     margin: number,
     market: Shared.MARKET_AVAILABEL,
     costBasis: number,
+    markPrice: number,
   ) {
     let userOrderInfo;
     const maxPrice = costBasis / qty;
@@ -326,6 +318,7 @@ export default class MatchingEngine {
         const prfitDetails = this.positons.calculateAndGetHigestPnl(
           "SHORT",
           market,
+          markPrice,
         );
         const [pnl, profitableUserId] = prfitDetails.profitableUser!;
 
@@ -413,6 +406,7 @@ export default class MatchingEngine {
         const prfitDetails = this.positons.calculateAndGetHigestPnl(
           "LONG",
           market,
+          markPrice,
         );
         const [pnl, profitableUserId] = prfitDetails.profitableUser!;
 

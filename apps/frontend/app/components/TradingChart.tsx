@@ -15,15 +15,19 @@ interface Candle {
 
 export default function TradingChart() {
   const { market, lastPrice } = useTrading();
+  const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<"chart" | "depth" | "margin" | "funding" | "market_info">("chart");
   const [priceType, setPriceType] = useState<"last" | "mark" | "index">("last");
   const [interval, setInterval] = useState("1h");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // Hover state
   const [hoveredCandle, setHoveredCandle] = useState<Candle | null>(null);
   const [mouseCoords, setMouseCoords] = useState<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
   // Map market to base price and asset name
   const marketDetails = useMemo(() => {
     if (market === "ETHUSD") {
@@ -192,6 +196,10 @@ export default function TradingChart() {
     return minPrice + (relativeY / (chartHeight - 2 * padding)) * priceRange;
   };
 
+  if (!mounted) {
+    return <div className="flex flex-col h-full bg-[#0c0d10] border border-[#171a1f] rounded-lg p-4 select-none font-sans min-h-[500px]" />;
+  }
+
   return (
     <div className="flex flex-col h-full bg-[#0c0d10] border border-[#171a1f] rounded-lg overflow-hidden select-none font-sans" ref={containerRef}>
       {/* Top Tab Bar Header */}
@@ -281,7 +289,7 @@ export default function TradingChart() {
 
               <button className="text-[#8491a5] hover:text-white font-semibold text-[11px]">
                 Indicators
-              </button>
+              </button> 
               
               <button className="text-blue-400 hover:text-blue-300 font-semibold text-[10px] bg-blue-500/10 px-1.5 py-0.5 rounded font-bold">
                 OL

@@ -6,12 +6,13 @@ export default class Balance {
     this.user = {};
   }
 
-  createBalanceSnapShot() {
+  createSnapShot() {
     return JSON.stringify(this.user);
   }
 
-  loadBalanceSnapshot(balanceSnapShot: string) {
-    this.user = JSON.parse(balanceSnapShot);
+  loadSnapShot(balanceSnapShot: string) {
+    if (!balanceSnapShot) return;
+    this.user = JSON.parse(balanceSnapShot || '{}');
   }
   createUserBalanceAccount(userId: string) {
     let userAvailabel = this.user[userId];

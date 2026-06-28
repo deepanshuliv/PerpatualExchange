@@ -56,7 +56,6 @@ export default class BinanceClassListner {
                 else if (rawSymbol === "SOLUSDT") market = "SOLUSD";
                 else market = rawSymbol;
 
-                console.log("price update from binance", data.p, market);
                 await this.redisClient.xAdd("to-engine", "*", {
                     data: JSON.stringify({
                         type: "markprice_updated",

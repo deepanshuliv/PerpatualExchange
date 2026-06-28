@@ -1,37 +1,51 @@
-import { redisClient, type RedisClientType, connectRedisClient } from '@repo/redis';
+import { connectRedisClient, redisClient, type RedisClientType } from '@repo/redis';
+import { EngineRequest, EngineResponse } from '@repo/shared-types';
+import type { EngineSnapShotInstanceType } from '@repo/shared-types/internal-types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { EngineRequest, EngineResponse, type RedisStreamResponse } from '@repo/shared-types';
-import type { EngineSnapShotInstanceType } from '@repo/shared-types/internal-types';
-import { allMarketsList } from '../../../packages/shared-types/shared';
+import { allMarketsList, type KIND } from '../../../packages/shared-types/shared';
 import BinanceClassListner from './binanceListner';
 import MatchingEngine from './matchingEngine';
 import PostionManager from './PositionManager';
 
 export default class EngineManager {
   private binanceListner: BinanceClassListner;
-  private redisClient: RedisClientType;
+  private publisherRedisClient: RedisClientType;
+  private subsciberRedisClient: RedisClientType;
   private positionManager: PostionManager;
   private matchingManger: MatchingEngine;
   private redisReadPointer = '';
+
   constructor() {
-    this.redisClient = redisClient.duplicate();
+    this.publisherRedisClient = redisClient.duplicate();
+    this.subsciberRedisClient = redisClient.duplicate();
     this.binanceListner = new BinanceClassListner(redisClient.duplicate());
     this.positionManager = new PostionManager();
     this.matchingManger = new MatchingEngine(this.positionManager);
   }
 
   async sendTobackend(response: EngineResponse.ENGINE_RESPONSE) {
-    await connectRedisClient(this.redisClient, "MatchingEngine");
-    await this.redisClient.xAdd('to-backend', '*', { data: JSON.stringify(response) });
+    const publisher = await connectRedisClient(
+      this.publisherRedisClient,
+      'MatchingEngine-publisher',
+    );
+
+    await publisher.xAdd('to-backend', '*', { data: JSON.stringify(response) });
+    if (response.type !== 'markprice_updated' && response.type !== 'bookticker_updated') {
+      const correlationId = 'correlationId' in response ? response.correlationId : 'N/A';
+      console.log(
+        `[Engine] Sent response to backend: type=${response.type} | correlationId=${correlationId}`,
+      );
+    }
   }
 
-  hadleRequest(request: EngineRequest.ENGINE_REQUEST) {
+  handleBackendRequest(request: EngineRequest.ENGINE_REQUEST | EngineRequest.GET_MARKET_PRICE) {
     if (request.type === 'get_balance') {
       const { correlationId } = request;
-      const { market, userId } = request.paylaod;
+      const { market, userId } = request.payload;
       const balance = this.matchingManger.getBalance(userId, market);
       const numericBalance = typeof balance === 'number' ? balance : null;
+      
       this.sendTobackend({
         correlationId,
         type: 'get_balance',
@@ -162,15 +176,6 @@ export default class EngineManager {
         type: 'get_closed_orders',
         payload: closedOrders,
       });
-    } else if (request.type === 'get_fills') {
-      const { correlationId } = request;
-      const { userId } = request.payload;
-      const fills = this.matchingManger.getFills(userId);
-      this.sendTobackend({
-        correlationId,
-        type: 'get_fills',
-        payload: fills,
-      });
     } else if (request.type === 'get_depth') {
       const { correlationId } = request;
       const { market } = request.payload;
@@ -181,16 +186,12 @@ export default class EngineManager {
         payload: depth,
       });
     } else if (request.type === 'markprice_updated') {
-      console.log('liquidation started');
       const { price, market } = request.payload;
 
-      this.sendTobackend({
-        type: 'markprice_updated',
-        payload: { market, price, transactionTime: Date.now() },
-      });
-
       this.positionManager.updateMarkpriceMap(market, price);
+
       const userToLiquidate = this.positionManager.calculateLiquidation(market, price);
+
       userToLiquidate?.forEach((user) => {
         const { qty, margin, userId, kind, market, costBasis } = user;
         const liquidationOrder = this.matchingManger.palceMarketOrderForLiquidation(
@@ -200,6 +201,7 @@ export default class EngineManager {
           margin,
           market,
           costBasis,
+          price,
         );
         if (!liquidationOrder) return;
 
@@ -208,7 +210,7 @@ export default class EngineManager {
           payload: {
             orderId: liquidationOrder.orderId,
             userId,
-            kind: liquidationOrder.kind as any,
+            kind: liquidationOrder.kind as KIND,
             market,
             filledQty: liquidationOrder.filledQty,
             totalQty: liquidationOrder.totalQty,
@@ -234,15 +236,17 @@ export default class EngineManager {
         });
       });
     } else if (request.type === 'run_funding_rate') {
+      // push to stream
       setInterval(
         async () => {
-          const publisher = await redisClient.connect();
+          const publisher = await this.publisherRedisClient.connect();
           publisher.xAdd('to-engine', '*', {
             data: JSON.stringify({ type: 'run_funding_rate' }),
           });
         },
         8 * 60 * 60 * 1000,
       ); // 8hr timer
+      // run funding rate
       allMarketsList.forEach((market) => {
         const markPrice = this.positionManager.getMarkpriceOfMarket(market) || 0;
         const lastTradedPrice = this.matchingManger.getLastTradedPriceOFMarket(market) || 0;
@@ -285,60 +289,61 @@ export default class EngineManager {
     const latestFilePathName = path.join(pathLocation, latestFile);
     console.log('[LATEST_FILEPATH]', latestFilePathName);
 
-    const data = await fs.readFile(latestFilePathName, 'utf8');
-    type EngineSnapshotWithPointer = EngineSnapShotInstanceType & {
-      redisReadPointer: string;
-    };
-    const parsedSnapShot = JSON.parse(data ?? '') as EngineSnapshotWithPointer;
-    this.matchingManger.loadSnapShotOfEngine(parsedSnapShot);
-    this.redisReadPointer = parsedSnapShot.redisReadPointer;
+    try {
+      const data = await fs.readFile(latestFilePathName, 'utf8');
+      type EngineSnapshotWithPointer = EngineSnapShotInstanceType & {
+        redisReadPointer: string;
+      };
+      const parsedSnapShot = JSON.parse(data || '{}') as EngineSnapshotWithPointer;
+      if (parsedSnapShot) {
+        this.matchingManger.loadSnapShot(parsedSnapShot);
+        this.redisReadPointer = parsedSnapShot.redisReadPointer || '';
+      }
+    } catch (err) {
+      console.error('[EngineManager] Error loading snapshot file:', err);
+    }
   }
 
   async getSnapShotFolderPath() {
     const currentFilePath = import.meta.dir;
     const rootFolder = path.join(currentFilePath, '..');
     const destinationFolder = path.join(rootFolder, 'snapshots');
+
     try {
       await fs.stat(destinationFolder);
     } catch (error) {
       await fs.mkdir(destinationFolder, { recursive: true });
-      console.log('created a folder');
     }
-    console.log('directory created');
 
     return destinationFolder;
   }
 
   async start() {
-    console.log("Connecting to Redis...");
-    await connectRedisClient(this.redisClient, "MatchingEngine");
-    console.log("Redis connected successfully.");
+    console.log('Connecting to Redis...');
+    const subscriber = await connectRedisClient(
+      this.subsciberRedisClient,
+      'MatchingEngine-subscriber',
+    );
+    console.log('Redis connected successfully.');
 
     console.log('waiting for binance to connect...');
     await this.binanceListner.intialize();
     console.log('connected to binance');
 
-    // load snapshot if avaialbel
     console.log('loading snapshot...');
-
     await this.loadLatestSnapShotfromFile();
-
     console.log('snapshot loaded');
 
     setInterval(
       async () => {
         await this.addSnapShotInFile({
-          ...this.matchingManger.getSnapShotOfEngine(),
+          ...this.matchingManger.createSnapShot(),
           redisReadPointer: this.redisReadPointer,
         });
       },
-      8000, // 8 seconds
+      8000 * 60, // 8 hour
     );
 
-    console.log('subscribing to stream...');
-
-    const subscriber = this.redisClient;
-    console.log('connected to stream');
     //read if availabel startpointer else from start
     while (1) {
       const readFrom = this.redisReadPointer === '' ? '$' : this.redisReadPointer;
@@ -354,13 +359,36 @@ export default class EngineManager {
       // loop to read msga and give to handler
       for (const stream of response) {
         for (const msg of stream.messages) {
-          const parsedMessage = JSON.parse(msg.message.data!) || {};
-          const { success, data } = EngineRequest.ENGINE_REQUEST_SCHEMA.safeParse(parsedMessage);
-          if (!success) continue;
-          console.log('message come and handling to engine');
-
-          this.hadleRequest(data);
           this.redisReadPointer = msg.id;
+          const parsedMessage = JSON.parse(msg.message.data!) || {};
+          const type = parsedMessage.type || 'unknown';
+          const correlationId = parsedMessage.correlationId || 'N/A';
+          if (type !== 'markprice_updated') {
+            console.log(
+              `[Engine] Stream message received: type=${type} | correlationId=${correlationId}`,
+            );
+          }
+
+          if (type === 'markprice_updated') {
+            const { success, data, error } =
+              EngineRequest.GET_MARKET_PRICE_SCHEMA.safeParse(parsedMessage);
+            if (!success) {
+              console.error(`[Engine] Schema validation failed for markprice_updated:`, error);
+              continue;
+            }
+            this.handleBackendRequest(data);
+          } else {
+            const { success, data, error } =
+              EngineRequest.ENGINE_REQUEST_SCHEMA.safeParse(parsedMessage);
+            if (!success) {
+              console.error(
+                `[Engine] Schema validation failed for message type=${type} | correlationId=${correlationId}:`,
+                error,
+              );
+              continue;
+            }
+            this.handleBackendRequest(data);
+          }
         }
       }
     }
