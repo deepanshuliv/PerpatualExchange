@@ -36,6 +36,8 @@ export const WsStreamingResponse = z.union([
   BOOKTICKER_UPDATED_RESPONSE_SCHEMA,
 ]);
 
+export type WsStreamingMessage = z.infer<typeof WsStreamingResponse>;
+
 export const WS_SUBSCRIBE_SCHEMA = z.object({
   method: z.enum(['SUBSCRIBE', 'UNSUBSCRIBE']),
   params: z.array(z.string()),

@@ -306,14 +306,6 @@ export default class MatchingEngine {
     return this.positons.getPositionsForUser(userId);
   }
 
-  getOpenOrders(userId: string, market?: Shared.MARKET_AVAILABEL) {
-    return this.orderBook.getOpenOrders(userId, market);
-  }
-
-  getClosedOrders(userId: string, market?: Shared.MARKET_AVAILABEL) {
-    return this.orderBook.getClosedOrders(userId, market);
-  }
-
   getFills(userId: string) {
     return this.orderBook.getFills(userId);
   }

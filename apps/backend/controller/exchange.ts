@@ -227,154 +227,210 @@ export async function getOpenPositions(req: Request, res: Response) {
 }
 
 export async function getClosedPositions(req: Request, res: Response) {
-  const marketId = req.params.marketId === 'all' ? undefined : req.params.marketId;
-  let market: Shared.MARKET_AVAILABEL | undefined;
-  if (marketId !== undefined) {
+  // get closed orders from db instead of engine
+  let marketId = req.params.marketId;
+  if (Array.isArray(marketId)) {
+    marketId = marketId[0];
+  }
+
+  let market: Shared.MARKET_AVAILABEL | undefined = undefined;
+  if (marketId !== undefined && marketId !== 'all') {
     const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
     if (!parsed.success) {
-      return res.status(400).json({
-        msg: 'invalid market',
-      });
+      return res.status(400).json({ msg: 'invalid market' });
     }
     market = parsed.data;
   }
 
-  const engineRequest: EngineRequest.GET_CLOSED_ORDERS = {
-    correlationId: crypto.randomUUID(),
-    type: 'get_closed_orders',
-    payload: {
-      userId: req.userId!,
-      market,
-    },
-  };
-
   try {
-    const engineResponse = await sendToEngine(engineRequest);
-    if (!engineResponse) {
-      return res.status(403).json({
-        msg: 'some error occured',
+    const userId = req.userId!;
+
+    let orders;
+    if (market) {
+      orders = await prisma.order.findMany({
+        where: {
+          userId: userId,
+          market: market as any,
+        },
+        orderBy: { transactionTime: 'desc' },
+      });
+    } else {
+      orders = await prisma.order.findMany({
+        where: {
+          userId: userId,
+        },
+        orderBy: { transactionTime: 'desc' },
       });
     }
 
-    if (engineResponse.type === 'error') {
-      return res.status(400).json({
-        msg: engineResponse.payload.error,
-      });
+    const closedOrders = [];
+    for (const order of orders) {
+      const isCancelled = order.status === 'CANCELLED';
+      const isFullyFilled = order.filledQty >= order.totalQty;
+
+      if (isCancelled || isFullyFilled) {
+        closedOrders.push({
+          orderId: order.id,
+          userId: order.userId,
+          type: order.type,
+          qty: order.totalQty,
+          totalQty: order.totalQty,
+          filledQty: order.filledQty,
+          price: order.price,
+          status: order.status,
+          margin: order.margin,
+          kind: order.kind,
+          market: order.market,
+          createdAt: order.createdAt,
+          transactionTime: order.transactionTime,
+        });
+      }
     }
 
     res.status(200).json({
       ok: true,
-      data: engineResponse.payload,
+      data: closedOrders,
     });
   } catch (err: any) {
-    return res.status(504).json({ msg: err?.message || 'Engine timeout' });
+    console.error('[orders/closed] DB error:', err);
+    return res.status(500).json({ msg: 'failed to fetch closed orders' });
   }
 }
 
 export async function getOpenOrders(req: Request, res: Response) {
-  const marketId = req.params.marketId === 'all' ? undefined : req.params.marketId;
-  let market: Shared.MARKET_AVAILABEL | undefined;
-  if (marketId !== undefined) {
+  // get open orders from db instead of engine
+  let marketId = req.params.marketId;
+  if (Array.isArray(marketId)) {
+    marketId = marketId[0];
+  }
+
+  let market: Shared.MARKET_AVAILABEL | undefined = undefined;
+  if (marketId !== undefined && marketId !== 'all') {
     const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
     if (!parsed.success) {
-      return res.status(400).json({
-        msg: 'invalid market',
-      });
+      return res.status(400).json({ msg: 'invalid market' });
     }
     market = parsed.data;
   }
 
-  const engineRequest: EngineRequest.GET_OPEN_ORDERS = {
-    correlationId: crypto.randomUUID(),
-    type: 'get_open_orders',
-    payload: {
-      userId: req.userId!,
-      market,
-    },
-  };
-
   try {
-    const engineResponse = await sendToEngine(engineRequest);
-    if (!engineResponse) {
-      return res.status(403).json({
-        msg: 'some error occured',
+    const userId = req.userId!;
+
+    let orders;
+    if (market) {
+      orders = await prisma.order.findMany({
+        where: {
+          userId: userId,
+          market: market as any,
+        },
+        orderBy: { transactionTime: 'desc' },
+      });
+    } else {
+      orders = await prisma.order.findMany({
+        where: {
+          userId: userId,
+        },
+        orderBy: { transactionTime: 'desc' },
       });
     }
 
-    if (engineResponse.type === 'error') {
-      return res.status(400).json({
-        msg: engineResponse.payload.error,
-      });
+    const openOrders = [];
+    for (const order of orders) {
+      const isCancelled = order.status === 'CANCELLED';
+      const stillHasQtyLeft = order.filledQty < order.totalQty;
+
+      if (!isCancelled && stillHasQtyLeft) {
+        openOrders.push({
+          orderId: order.id,
+          userId: order.userId,
+          type: order.type,
+          qty: order.totalQty,
+          totalQty: order.totalQty,
+          filledQty: order.filledQty,
+          price: order.price,
+          status: order.status,
+          margin: order.margin,
+          kind: order.kind,
+          market: order.market,
+          createdAt: order.createdAt,
+          transactionTime: order.transactionTime,
+        });
+      }
     }
 
     res.status(200).json({
       ok: true,
-      data: engineResponse.payload,
+      data: openOrders,
     });
   } catch (err: any) {
-    return res.status(504).json({ msg: err?.message || 'Engine timeout' });
+    console.error('[orders/open] DB error:', err);
+    return res.status(500).json({ msg: 'failed to fetch open orders' });
   }
 }
 
 export async function getAllOrders(req: Request, res: Response) {
-  const marketId = req.params.marketId === 'all' ? undefined : req.params.marketId;
-  let market: Shared.MARKET_AVAILABEL | undefined;
-  if (marketId !== undefined) {
+  // get all orders from db instead of engine
+  let marketId = req.params.marketId;
+  if (Array.isArray(marketId)) {
+    marketId = marketId[0];
+  }
+
+  let market: Shared.MARKET_AVAILABEL | undefined = undefined;
+  if (marketId !== undefined && marketId !== 'all') {
     const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
     if (!parsed.success) {
-      return res.status(400).json({
-        msg: 'invalid market',
-      });
+      return res.status(400).json({ msg: 'invalid market' });
     }
     market = parsed.data;
   }
 
-  const openRequest: EngineRequest.GET_OPEN_ORDERS = {
-    correlationId: crypto.randomUUID(),
-    type: 'get_open_orders',
-    payload: {
-      userId: req.userId!,
-      market,
-    },
-  };
-
-  const closedRequest: EngineRequest.GET_CLOSED_ORDERS = {
-    correlationId: crypto.randomUUID(),
-    type: 'get_closed_orders',
-    payload: {
-      userId: req.userId!,
-      market,
-    },
-  };
-
   try {
-    const [openRes, closedRes] = await Promise.all([
-      sendToEngine(openRequest),
-      sendToEngine(closedRequest),
-    ]);
+    const userId = req.userId!;
 
-    if (!openRes || !closedRes) {
-      return res.status(403).json({
-        msg: 'some error occured',
+    let orders;
+    if (market) {
+      orders = await prisma.order.findMany({
+        where: {
+          userId: userId,
+          market: market as any,
+        },
+        orderBy: { transactionTime: 'desc' },
+      });
+    } else {
+      orders = await prisma.order.findMany({
+        where: {
+          userId: userId,
+        },
+        orderBy: { transactionTime: 'desc' },
       });
     }
 
-    if (openRes.type === 'error') {
-      return res.status(400).json({ msg: openRes.payload.error });
+    const result = [];
+    for (const order of orders) {
+      result.push({
+        orderId: order.id,
+        userId: order.userId,
+        type: order.type,
+        qty: order.totalQty,
+        totalQty: order.totalQty,
+        filledQty: order.filledQty,
+        price: order.price,
+        status: order.status,
+        margin: order.margin,
+        kind: order.kind,
+        market: order.market,
+        createdAt: order.createdAt,
+        transactionTime: order.transactionTime,
+      });
     }
-    if (closedRes.type === 'error') {
-      return res.status(400).json({ msg: closedRes.payload.error });
-    }
-
-    const openOrders = openRes.type === 'get_open_orders' ? openRes.payload : [];
-    const closedOrders = closedRes.type === 'get_closed_orders' ? closedRes.payload : [];
 
     res.status(200).json({
       ok: true,
-      data: [...openOrders, ...closedOrders],
+      data: result,
     });
   } catch (err: any) {
-    return res.status(504).json({ msg: err?.message || 'Engine timeout' });
+    console.error('[orders] DB error:', err);
+    return res.status(500).json({ msg: 'failed to fetch orders' });
   }
 }
 
@@ -474,10 +530,14 @@ export async function getTickerPrice(req: Request, res: Response) {
       },
     });
 
+    let price = 0;
+    if (lastFill) {
+      price = lastFill.price;
+    }
+
     return res.status(200).json({
       ok: true,
-      // Returns 0 when no trades have occurred yet on this market
-      price: lastFill ? lastFill.price : 0,
+      price: price,
     });
   } catch (error) {
     console.error('[ticker/price] DB error:', error);

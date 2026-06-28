@@ -4,11 +4,11 @@ import { EngineResponse, type EngineRequest, type RedisStreamResponse } from '@r
 const publisher = redisClient.duplicate();
 const subscriber = redisClient.duplicate();
 
-const correlationIdToResolveMap = new Map<string, (data: EngineResponse.ENGINE_RESPONSE) => void>();
+const correlationIdToResolveMap = new Map<string, (data: EngineResponse.BACKEND_RESPONSE) => void>();
 
 export async function sendToEngine(
   engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST,
-): Promise<EngineResponse.ENGINE_RESPONSE> {
+): Promise<EngineResponse.BACKEND_RESPONSE> {
   await connectRedisClient(publisher, 'Backend-Publisher');
 
   const streamKey = process.env.ENGINE_STREAM! || 'to-engine';
@@ -47,7 +47,7 @@ function handleEngineResponse(rawMessage: unknown) {
     }
   }
 
-  const { success, data, error } = EngineResponse.ENGINE_RESPONSE_SCHEMA.safeParse(rawMessage);
+  const { success, data, error } = EngineResponse.BACKEND_RESPONSE_SCHEMA.safeParse(rawMessage);
   if (!success) {
     console.error('[Backend] Could not parse engine response:', rawMessage, error?.format());
     return;

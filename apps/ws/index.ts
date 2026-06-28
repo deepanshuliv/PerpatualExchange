@@ -1,4 +1,4 @@
-import { EngineResponse, WebsocketTypes, WS_SUBSCRIBE_SCHEMA } from '@repo/shared-types';
+import { WebsocketTypes, WS_SUBSCRIBE_SCHEMA } from '@repo/shared-types';
 import { WebSocket, WebSocketServer } from 'ws';
 import { startConsumerGroup } from './src/redis';
 
@@ -74,17 +74,7 @@ async function bootstrap() {
 
 bootstrap();
 
-type ProcessableEngineMessage = Extract<
-  EngineResponse.ENGINE_RESPONSE,
-  {
-    type:
-      | 'create_order'
-      | 'cancel_order'
-      | 'liquidation'
-      | 'markprice_updated'
-      | 'bookticker_updated';
-  }
->;
+type ProcessableEngineMessage = WebsocketTypes.WsStreamingMessage;
 
 export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngineMessage) {
   const transactionTime = update.payload.transactionTime;

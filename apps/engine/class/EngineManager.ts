@@ -25,7 +25,7 @@ export default class EngineManager {
     this.matchingManger = new MatchingEngine(this.positionManager);
   }
 
-  async sendTobackend(response: EngineResponse.ENGINE_RESPONSE) {
+  async sendTobackend(response: EngineResponse.ENGINE_STREAM_MESSAGE) {
     const publisher = await connectRedisClient(
       this.publisherRedisClient,
       'MatchingEngine-publisher',
@@ -130,23 +130,14 @@ export default class EngineManager {
           payload: positions,
         });
       }
-    } else if (request.type === 'get_open_orders') {
+    } else if (request.type === 'get_fills') {
       const { correlationId } = request;
-      const { market, userId } = request.payload;
-      const openOrders = this.matchingManger.getOpenOrders(userId, market);
+      const { userId } = request.payload;
+      const fills = this.matchingManger.getFills(userId);
       this.sendTobackend({
         correlationId,
-        type: 'get_open_orders',
-        payload: openOrders,
-      });
-    } else if (request.type === 'get_closed_orders') {
-      const { correlationId } = request;
-      const { market, userId } = request.payload;
-      const closedOrders = this.matchingManger.getClosedOrders(userId, market);
-      this.sendTobackend({
-        correlationId,
-        type: 'get_closed_orders',
-        payload: closedOrders,
+        type: 'get_fills',
+        payload: fills,
       });
     } else if (request.type === 'get_depth') {
       const { correlationId } = request;

@@ -10,24 +10,25 @@ async function startConsumerWorker(consumerName: string) {
   const subscriber = redisClient.duplicate();
   await connectRedisClient(subscriber, `DBConsumer-${consumerName}`);
 
+  // create consumer group if it does not exist yet
   try {
     await subscriber.xGroupCreate(STREAM_KEY, CONSUMER_GROUP, "0", {
       MKSTREAM: true,
     });
   } catch (err: any) {
     if (err.message && err.message.includes("BUSYGROUP")) {
+      // group already exists, thats fine
     } else {
       console.error(`[DB Consumer Worker - ${consumerName}] Failed to initialize consumer group:`, err);
       process.exit(1);
     }
   }
 
-
   const BATCH_SIZE = 50;
 
   while (true) {
     try {
-      // 1. Process pending messages (id = '0') first to handle crash recoveries
+      // first try to read pending messages (for crash recovery)
       let response = (await subscriber.xReadGroup(
         CONSUMER_GROUP,
         consumerName,
@@ -35,7 +36,7 @@ async function startConsumerWorker(consumerName: string) {
         { COUNT: BATCH_SIZE, BLOCK: 1000 },
       )) as unknown as RedisStreamResponse;
 
-      // 2. If no pending messages, read new messages (id = '>')
+      // if no pending messages, read new ones
       if (!response || response.length === 0 || response[0]!.messages.length === 0) {
         response = (await subscriber.xReadGroup(
           CONSUMER_GROUP,
@@ -53,55 +54,70 @@ async function startConsumerWorker(consumerName: string) {
         const messages = stream.messages;
         if (messages.length === 0) continue;
 
-        // Parse and filter down the valid messages to work with
         const batchOrderIds: string[] = [];
         const parsedMessages: Array<{ msgId: string; event: any }> = [];
 
+        // step 1: parse messages from redis
         for (const msg of messages) {
           try {
             const parsed = JSON.parse(msg.message.data!);
-            const parseResult = EngineResponse.ENGINE_RESPONSE_SCHEMA.safeParse(parsed);
+            const parseResult = EngineResponse.DB_PERSISTENCE_EVENT_SCHEMA.safeParse(parsed);
+
             if (parseResult.success) {
               const event = parseResult.data;
 
               if (event.type === "create_order" || event.type === "liquidation" || event.type === "cancel_order") {
                 parsedMessages.push({ msgId: msg.id, event });
                 batchOrderIds.push(event.payload.orderId);
+
+                // also collect maker order ids from fills
+                if (event.type !== "cancel_order") {
+                  const fills = event.payload.fills ?? [];
+                  for (const fill of fills) {
+                    batchOrderIds.push(fill.orderId);
+                  }
+                }
               } else {
-                // Acknowledge other messages immediately (like add_balance, get_balance)
+                // we dont care about get_balance etc, just ack them
                 await subscriber.xAck(STREAM_KEY, CONSUMER_GROUP, msg.id);
               }
             } else {
-              // Invalid schema - acknowledge to remove from stream
               await subscriber.xAck(STREAM_KEY, CONSUMER_GROUP, msg.id);
             }
           } catch (e) {
-            // Malformed JSON - acknowledge to remove from stream
             await subscriber.xAck(STREAM_KEY, CONSUMER_GROUP, msg.id);
           }
         }
 
         if (parsedMessages.length === 0) continue;
 
-        // DB level optimization: Fetch all existing order IDs in the current batch in a single query
-        const existingOrderIds = new Set(
-          (
-            await prisma.order.findMany({
-              where: { id: { in: batchOrderIds } },
-              select: { id: true },
-            })
-          ).map((o) => o.id)
-        );
+        // step 2: check which orders already exist in db
+        const uniqueBatchOrderIds = [...new Set(batchOrderIds)];
+        const existingOrders = await prisma.order.findMany({
+          where: { id: { in: uniqueBatchOrderIds } },
+        });
 
-        // Accumulators for bulk insertion
+        const existingOrdersMap = new Map<string, (typeof existingOrders)[0]>();
+        for (const order of existingOrders) {
+          existingOrdersMap.set(order.id, order);
+        }
+
+        const existingOrderIds = new Set<string>();
+        for (const order of existingOrders) {
+          existingOrderIds.add(order.id);
+        }
+
+        // stuff we will write to db in one transaction
         const usersMap = new Map<string, { id: string; username: string; password: string }>();
         const ordersToCreate = new Map<string, any>();
-        const ordersToUpdate = new Map<string, any>();
+        const ordersToUpdate = new Map<string, { filledQty: number; status: string }>();
+        const cancelUpserts = new Map<string, any>();
+        const makerFillAcc = new Map<string, number>(); // how much qty got filled for maker orders
         const fillsToCreate: any[] = [];
         const processedMessageIds: string[] = [];
 
+        // step 3: go through each event and figure out what to insert/update
         for (const { msgId, event } of parsedMessages) {
-
           if (event.type === "create_order") {
             const {
               orderId,
@@ -118,52 +134,68 @@ async function startConsumerWorker(consumerName: string) {
               transactionTime,
             } = event.payload;
 
-            if (existingOrderIds.has(orderId)) {
-              processedMessageIds.push(msgId);
-              continue;
-            }
-
-            // Queue user creation
+            // create user if needed
             usersMap.set(userId, { id: userId, username: `user_${userId}`, password: "" });
 
-            // Queue order creation
-            ordersToCreate.set(orderId, {
-              id: orderId,
-              userId,
-              kind: kind as any,
-              market: market as any,
-              price,
-              type: type as any,
-              margin,
-              status: status as any,
-              totalQty,
-              filledQty,
-              isSkeleton: false,
-              transactionTime: new Date(transactionTime),
-            });
+            // insert new order or update if it already exists (retry case)
+            if (!existingOrderIds.has(orderId)) {
+              ordersToCreate.set(orderId, {
+                id: orderId,
+                userId,
+                kind: kind as any,
+                market: market as any,
+                price,
+                type: type as any,
+                margin,
+                status: status as any,
+                totalQty,
+                filledQty,
+                transactionTime: new Date(transactionTime),
+              });
+            } else {
+              ordersToUpdate.set(orderId, {
+                filledQty,
+                status: status as string,
+              });
+            }
 
-            // Queue fills and their required users / skeleton orders
-            for (const fill of fills) {
+            // process fills from this order
+            const fillList = fills ?? [];
+            for (const fill of fillList) {
               usersMap.set(fill.buyerId, { id: fill.buyerId, username: `user_${fill.buyerId}`, password: "" });
               usersMap.set(fill.sellerId, { id: fill.sellerId, username: `user_${fill.sellerId}`, password: "" });
 
-              // If the maker order does not exist in our create list yet, insert a skeleton order
-              const existingInMap = ordersToCreate.get(fill.orderId);
-              if (!existingInMap || existingInMap.isSkeleton) {
-                ordersToCreate.set(fill.orderId, {
-                  id: fill.orderId,
-                  userId: fill.kind === "LONG" ? fill.buyerId : fill.sellerId,
-                  type: fill.type as any,
-                  totalQty: fill.qty,
-                  filledQty: fill.status === "FILLED" ? fill.qty : 0,
-                  price: fill.price,
-                  status: fill.status as any,
-                  margin: 0,
-                  kind: fill.kind as any,
-                  market: market as any,
-                  isSkeleton: true,
-                  transactionTime: new Date(fill.transactionTime || transactionTime),
-                });
+              // track maker order fill qty (skip taker's own orderId)
+              if (fill.orderId !== orderId) {
+                const oldQty = makerFillAcc.get(fill.orderId) ?? 0;
+                makerFillAcc.set(fill.orderId, oldQty + fill.qty);
+              }
+
+              // if maker order not in db yet, create a placeholder order
+              const alreadyInCreateMap = ordersToCreate.get(fill.orderId);
+              const isSkeleton = alreadyInCreateMap && alreadyInCreateMap.isSkeleton;
+              if (!alreadyInCreateMap || isSkeleton) {
+                if (!existingOrderIds.has(fill.orderId)) {
+                  let skeletonFilledQty = 0;
+                  if (fill.status === "FILLED") {
+                    skeletonFilledQty = fill.qty;
+                  }
+
+                  ordersToCreate.set(fill.orderId, {
+                    id: fill.orderId,
+                    userId: fill.kind === "LONG" ? fill.buyerId : fill.sellerId,
+                    type: fill.type as any,
+                    totalQty: fill.qty,
+                    filledQty: skeletonFilledQty,
+                    price: fill.price,
+                    status: fill.status as any,
+                    margin: 0,
+                    kind: fill.kind as any,
+                    market: market as any,
+                    isSkeleton: true,
+                    transactionTime: new Date(fill.transactionTime || transactionTime),
+                  });
+                }
               }
 
               fillsToCreate.push({
@@ -186,13 +218,12 @@ async function startConsumerWorker(consumerName: string) {
 
             usersMap.set(userId, { id: userId, username: `user_${userId}`, password: "" });
 
-            // Queue cancel updates
-            ordersToUpdate.set(orderId, {
+            cancelUpserts.set(orderId, {
               id: orderId,
               userId,
               type: "LIMIT",
-              totalQty: totalQty,
-              filledQty: filledQty,
+              totalQty,
+              filledQty,
               price,
               status: "CANCELLED",
               margin,
@@ -205,51 +236,71 @@ async function startConsumerWorker(consumerName: string) {
           } else if (event.type === "liquidation") {
             const { orderId, userId, kind, market, filledQty, totalQty, totalSpent, fills, transactionTime } = event.payload;
 
-            if (existingOrderIds.has(orderId)) {
-              processedMessageIds.push(msgId);
-              continue;
+            let avgPrice = 0;
+            if (totalQty > 0) {
+              avgPrice = totalSpent / totalQty;
             }
 
-            const avgPrice = totalQty > 0 ? totalSpent / totalQty : 0;
-            const status = filledQty === totalQty ? "FILLED" : "PARTIALLY_FILLED";
+            let status = "PARTIALLY_FILLED";
+            if (filledQty === totalQty) {
+              status = "FILLED";
+            }
 
             usersMap.set(userId, { id: userId, username: `user_${userId}`, password: "" });
 
-            ordersToCreate.set(orderId, {
-              id: orderId,
-              userId,
-              kind: kind as any,
-              market: market as any,
-              price: avgPrice,
-              type: "MARKET",
-              margin: 0,
-              status: status as any,
-              totalQty,
-              filledQty,
-              isSkeleton: false,
-              transactionTime: new Date(transactionTime),
-            });
+            if (!existingOrderIds.has(orderId)) {
+              ordersToCreate.set(orderId, {
+                id: orderId,
+                userId,
+                kind: kind as any,
+                market: market as any,
+                price: avgPrice,
+                type: "MARKET",
+                margin: 0,
+                status: status as any,
+                totalQty,
+                filledQty,
+                transactionTime: new Date(transactionTime),
+              });
+            } else {
+              ordersToUpdate.set(orderId, { filledQty, status });
+            }
 
-            for (const fill of fills) {
+            // process fills (same as create_order)
+            const fillList = fills ?? [];
+            for (const fill of fillList) {
               usersMap.set(fill.buyerId, { id: fill.buyerId, username: `user_${fill.buyerId}`, password: "" });
               usersMap.set(fill.sellerId, { id: fill.sellerId, username: `user_${fill.sellerId}`, password: "" });
 
-              const existingInMap = ordersToCreate.get(fill.orderId);
-              if (!existingInMap || existingInMap.isSkeleton) {
-                ordersToCreate.set(fill.orderId, {
-                  id: fill.orderId,
-                  userId: fill.kind === "LONG" ? fill.buyerId : fill.sellerId,
-                  type: fill.type as any,
-                  totalQty: fill.qty,
-                  filledQty: fill.status === "FILLED" ? fill.qty : 0,
-                  price: fill.price,
-                  status: fill.status as any,
-                  margin: 0,
-                  kind: fill.kind as any,
-                  market: market as any,
-                  isSkeleton: true,
-                  transactionTime: new Date(fill.transactionTime || transactionTime),
-                });
+              if (fill.orderId !== orderId) {
+                const oldQty = makerFillAcc.get(fill.orderId) ?? 0;
+                makerFillAcc.set(fill.orderId, oldQty + fill.qty);
+              }
+
+              const alreadyInCreateMap = ordersToCreate.get(fill.orderId);
+              const isSkeleton = alreadyInCreateMap && alreadyInCreateMap.isSkeleton;
+              if (!alreadyInCreateMap || isSkeleton) {
+                if (!existingOrderIds.has(fill.orderId)) {
+                  let skeletonFilledQty = 0;
+                  if (fill.status === "FILLED") {
+                    skeletonFilledQty = fill.qty;
+                  }
+
+                  ordersToCreate.set(fill.orderId, {
+                    id: fill.orderId,
+                    userId: fill.kind === "LONG" ? fill.buyerId : fill.sellerId,
+                    type: fill.type as any,
+                    totalQty: fill.qty,
+                    filledQty: skeletonFilledQty,
+                    price: fill.price,
+                    status: fill.status as any,
+                    margin: 0,
+                    kind: fill.kind as any,
+                    market: market as any,
+                    isSkeleton: true,
+                    transactionTime: new Date(fill.transactionTime || transactionTime),
+                  });
+                }
               }
 
               fillsToCreate.push({
@@ -270,41 +321,101 @@ async function startConsumerWorker(consumerName: string) {
           }
         }
 
+        // step 4: apply maker fill updates so resting orders get correct status in db
+        for (const [makerOrderId, fillQty] of makerFillAcc) {
+          // dont update if order was cancelled
+          if (cancelUpserts.has(makerOrderId)) {
+            continue;
+          }
+
+          const existing = existingOrdersMap.get(makerOrderId);
+          if (existing) {
+            const newFilledQty = existing.filledQty + fillQty;
+
+            let newStatus = "OPEN";
+            if (newFilledQty >= existing.totalQty) {
+              newStatus = "FILLED";
+            } else if (newFilledQty > 0) {
+              newStatus = "PARTIALLY_FILLED";
+            }
+
+            ordersToUpdate.set(makerOrderId, {
+              filledQty: newFilledQty,
+              status: newStatus,
+            });
+            continue;
+          }
+
+          // order might be getting created in same batch
+          const pending = ordersToCreate.get(makerOrderId);
+          if (pending) {
+            const newFilledQty = pending.filledQty + fillQty;
+
+            let newStatus = "OPEN";
+            if (newFilledQty >= pending.totalQty) {
+              newStatus = "FILLED";
+            } else if (newFilledQty > 0) {
+              newStatus = "PARTIALLY_FILLED";
+            }
+
+            pending.filledQty = newFilledQty;
+            pending.status = newStatus;
+          }
+        }
+
+        // step 5: write everything to db in one transaction
         try {
-          // Open a single transaction for the entire batch of messages (Option B)
           await prisma.$transaction(async (tx) => {
-            // Step 1: Bulk insert users
+            // insert users
             if (usersMap.size > 0) {
+              const usersList = [];
+              for (const user of usersMap.values()) {
+                usersList.push(user);
+              }
               await tx.user.createMany({
-                data: Array.from(usersMap.values()),
+                data: usersList,
                 skipDuplicates: true,
               });
             }
 
-            // Step 2: Bulk insert orders (stripping temporary isSkeleton field)
+            // insert new orders
             if (ordersToCreate.size > 0) {
-              const ordersData = Array.from(ordersToCreate.values()).map(
-                ({ isSkeleton, ...rest }) => rest
-              );
+              const ordersList = [];
+              for (const order of ordersToCreate.values()) {
+                // remove isSkeleton before inserting, its just for our internal use
+                const { isSkeleton, ...orderData } = order;
+                ordersList.push(orderData);
+              }
               await tx.order.createMany({
-                data: ordersData,
+                data: ordersList as any,
                 skipDuplicates: true,
               });
             }
 
-            // Step 3: Run updates for cancelled orders
-            for (const [orderId, cancelData] of ordersToUpdate) {
-              await tx.order.upsert({
+            // update orders that changed status (taker retry or maker got filled)
+            for (const [orderId, update] of ordersToUpdate) {
+              await tx.order.update({
                 where: { id: orderId },
+                data: {
+                  filledQty: update.filledQty,
+                  status: update.status as any,
+                },
+              });
+            }
+
+            // handle cancelled orders
+            for (const cancelData of cancelUpserts.values()) {
+              await tx.order.upsert({
+                where: { id: cancelData.id },
                 update: {
                   status: "CANCELLED",
                   filledQty: cancelData.filledQty,
                 },
-                create: cancelData,
+                create: cancelData as any,
               });
             }
 
-            // Step 4: Bulk insert fills
+            // insert fills
             if (fillsToCreate.length > 0) {
               await tx.fill.createMany({
                 data: fillsToCreate,
@@ -312,14 +423,13 @@ async function startConsumerWorker(consumerName: string) {
             }
           });
 
-          // Acknowledge all successfully processed/skipped messages in the batch together
+          // ack messages only after db write succeeded
           if (processedMessageIds.length > 0) {
             await subscriber.xAck(STREAM_KEY, CONSUMER_GROUP, processedMessageIds);
           }
         } catch (txError) {
           console.error(`[DB Consumer Worker - ${consumerName}] Transaction failed for batch. Retrying whole batch. Error:`, txError);
-          // Do NOT acknowledge any messages, they remain in the pending list to be retried
-          // Sleep to prevent hot looping in case of database issues
+          // dont ack, so redis will retry
           await new Promise((resolve) => setTimeout(resolve, 5000));
         }
       }
@@ -333,7 +443,6 @@ async function startConsumerWorker(consumerName: string) {
 async function startMultiConsumer() {
   const CONCURRENCY = parseInt(process.env.CONCURRENCY || "3");
   const instanceId = crypto.randomBytes(3).toString("hex");
-
 
   const workers = [];
   for (let i = 1; i <= CONCURRENCY; i++) {
