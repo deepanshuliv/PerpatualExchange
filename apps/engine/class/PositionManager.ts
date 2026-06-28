@@ -6,7 +6,6 @@ import type {
   positonSnapshotInstanceType,
 } from "@repo/shared-types/internal-types";
 import { Shared } from "@repo/shared-types";
-import { OrderedMap } from "js-sdsl";
 
 export default class PostionManager {
   private positions: Positions;
@@ -47,6 +46,20 @@ export default class PostionManager {
     return this.positions.get(userId) || [];
   }
 
+  private removePositionEntry(userId: string, market: Shared.MARKET_AVAILABEL) {
+    const userPositions = this.positions.get(userId);
+    if (!userPositions) return;
+
+    const remaining = userPositions.filter((pos) => pos.market !== market);
+    this.markteIndex.get(market)?.delete(userId);
+
+    if (remaining.length === 0) {
+      this.positions.delete(userId);
+    } else {
+      this.positions.set(userId, remaining);
+    }
+  }
+
   changePosition(
     userId: string,
     market: Shared.MARKET_AVAILABEL,
@@ -55,37 +68,41 @@ export default class PostionManager {
     costBasis: number,
     margin: number,
   ) {
-    const userPos = this.getPosition(userId, market);
+    const userPositions = this.positions.get(userId) || [];
+    const userPos = userPositions.find((pos) => pos.market === market) ?? null;
 
     if (!userPos) {
+  
       const positionDetails: PositionDetails = { costBasis, kind, margin, market, qty };
       if (!this.markteIndex.has(market)) {
         this.markteIndex.set(market, new Set());
       }
-      this.positions.set(userId, [positionDetails]);
+      this.positions.set(userId, [...userPositions, positionDetails]);
       this.markteIndex.get(market)?.add(userId);
-      return userPos;
+      return positionDetails;
     }
 
     if (userPos.kind === kind) {
       userPos.qty += qty;
       userPos.costBasis += costBasis;
       userPos.margin += margin;
+    } else if (userPos.qty > qty) {
+      userPos.qty -= qty;
+      userPos.margin -= margin;
+      userPos.costBasis -= costBasis;
+    } else if (userPos.qty === qty) {
+      this.removePositionEntry(userId, market);
+      return userPos;
     } else {
-      if (userPos.qty === qty) {
-        let userPosToChange = this.positions.get(userId)?.filter((pos) => pos.market !== market);
-        this.positions.set(userId, userPosToChange || []);
-        this.markteIndex.get(market)?.delete(userId);
-      } else if (userPos.qty > qty) {
-        userPos.qty -= qty;
-        userPos.margin -= margin;
-        userPos.costBasis -= costBasis;
-      } else {
-        userPos.qty = qty;
-        userPos.margin = margin;
-        userPos.costBasis = costBasis;
-        userPos.kind = kind;
-      }
+      userPos.qty = qty - userPos.qty;
+      userPos.margin = margin;
+      userPos.costBasis = costBasis;
+      userPos.kind = kind;
+    }
+
+    if (userPos.qty <= 0) {
+      this.removePositionEntry(userId, market);
+      return userPos;
     }
 
     return userPos;
@@ -104,7 +121,10 @@ export default class PostionManager {
         if (pos.market === market) {
           const liquidationMarginLimit = pos.margin * 0.95;
           const priceOfPostionAccordingToMarkPrice = markPrice * pos.qty;
-          const uPnl = priceOfPostionAccordingToMarkPrice - pos.costBasis;
+          const uPnl =
+            pos.kind === 'LONG'
+              ? priceOfPostionAccordingToMarkPrice - pos.costBasis
+              : pos.costBasis - priceOfPostionAccordingToMarkPrice;
 
           if (uPnl + liquidationMarginLimit <= 0) {
             userMarketOrder.push({
@@ -179,24 +199,45 @@ export default class PostionManager {
     return this.marketsMarkPrice.get(market);
   }
 
-  calculateAndGetHigestPnl(kind: Shared.KIND, market: Shared.MARKET_AVAILABEL, markPrice: number) {
-    const oppSide = kind === 'SHORT' ? 'LONG' : 'SHORT';
+  calculateAndGetHigestPnl(
+    closeKind: Shared.KIND,
+    market: Shared.MARKET_AVAILABEL,
+    markPrice: number,
+    excludeUserId?: string,
+  ) {
+    // Opposite side to the closing order (LONG close → find SHORT positions, etc.)
+    const adlSide: Shared.KIND = closeKind === 'SHORT' ? 'LONG' : 'SHORT';
 
-    const oppSideMaxPnlUsers = new OrderedMap<number, string>();
-    if (!this.markteIndex || !this.markteIndex.get) return { profitableUser: null, markPrice };
+    if (!this.markteIndex?.get) return { profitableUser: null, markPrice };
+
+    let highestPnl = -Infinity;
+    let profitableUserId: string | null = null;
 
     this.markteIndex.get(market)?.forEach((userId) => {
+      if (excludeUserId && userId === excludeUserId) return;
+
       const userPositions = this.positions.get(userId);
       const userMarketPos = userPositions?.find(
-        (pos) => pos.kind === oppSide && pos.market === market,
+        (pos) => pos.kind === adlSide && pos.market === market,
       );
-      if (!userMarketPos) return;
+      if (!userMarketPos || userMarketPos.qty <= 0) return;
 
       const marketPositionValue = markPrice * userMarketPos.qty;
-      const uPnl = marketPositionValue - userMarketPos.costBasis;
-      oppSideMaxPnlUsers.setElement(uPnl, userId);
+      const uPnl =
+        userMarketPos.kind === 'LONG'
+          ? marketPositionValue - userMarketPos.costBasis
+          : userMarketPos.costBasis - marketPositionValue;
+
+      if (uPnl > highestPnl) {
+        highestPnl = uPnl;
+        profitableUserId = userId;
+      }
     });
 
-    return { profitableUser: oppSideMaxPnlUsers.front(), markPrice };
+    return {
+      profitableUser:
+        profitableUserId !== null ? ([highestPnl, profitableUserId] as [number, string]) : null,
+      markPrice,
+    };
   }
 }

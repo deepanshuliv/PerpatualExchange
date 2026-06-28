@@ -15,6 +15,7 @@ export default class EngineManager {
   private positionManager: PostionManager;
   private matchingManger: MatchingEngine;
   private redisReadPointer = '';
+  private fundingRateTimerStarted = false;
 
   constructor() {
     this.publisherRedisClient = redisClient.duplicate();
@@ -42,14 +43,13 @@ export default class EngineManager {
   handleBackendRequest(request: EngineRequest.ENGINE_REQUEST | EngineRequest.GET_MARKET_PRICE) {
     if (request.type === 'get_balance') {
       const { correlationId } = request;
-      const { market, userId } = request.payload;
-      const balance = this.matchingManger.getBalance(userId, market);
-      const numericBalance = typeof balance === 'number' ? balance : null;
-      
+      const { userId } = request.payload;
+      const balance = this.matchingManger.getBalance(userId);
+
       this.sendTobackend({
         correlationId,
         type: 'get_balance',
-        payload: numericBalance,
+        payload: balance,
       });
     } else if (request.type === 'create_order') {
       const { correlationId } = request;
@@ -77,24 +77,10 @@ export default class EngineManager {
         payload: { ...createOrder, market, kind, userId, transactionTime: Date.now() },
       });
 
-      const depth = this.matchingManger.getDepth(market);
-      const bestBid = depth.bids[0] || [0, 0];
-      const bestAsk = depth.asks[0] || [0, 0];
-      this.sendTobackend({
-        type: 'bookticker_updated',
-        payload: {
-          market,
-          bestBidPrice: bestBid[0],
-          bestBidQty: bestBid[1],
-          bestAskPrice: bestAsk[0],
-          bestAskQty: bestAsk[1],
-          transactionTime: Date.now(),
-        },
-      });
-    } else if (request.type === 'add_balance') {
+    } 
+    else if (request.type === 'add_balance') {
       const { correlationId } = request;
       const { userId, amount } = request.payload;
-      // TODO ask should i return a string acknowledge mesaage
       this.matchingManger.addBalance(userId, amount);
       this.sendTobackend({ correlationId, type: 'add_balance', payload: null });
     } else if (request.type === 'cancel_order') {
@@ -126,25 +112,11 @@ export default class EngineManager {
       });
 
       const market = cancelled.market;
-      const depth = this.matchingManger.getDepth(market);
-      const bestBid = depth.bids[0] || [0, 0];
-      const bestAsk = depth.asks[0] || [0, 0];
-      this.sendTobackend({
-        type: 'bookticker_updated',
-        payload: {
-          market,
-          bestBidPrice: bestBid[0],
-          bestBidQty: bestBid[1],
-          bestAskPrice: bestAsk[0],
-          bestAskQty: bestAsk[1],
-          transactionTime: Date.now(),
-        },
-      });
     } else if (request.type === 'get_position') {
       const { correlationId } = request;
       const { market, userId } = request.payload;
       if (market) {
-        const position = this.matchingManger.getPosition(userId, market);
+        const position = this.matchingManger.getPositionForMarket(userId, market);
         this.sendTobackend({
           correlationId,
           type: 'get_position',
@@ -194,7 +166,7 @@ export default class EngineManager {
 
       userToLiquidate?.forEach((user) => {
         const { qty, margin, userId, kind, market, costBasis } = user;
-        const liquidationOrder = this.matchingManger.palceMarketOrderForLiquidation(
+        const liquidationOrder = this.matchingManger.placeMarketOrderForLiquidation(
           userId,
           kind,
           qty,
@@ -236,17 +208,21 @@ export default class EngineManager {
         });
       });
     } else if (request.type === 'run_funding_rate') {
-      // push to stream
-      setInterval(
-        async () => {
-          const publisher = await this.publisherRedisClient.connect();
-          publisher.xAdd('to-engine', '*', {
-            data: JSON.stringify({ type: 'run_funding_rate' }),
-          });
-        },
-        8 * 60 * 60 * 1000,
-      ); // 8hr timer
-      // run funding rate
+      if (!this.fundingRateTimerStarted) {
+        this.fundingRateTimerStarted = true;
+        setInterval(
+          async () => {
+            const publisher = await connectRedisClient(
+              this.publisherRedisClient,
+              'MatchingEngine-funding-publisher',
+            );
+            publisher.xAdd('to-engine', '*', {
+              data: JSON.stringify({ type: 'run_funding_rate' }),
+            });
+          },
+          8 * 60 * 60 * 1000,
+        );
+      }
       allMarketsList.forEach((market) => {
         const markPrice = this.positionManager.getMarkpriceOfMarket(market) || 0;
         const lastTradedPrice = this.matchingManger.getLastTradedPriceOFMarket(market) || 0;
@@ -341,7 +317,7 @@ export default class EngineManager {
           redisReadPointer: this.redisReadPointer,
         });
       },
-      8000 * 60, // 8 hour
+      8 * 60 * 60 * 1000, // 8 hours
     );
 
     //read if availabel startpointer else from start

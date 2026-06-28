@@ -14,14 +14,15 @@ export default class Balance {
     if (!balanceSnapShot) return;
     this.user = JSON.parse(balanceSnapShot || '{}');
   }
+
   createUserBalanceAccount(userId: string) {
-    let userAvailabel = this.user[userId];
-    if (!userAvailabel) {
-      userAvailabel = {
+    if (!this.user[userId]) {
+      this.user[userId] = {
         balance: 1000,
         lockedBalance: 0,
       };
     }
+    return this.user[userId];
   }
 
   getBalance(userId: string) {
@@ -41,10 +42,13 @@ export default class Balance {
 
   addBalance(userId: string, amount: number) {
     if (!this.user[userId]) {
-      return null;
+      this.createUserBalanceAccount(userId);
     }
-    this.user[userId].balance += amount;
+    const account = this.user[userId]!;
+    account.balance += amount;
+    return account.balance;
   }
+
   updateLockedBalance(userId: string, signedAmount: number) {
     if (!this.user[userId]) {
       return null;
@@ -58,6 +62,7 @@ export default class Balance {
     }
     this.user[userId].lockedBalance += amount;
   }
+
   getLockedBalance(userId: string) {
     if (!this.user[userId]) {
       return null;
