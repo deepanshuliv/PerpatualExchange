@@ -38,6 +38,13 @@ export const apiService = {
     return res.json();
   },
 
+  getLiquidations: async (market: string) => {
+    const res = await fetch(`${API_BASE}/liquidations/${market}`, {
+      headers: getHeaders(),
+    });
+    return res.json();
+  },
+
   getAvailableEquity: async (token: string, market: string) => {
     const res = await fetch(`${API_BASE}/equity/available?market=${market}`, {
       headers: getHeaders(token),

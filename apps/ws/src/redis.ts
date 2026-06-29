@@ -1,4 +1,4 @@
-import { connectRedisClient, redisClient, type RedisClientType } from '@repo/redis';
+import { connectRedisClient, redisClient } from '@repo/redis';
 import { WebsocketTypes, type RedisStreamResponse } from '@repo/shared-types';
 import { checkMarketUpdateAndSendToSubsribedUser } from './broadcast';
 
@@ -16,16 +16,14 @@ export async function startConsumerGroup() {
     });
     console.log(`[WebSocket Consumer] Created group '${groupName}' at stream tail ($)`);
   } catch (err: any) {
-    if (err.message && err.message.includes('BUSYGROUP')) {
-      await consumerGroups.sendCommand(['XGROUP', 'SETID', streamKey, groupName, '$']);
-      console.log(`[WebSocket Consumer] Group '${groupName}' reset to stream tail ($)`);
-    } else {
+    if (!err.message?.includes('BUSYGROUP')) {
       console.log('[WebSocket Consumer] Failed to initialize consumer group:', err);
       process.exit(1);
     }
+    
+    await consumerGroups.sendCommand(['XGROUP', 'SETID', streamKey, groupName, '$']);
+    console.log(`[WebSocket Consumer] Group '${groupName}' reset to stream tail ($)`);
   }
-
-  await drainPendingMessages(consumerGroups, streamKey, groupName, consumerName);
 
   (async () => {
     while (1) {
@@ -74,36 +72,4 @@ export async function startConsumerGroup() {
     console.log('WebSocket consumer loop error:', err);
     process.exit(1);
   });
-}
-
-async function drainPendingMessages(
-  client: RedisClientType,
-  streamKey: string,
-  groupName: string,
-  consumerName: string,
-) {
-  let drained = 0;
-  while (true) {
-    const response = (await client.xReadGroup(
-      groupName,
-      consumerName,
-      { key: streamKey, id: '0' },
-      { BLOCK: 0, COUNT: 100 },
-    )) as unknown as RedisStreamResponse;
-
-    if (!response || !Array.isArray(response) || !response[0]?.messages?.length) {
-      break;
-    }
-
-    for (const message of response[0].messages) {
-      await client.xAck(streamKey, groupName, message.id);
-      drained++;
-    }
-  }
-
-  if (drained > 0) {
-    console.log(
-      `[WebSocket Consumer] Drained ${drained} stale pending message(s) without broadcast`,
-    );
-  }
 }

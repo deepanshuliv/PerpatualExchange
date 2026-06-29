@@ -368,6 +368,50 @@ export async function getDepth(req: Request, res: Response) {
   }
 }
 
+export async function getLiquidations(req: Request, res: Response) {
+  const marketId = req.params.marketId;
+  const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+  if (!parsed.success) {
+    return res.status(400).json({ msg: 'invalid market' });
+  }
+  const market = parsed.data;
+
+  try {
+    const orders = await prisma.order.findMany({
+      where: {
+        market: market as any,
+        type: 'MARKET',
+        margin: 0,
+        status: { in: ['FILLED', 'PARTIALLY_FILLED'] },
+      },
+      orderBy: { transactionTime: 'desc' },
+      take: 100,
+      select: {
+        userId: true,
+        kind: true,
+        filledQty: true,
+        totalQty: true,
+        price: true,
+        transactionTime: true,
+      },
+    });
+
+    const data = orders.map((order) => ({
+      userId: order.userId,
+      kind: order.kind,
+      price: order.price,
+      qty: order.filledQty,
+      totalQty: order.totalQty,
+      time: order.transactionTime.getTime(),
+    }));
+
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    console.log('[liquidations] DB error:', error);
+    return res.status(200).json({ ok: true, data: [] });
+  }
+}
+
 export async function getTickerPrice(req: Request, res: Response) {
   const marketId = req.params.marketId;
   const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);

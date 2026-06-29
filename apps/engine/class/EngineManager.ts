@@ -40,12 +40,7 @@ export default class EngineManager {
   }
 
   async sendTobackend(response: EngineResponse.ENGINE_STREAM_MESSAGE) {
-    const publisher = await connectRedisClient(
-      this.publisherRedisClient,
-      'MatchingEngine-publisher',
-    );
-
-    await publisher.xAdd('to-backend', '*', { data: JSON.stringify(response) });
+    await this.publisherRedisClient.xAdd('to-backend', '*', { data: JSON.stringify(response) });
     if (!SILENT_BROADCAST_TYPES.has(response.type)) {
       const correlationId = 'correlationId' in response ? response.correlationId : 'N/A';
       console.log(
@@ -66,13 +61,14 @@ export default class EngineManager {
       payload: { market, bids: depth.bids, asks: depth.asks, transactionTime },
     });
 
+    // TODO THINK :- can do at ws level so that no load on stream . and send to subscribed user only
     for (const fill of fills) {
       await this.sendTobackend({
         type: 'trade_executed',
         payload: { market, price: fill.price, qty: fill.qty, transactionTime },
       });
     }
-
+    // TODO THINK:- about it vcan be replaceable as can be sent at ws level after calculating
     if (fills.length > 0) {
       const lastFill = fills[fills.length - 1]!;
       await this.sendTobackend({
@@ -242,11 +238,7 @@ export default class EngineManager {
       if (!this.fundingRateTimerStarted) {
         this.fundingRateTimerStarted = true;
         setInterval(async () => {
-          const publisher = await connectRedisClient(
-            this.publisherRedisClient,
-            'MatchingEngine-funding-publisher',
-          );
-          publisher.xAdd('to-engine', '*', {
+          this.publisherRedisClient.xAdd('to-engine', '*', {
             data: JSON.stringify({ type: 'run_funding_rate' }),
           });
         }, FUNDING_INTERVAL_MS);
@@ -328,10 +320,8 @@ export default class EngineManager {
 
   async start() {
     console.log('Connecting to Redis...');
-    const subscriber = await connectRedisClient(
-      this.subsciberRedisClient,
-      'MatchingEngine-subscriber',
-    );
+    await connectRedisClient(this.subsciberRedisClient, 'MatchingEngine-subscriber');
+    await connectRedisClient(this.publisherRedisClient, 'MatchingEngine-publisher');
     console.log('Redis connected successfully.');
 
     console.log('waiting for binance to connect...');
@@ -355,10 +345,13 @@ export default class EngineManager {
     while (1) {
       const readFrom = this.redisReadPointer === '' ? '$' : this.redisReadPointer;
 
-      const response = (await subscriber.xRead([{ key: 'to-engine', id: readFrom }], {
-        BLOCK: 0,
-        COUNT: 100,
-      })) as RedisStreamResponse;
+      const response = (await this.subsciberRedisClient.xRead(
+        [{ key: 'to-engine', id: readFrom }],
+        {
+          BLOCK: 0,
+          COUNT: 100,
+        },
+      )) as RedisStreamResponse;
 
       if (!response || !Array.isArray(response)) {
         continue;
@@ -367,8 +360,8 @@ export default class EngineManager {
         for (const msg of stream.messages) {
           this.redisReadPointer = msg.id;
           const parsedMessage = JSON.parse(msg.message.data!) || {};
-          const type = parsedMessage.type || 'unknown';
-          const correlationId = parsedMessage.correlationId || 'N/A';
+          const type = parsedMessage.type;
+          const correlationId = parsedMessage.correlationId;
           if (type !== 'markprice_updated') {
             console.log(
               `[Engine] Stream message received: type=${type} | correlationId=${correlationId}`,

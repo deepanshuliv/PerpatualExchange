@@ -5,8 +5,8 @@ import { useTrading } from "../context/TradingContext";
 import { Lock, Unlock, Minus, Plus } from "lucide-react";
 
 export default function OrderBook() {
-  const { bids, asks, lastPrice, markPrice, marketTrades, market, loadingDepth } = useTrading();
-  const [activeTab, setActiveTab] = useState<"book" | "trades">("book");
+  const { bids, asks, lastPrice, markPrice, marketTrades, marketLiquidations, market, loadingDepth } = useTrading();
+  const [activeTab, setActiveTab] = useState<"book" | "trades" | "liquidations">("book");
   const [layout, setLayout] = useState<"both" | "asks" | "bids">("both");
   const [isLocked, setIsLocked] = useState(true);
   const [precision, setPrecision] = useState(0.1);
@@ -91,6 +91,14 @@ export default function OrderBook() {
             }`}
           >
             Trades
+          </button>
+          <button
+            onClick={() => setActiveTab("liquidations")}
+            className={`px-3 py-1 text-xs font-bold transition-colors ${
+              activeTab === "liquidations" ? "text-white border-b-2 border-white" : "text-[#8491a5] hover:text-white"
+            }`}
+          >
+            Liquidation
           </button>
         </div>
       </div>
@@ -247,7 +255,7 @@ export default function OrderBook() {
             )}
           </div>
         </>
-      ) : (
+      ) : activeTab === "trades" ? (
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="grid grid-cols-3 text-[10px] font-bold text-[#8491a5] px-3 py-1.5 border-b border-[#171a1f] bg-[#0c0d10] shrink-0">
             <div>Time</div>
@@ -272,6 +280,45 @@ export default function OrderBook() {
                     {trade.price.toLocaleString(undefined, { minimumFractionDigits: 1 })}
                   </div>
                   <div className="text-right text-[#b0bbcb]">{trade.qty.toFixed(5)}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="px-3 py-2 border-b border-[#171a1f] bg-[#12161c]/40 shrink-0">
+            <p className="text-[10px] text-[#8491a5] leading-relaxed">
+              Liquidations trigger when mark price moves against a position past its maintenance margin.
+            </p>
+          </div>
+          <div className="grid grid-cols-4 text-[10px] font-bold text-[#8491a5] px-3 py-1.5 border-b border-[#171a1f] bg-[#0c0d10] shrink-0">
+            <div>Time</div>
+            <div>Side</div>
+            <div className="text-right">Price (USD)</div>
+            <div className="text-right">Quantity ({asset})</div>
+          </div>
+          <div className="flex-1 overflow-y-auto no-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
+            {marketLiquidations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans">
+                <span>No liquidations yet</span>
+              </div>
+            ) : (
+              marketLiquidations.map((liq, idx) => (
+                <div
+                  key={`liq-${liq.time}-${liq.userId}-${idx}`}
+                  className="grid grid-cols-4 px-3 py-1.5 hover:bg-white/[0.02] items-center"
+                >
+                  <div className="text-[#8491a5] text-[10px]">
+                    {new Date(liq.time).toLocaleTimeString()}
+                  </div>
+                  <div className={liq.kind === "LONG" ? "text-[#ff3b30]" : "text-[#00c087]"}>
+                    {liq.kind}
+                  </div>
+                  <div className="text-right text-white font-bold">
+                    {liq.price.toLocaleString(undefined, { minimumFractionDigits: 1 })}
+                  </div>
+                  <div className="text-right text-[#b0bbcb]">{liq.qty.toFixed(5)}</div>
                 </div>
               ))
             )}

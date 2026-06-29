@@ -102,16 +102,16 @@ export default function Home() {
           </div>
 
           <nav className="hidden md:flex items-center space-x-6 text-xs font-semibold text-[#8491a5]">
-            <a href="#" className="hover:text-white transition-colors">
+            {/* <a href="#" className="hover:text-white transition-colors">
               Spot
-            </a>
+            </a> */}
             <a
               href="#"
               className="text-white border-b-2 border-white pb-4 pt-4 font-bold"
             >
               Futures
             </a>
-            <a href="#" className="hover:text-white transition-colors">
+            {/* <a href="#" className="hover:text-white transition-colors">
               Lend
             </a>
             <a href="#" className="hover:text-white transition-colors">
@@ -129,17 +129,17 @@ export default function Home() {
             >
               <span>More</span>
               <ChevronDown className="w-3.5 h-3.5" />
-            </a>
+            </a> */}
           </nav>
         </div>
 
         <div className="flex items-center space-x-4">
-          <button className="text-[#8491a5] hover:text-white p-1 transition-colors">
+          {/* <button className="text-[#8491a5] hover:text-white p-1 transition-colors">
             <Search className="w-4 h-4" />
           </button>
           <button className="text-[#8491a5] hover:text-white p-1 transition-colors">
             <Sun className="w-4 h-4" />
-          </button>
+          </button> */}
 
           {user ? (
             <div className="flex items-center space-x-3 text-xs">

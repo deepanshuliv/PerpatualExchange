@@ -18,6 +18,15 @@ export interface MarketTrade {
   time: number;
 }
 
+export interface MarketLiquidation {
+  userId: string;
+  kind: 'LONG' | 'SHORT';
+  price: number;
+  qty: number;
+  totalQty: number;
+  time: number;
+}
+
 interface TradingContextType {
   market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD';
   setMarket: (market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD') => void;
@@ -31,6 +40,7 @@ interface TradingContextType {
   previewFundingRate: number | null;
   fundingCountdown: string;
   marketTrades: MarketTrade[];
+  marketLiquidations: MarketLiquidation[];
   openPositions: Position[];
   openOrders: Order[];
   fills: Fill[];
@@ -63,6 +73,7 @@ export const useTrading = () => {
 };
 
 const MAX_MARKET_TRADES = 100;
+const MAX_MARKET_LIQUIDATIONS = 100;
 
 export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const api = useApi();
@@ -78,6 +89,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [fundingDeadline, setFundingDeadline] = useState(() => startFundingTimer());
   const [fundingCountdown, setFundingCountdown] = useState('08:00:00');
   const [marketTrades, setMarketTrades] = useState<MarketTrade[]>([]);
+  const [marketLiquidations, setMarketLiquidations] = useState<MarketLiquidation[]>([]);
   const [loadingDepth, setLoadingDepth] = useState<boolean>(true);
 
   const previewFundingRate = computeFundingRatePreview(markPrice, lastPrice);
@@ -124,6 +136,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setLastPrice(0);
     setMarkPrice(0);
     setMarketTrades([]);
+    setMarketLiquidations([]);
     setFundingDeadline(startFundingTimer());
   }, [market]);
 
@@ -180,6 +193,18 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (tokenRef.current) {
               refreshUserData();
             }
+          } else if (stream.startsWith('liquidation')) {
+            const liquidation: MarketLiquidation = {
+              userId: String(data.userId),
+              kind: data.kind as 'LONG' | 'SHORT',
+              price: Number(data.price),
+              qty: Number(data.qty),
+              totalQty: Number(data.totalQty),
+              time: Number(data.transactionTime ?? data.executionTime ?? Date.now()),
+            };
+            if (liquidation.qty > 0) {
+              setMarketLiquidations((prev) => [liquidation, ...prev].slice(0, MAX_MARKET_LIQUIDATIONS));
+            }
           }
         }
       } catch (err) {
@@ -220,6 +245,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     subscribeToMarket(ws, market);
     fetchDepth();
     fetchLastPrice();
+    fetchLiquidations();
 
     return () => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -235,6 +261,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       `lastTradedPrice.${targetMarket}`,
       `trade.${targetMarket}`,
       `funding.${targetMarket}`,
+      `liquidation.${targetMarket}`,
     ];
     ws.send(
       JSON.stringify({
@@ -252,6 +279,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       `lastTradedPrice.${targetMarket}`,
       `trade.${targetMarket}`,
       `funding.${targetMarket}`,
+      `liquidation.${targetMarket}`,
     ];
     ws.send(
       JSON.stringify({
@@ -283,6 +311,33 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const json = await api.getTickerPrice(market);
       if (json.ok && json.price && Number(json.price) > 0) {
         setLastPrice(Number(json.price));
+      }
+    } catch {
+    }
+  };
+
+  const fetchLiquidations = async () => {
+    try {
+      const json = await api.getLiquidations(market);
+      if (json.ok && Array.isArray(json.data)) {
+        const formatted: MarketLiquidation[] = json.data.map(
+          (item: {
+            userId: string;
+            kind: 'LONG' | 'SHORT';
+            price: number;
+            qty: number;
+            totalQty: number;
+            time: number;
+          }) => ({
+            userId: item.userId,
+            kind: item.kind,
+            price: Number(item.price),
+            qty: Number(item.qty),
+            totalQty: Number(item.totalQty),
+            time: Number(item.time),
+          }),
+        );
+        setMarketLiquidations(formatted);
       }
     } catch {
     }
@@ -501,6 +556,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         previewFundingRate,
         fundingCountdown,
         marketTrades,
+        marketLiquidations,
         openPositions,
         openOrders,
         fills,

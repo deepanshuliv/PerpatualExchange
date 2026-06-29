@@ -258,8 +258,8 @@ export default class OrderBookManager {
 
       if (bestPrice < price) {
         break;
-      } 
-      if(bestPrice >= price) {
+      }
+      if (bestPrice >= price) {
         while (PriceLevel.openOrder.length > 0 && remianingQty > 0) {
           const topOrder = PriceLevel.openOrder[0]!;
           const remainingPriceLevelQty = topOrder.totalQty - topOrder.filledQty;

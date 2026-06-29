@@ -80,5 +80,19 @@ export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngin
       transactionTime,
       executionTime,
     });
+  } else if (update.type === 'liquidation') {
+    const { market, userId, kind, filledQty, totalQty, totalSpent } = update.payload;
+    const avgPrice = totalQty > 0 ? totalSpent / totalQty : 0;
+    sendToSubscribers(`liquidation.${market}`, {
+      type: 'liquidation',
+      market,
+      userId,
+      kind,
+      price: avgPrice,
+      qty: filledQty,
+      totalQty,
+      transactionTime,
+      executionTime,
+    });
   }
 }

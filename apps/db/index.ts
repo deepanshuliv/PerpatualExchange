@@ -11,12 +11,13 @@ async function startConsumerWorker(consumerName: string) {
   await connectRedisClient(subscriber, `DBConsumer-${consumerName}`);
 
   try {
+    // TODO : optimize store somewher last read message . so that start from that msg
     await subscriber.xGroupCreate(STREAM_KEY, CONSUMER_GROUP, '0', {
       MKSTREAM: true,
     });
+    console.log(`[DB Consumer Worker - ${consumerName}] Created group '${CONSUMER_GROUP}'`);
   } catch (err: any) {
-    if (err.message && err.message.includes('BUSYGROUP')) {
-    } else {
+    if (!err.message?.includes('BUSYGROUP')) {
       console.log(
         `[DB Consumer Worker - ${consumerName}] Failed to initialize consumer group:`,
         err,
