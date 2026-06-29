@@ -34,7 +34,6 @@ export default function Home() {
   const [marketDropdownOpen, setMarketDropdownOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
-  // Map market to display text
   const getMarketLabel = (mkt: string) => {
     if (mkt === "ETHUSD") return "ETH-PERP";
     if (mkt === "SOLUSD") return "SOL-PERP";
@@ -69,7 +68,6 @@ export default function Home() {
     );
   };
 
-  // Mock changes for 24h change values
   const get24HChange = () => {
     if (market === "ETHUSD") return { val: "-55.20", pct: "-1.82", isGreen: false };
     if (market === "SOLUSD") return { val: "+3.45", pct: "+2.56", isGreen: true };
@@ -80,11 +78,8 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#08090b] text-[#f2f4f7] font-sans selection:bg-zinc-800 selection:text-white">
-      {/* 1. Header (Navbar) */}
       <header className="flex items-center justify-between bg-[#0c0d10] border-b border-[#171a1f] px-6 h-14 shrink-0 z-30 select-none">
-        {/* Left Brand and Navigation */}
         <div className="flex items-center space-x-8">
-          {/* Logo */}
           <div className="flex items-center space-x-2 cursor-pointer">
             <div className="bg-[#ff3b30] p-1.5 rounded-lg flex items-center justify-center shadow-md">
               <svg
@@ -106,7 +101,6 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Navigation Links */}
           <nav className="hidden md:flex items-center space-x-6 text-xs font-semibold text-[#8491a5]">
             <a href="#" className="hover:text-white transition-colors">
               Spot
@@ -139,7 +133,6 @@ export default function Home() {
           </nav>
         </div>
 
-        {/* Right Search, Settings and Auth Controls */}
         <div className="flex items-center space-x-4">
           <button className="text-[#8491a5] hover:text-white p-1 transition-colors">
             <Search className="w-4 h-4" />
@@ -148,7 +141,6 @@ export default function Home() {
             <Sun className="w-4 h-4" />
           </button>
 
-          {/* User information / Auth button block */}
           {user ? (
             <div className="flex items-center space-x-3 text-xs">
               <span className="text-[#8491a5]">
@@ -182,9 +174,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* 2. Ticker Statistics Bar */}
       <section className="flex flex-wrap md:flex-nowrap items-center bg-[#0c0d10] border-b border-[#171a1f] h-auto md:h-14 px-6 py-2 md:py-0 shrink-0 text-xs text-[#8491a5] select-none z-20">
-        {/* Market Selector dropdown */}
         <div className="relative mr-6 shrink-0 z-20">
           <button
             onClick={() => setMarketDropdownOpen(!marketDropdownOpen)}
@@ -230,9 +220,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* Dynamic Price stats */}
         <div className="flex flex-wrap md:flex-nowrap items-center w-full justify-between gap-4 md:gap-0 mt-2 md:mt-0 font-semibold overflow-hidden">
-          {/* Index/Mark Price block */}
           <div className="flex flex-col pr-6 border-r border-[#171a1f]/60">
             <span className={`text-sm font-bold leading-none ${changeInfo.isGreen ? "text-[#00c087]" : "text-[#ff3b30]"}`}>
               {lastPrice > 0 ? lastPrice.toLocaleString(undefined, { minimumFractionDigits: 1 }) : "61,643.2"}
@@ -242,7 +230,6 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Index Price */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">Index Price</span>
             <span className="font-mono text-white font-bold mt-0.5">
@@ -250,7 +237,6 @@ export default function Home() {
             </span>
           </div>
 
-          {/* 24h Change */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">24H Change</span>
             <span className={`font-mono font-bold mt-0.5 ${changeInfo.isGreen ? "text-[#00c087]" : "text-[#ff3b30]"}`}>
@@ -258,7 +244,6 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Funding / Countdown */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">8H Funding / Countdown</span>
             <span className="font-mono text-[#f59e0b] font-bold mt-0.5">
@@ -267,81 +252,61 @@ export default function Home() {
             </span>
           </div>
 
-          {/* 24h High */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">24H High</span>
             <span className="font-mono text-white font-bold mt-0.5">63,140.8</span>
           </div>
 
-          {/* 24h Low */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">24H Low</span>
             <span className="font-mono text-white font-bold mt-0.5">59,024.5</span>
           </div>
 
-          {/* 24h Volume */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">24H Volume (USD)</span>
             <span className="font-mono text-white font-bold mt-0.5">144,610,805.49</span>
           </div>
 
-          {/* Open Interest */}
           <div className="flex flex-col px-4 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">Open Interest ({market === "ETHUSD" ? "ETH" : market === "SOLUSD" ? "SOL" : "BTC"})</span>
             <span className="font-mono text-white font-bold mt-0.5">440.78862</span>
           </div>
 
-          {/* Carousel scroll right arrow */}
           <button className="text-[#8491a5] hover:text-white pl-4 transition-colors">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </section>
 
-      {/* 3. Main Dashboard layout */}
       <main className="flex-1 flex p-4 gap-4 overflow-hidden min-h-0 w-full">
-        
-        {/* Left Column: Chart + OrderBook side-by-side, and DashboardTabs below */}
         <div className="w-[75%] flex flex-col gap-4 min-h-0">
-          {/* Row 1: Chart and OrderBook */}
           <div className="flex gap-4 h-[480px] shrink-0 w-full">
-            {/* Chart Wrapper */}
             <div className="flex-1 min-h-0">
               <TradingChart />
             </div>
-            {/* OrderBook Wrapper */}
             <div className="w-[30%] shrink-0">
               <OrderBook />
             </div>
           </div>
 
-          {/* Row 2: Dashboard Tabs */}
           <div className="flex-1 min-h-0">
             <DashboardTabs />
           </div>
         </div>
-        {/* Right Column: OrderEntryPanel */}
         <div className="w-[25%] flex flex-col min-h-0">
-          
-          {/* Order entry card */}
           <div className="flex-1 overflow-y-auto no-scrollbar">
             <OrderEntryPanel />
           </div>
-
         </div>
       </main>
 
-      {/* 4. Footer (Bottom Bar ticker) */}
       <footer className="flex items-center justify-between bg-[#08090b] border-t border-[#171a1f] h-9 px-6 shrink-0 z-30 select-none text-[10px] font-semibold text-[#8491a5]">
-        
-        {/* Hot Movers ticker */}
         <div className="flex items-center space-x-6 overflow-hidden w-full mr-4 relative">
           <div className="flex items-center space-x-1.5 shrink-0 bg-[#08090b] pr-2 z-10 font-bold text-white uppercase tracking-wider">
             <TrendingUp className="w-3.5 h-3.5 text-orange-500" />
             <span>Top Movers</span>
           </div>
 
-          {/* Horizontal scrolling ticker items */}
           <div className="flex space-x-6 animate-[marquee_25s_linear_infinite] hover:[animation-play-state:paused] whitespace-nowrap">
             {[
               { ticker: "MEGA-PERP", price: "$0.04944", change: "-12.98%", isGreen: false },
@@ -364,7 +329,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Yield and stats */}
         <div className="flex items-center space-x-4 shrink-0 font-mono text-zinc-500 font-bold">
           <div className="flex items-center space-x-1.5">
             <span>Hourly Yield</span>
@@ -373,7 +337,6 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Auth Modals */}
       <AuthModal />
 
       <ConfirmModal

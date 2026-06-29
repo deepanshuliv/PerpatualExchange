@@ -69,7 +69,6 @@ const GET_DEPTH_SCHEMA = BASE_ENGINE_SCHEMA.extend({
 });
 type GET_DEPTH = z.infer<typeof GET_DEPTH_SCHEMA>;
 
-// without correlationId
 const GET_MARKET_PRICE_SCHEMA = z.object({
   type: z.literal('markprice_updated'),
   payload: z.object({

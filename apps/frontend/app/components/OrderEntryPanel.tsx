@@ -26,7 +26,6 @@ export default function OrderEntryPanel() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // Map market to asset details
   const getMarketInfo = () => {
     if (market === "ETHUSD") {
       return { symbol: "ETH", leverage: 50, color: "bg-[#627eea]" };
@@ -39,7 +38,6 @@ export default function OrderEntryPanel() {
 
   const { symbol, leverage, color } = getMarketInfo();
 
-  // Populate price when lastPrice changes or clicking Mid/BBO
   useEffect(() => {
     if (lastPrice > 0 && !priceInput) {
       setPriceInput(lastPrice.toString());
@@ -51,7 +49,6 @@ export default function OrderEntryPanel() {
       if (type === "MID") {
         setPriceInput(lastPrice.toString());
       } else {
-        // Best Bid Offer approximation
         const spread = side === "LONG" ? lastPrice * 0.999 : lastPrice * 1.001;
         setPriceInput(spread.toFixed(1));
       }
@@ -63,17 +60,14 @@ export default function OrderEntryPanel() {
   const orderValue = priceVal * qtyVal;
   const marginRequired = orderValue > 0 ? orderValue / leverage : 0;
 
-  // Handle slider changes
   const handleSliderClick = (percent: number) => {
     setSliderVal(percent);
     if (balance > 0 && priceVal > 0) {
-      // qty = (balance * percent / 100) * leverage / price
       const calculatedQty = ((balance * (percent / 100)) * leverage) / priceVal;
       setQtyInput(calculatedQty.toFixed(4));
     }
   };
 
-  // Synchronize order value updates back to quantity if needed, or simply calculate
   const handleQtyChange = (val: string) => {
     setQtyInput(val);
     const parsed = parseFloat(val) || 0;
@@ -84,7 +78,6 @@ export default function OrderEntryPanel() {
     }
   };
 
-  // Submit Order
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
@@ -126,12 +119,10 @@ export default function OrderEntryPanel() {
     }
   };
 
-  // Estimation of Liquidation Price
   const getEstLiquidationPrice = () => {
     if (qtyVal <= 0 || priceVal <= 0) return "--";
-    // Approx: Price * (1 -/+ 1/leverage)
     const direction = side === "LONG" ? -1 : 1;
-    const maintenanceMargin = 0.005; // 0.5% maintenance
+    const maintenanceMargin = 0.005;
     const liqPrice = priceVal * (1 + direction * (1 / leverage - maintenanceMargin));
     return `$${liqPrice.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
   };
@@ -139,7 +130,6 @@ export default function OrderEntryPanel() {
   return (
     <div className="flex flex-col h-full bg-[#0c0d10] border border-[#171a1f] rounded-lg p-4 text-[#f2f4f7] select-none font-sans justify-between min-h-[500px]">
       <form onSubmit={handleSubmitOrder} className="flex flex-col space-y-4">
-        {/* Buy/Long & Sell/Short Switcher */}
         <div className="grid grid-cols-2 bg-[#12161c] rounded-xl p-1 h-12 shrink-0">
           <button
             type="button"
@@ -165,7 +155,6 @@ export default function OrderEntryPanel() {
           </button>
         </div>
 
-        {/* Order Type Tabs */}
         <div className="flex items-center space-x-4 border-b border-[#171a1f] pb-2 text-xs">
           {["LIMIT", "MARKET", "CONDITIONAL"].map((type) => (
             <button
@@ -182,7 +171,6 @@ export default function OrderEntryPanel() {
           ))}
         </div>
 
-        {/* Available Equity */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-[#8491a5]">Available Equity</span>
           <span className="font-mono font-bold text-white">
@@ -190,7 +178,6 @@ export default function OrderEntryPanel() {
           </span>
         </div>
 
-        {/* Price Input Block */}
         {orderType !== "MARKET" && (
           <div className="bg-[#12161c] border border-[#171a1f] rounded-xl p-3 flex flex-col justify-between h-18">
             <div className="flex items-center justify-between">
@@ -228,7 +215,6 @@ export default function OrderEntryPanel() {
           </div>
         )}
 
-        {/* Quantity Input Block */}
         <div className="bg-[#12161c] border border-[#171a1f] rounded-xl p-3 flex flex-col justify-between h-18">
           <span className="text-[10px] font-bold text-[#8491a5]">Quantity</span>
           <div className="flex items-center justify-between mt-1">
@@ -245,15 +231,12 @@ export default function OrderEntryPanel() {
           </div>
         </div>
 
-        {/* Percentage Slider Selector */}
         <div className="flex flex-col space-y-1 py-1">
           <div className="relative w-full h-1 bg-[#171a1f] rounded">
-            {/* Slider bar */}
             <div
               className={`absolute top-0 left-0 h-full rounded ${side === "LONG" ? "bg-[#00c087]" : "bg-[#ff3b30]"}`}
               style={{ width: `${sliderVal}%` }}
             />
-            {/* Markers */}
             {[0, 25, 50, 75, 100].map((mark) => (
               <button
                 key={mark}
@@ -279,7 +262,6 @@ export default function OrderEntryPanel() {
           </div>
         </div>
 
-        {/* Order Value Block */}
         <div className="bg-[#12161c] border border-[#171a1f] rounded-xl p-3 flex flex-col justify-between h-18">
           <span className="text-[10px] font-bold text-[#8491a5]">Order Value</span>
           <div className="flex items-center justify-between mt-1">
@@ -292,7 +274,6 @@ export default function OrderEntryPanel() {
           </div>
         </div>
 
-        {/* Extra Statistics */}
         <div className="flex flex-col space-y-2 border-t border-[#171a1f] pt-3 text-[11px] font-semibold">
           <div className="flex justify-between">
             <span className="text-[#8491a5]">Margin Required</span>
@@ -308,7 +289,6 @@ export default function OrderEntryPanel() {
           </div>
         </div>
 
-        {/* Feedback Messages */}
         {errorMsg && (
           <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 py-2 px-3 rounded-lg text-center">
             {errorMsg}
@@ -320,7 +300,6 @@ export default function OrderEntryPanel() {
           </div>
         )}
 
-        {/* CTA Login/Signup/Trade Buttons */}
         <div className="flex flex-col space-y-2 pt-2">
           {user ? (
             <button
@@ -355,7 +334,6 @@ export default function OrderEntryPanel() {
         </div>
       </form>
 
-      {/* Checkboxes and Bottom Yield */}
       <div className="flex flex-col space-y-4 border-t border-[#171a1f] pt-4 mt-4 text-[10px] font-semibold text-[#8491a5]">
         <div className="grid grid-cols-2 gap-2">
           <label className="flex items-center space-x-1.5 cursor-pointer">

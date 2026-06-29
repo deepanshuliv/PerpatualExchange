@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
-import type { OrderBookRow, Position, Order, Fill } from "types";
-import { useApi, WS_BASE } from "../hooks/useApi";
+import type { Fill, Order, OrderBookRow, Position } from 'types';
+import { useApi, WS_BASE } from '../hooks/useApi';
 import {
   computeFundingRatePreview,
-  startFundingTimer,
-  fundingMsRemaining,
   formatCountdown,
-} from "../utils/funding";
-import { parseDepthSnapshot } from "../utils/orderbook";
+  fundingMsRemaining,
+  startFundingTimer,
+} from '../utils/funding';
+import { parseDepthSnapshot } from '../utils/orderbook';
 
 export interface MarketTrade {
   price: number;
@@ -19,8 +19,8 @@ export interface MarketTrade {
 }
 
 interface TradingContextType {
-  market: "BTCUSD" | "ETHUSD" | "SOLUSD";
-  setMarket: (market: "BTCUSD" | "ETHUSD" | "SOLUSD") => void;
+  market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD';
+  setMarket: (market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD') => void;
   token: string | null;
   user: { id: string; username: string } | null;
   balance: number;
@@ -35,13 +35,19 @@ interface TradingContextType {
   openOrders: Order[];
   fills: Fill[];
   loadingDepth: boolean;
-  authModalMode: "login" | "signup" | null;
-  setAuthModalMode: (mode: "login" | "signup" | null) => void;
+  authModalMode: 'login' | 'signup' | null;
+  setAuthModalMode: (mode: 'login' | 'signup' | null) => void;
   login: (username: string, password?: string) => Promise<boolean>;
   signup: (username: string, password?: string) => Promise<boolean>;
   logout: () => void;
   deposit: (amount: number) => Promise<boolean>;
-  placeOrder: (qty: string, price: number, type: "LIMIT" | "MARKET", kind: "LONG" | "SHORT", margin: number) => Promise<any>;
+  placeOrder: (
+    qty: string,
+    price: number,
+    type: 'LIMIT' | 'MARKET',
+    kind: 'LONG' | 'SHORT',
+    margin: number,
+  ) => Promise<any>;
   cancelOrder: (orderId: string) => Promise<boolean>;
   refreshUserData: () => void;
 }
@@ -51,7 +57,7 @@ const TradingContext = createContext<TradingContextType | undefined>(undefined);
 export const useTrading = () => {
   const context = useContext(TradingContext);
   if (!context) {
-    throw new Error("useTrading must be used within a TradingProvider");
+    throw new Error('useTrading must be used within a TradingProvider');
   }
   return context;
 };
@@ -60,32 +66,31 @@ const MAX_MARKET_TRADES = 100;
 
 export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const api = useApi();
-  const [market, setMarket] = useState<"BTCUSD" | "ETHUSD" | "SOLUSD">("BTCUSD");
+  const [market, setMarket] = useState<'BTCUSD' | 'ETHUSD' | 'SOLUSD'>('BTCUSD');
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<{ id: string; username: string } | null>(null);
   const [balance, setBalance] = useState<number>(0);
-  
-  // Orderbook and Price Stats State
+
   const [bids, setBids] = useState<OrderBookRow[]>([]);
   const [asks, setAsks] = useState<OrderBookRow[]>([]);
   const [lastPrice, setLastPrice] = useState<number>(0);
   const [markPrice, setMarkPrice] = useState<number>(0);
   const [fundingDeadline, setFundingDeadline] = useState(() => startFundingTimer());
-  const [fundingCountdown, setFundingCountdown] = useState("08:00:00");
+  const [fundingCountdown, setFundingCountdown] = useState('08:00:00');
   const [marketTrades, setMarketTrades] = useState<MarketTrade[]>([]);
   const [loadingDepth, setLoadingDepth] = useState<boolean>(true);
 
   const previewFundingRate = computeFundingRatePreview(markPrice, lastPrice);
 
-  // User Trade State
   const [openPositions, setOpenPositions] = useState<Position[]>([]);
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
   const [fills, setFills] = useState<Fill[]>([]);
-  const [authModalMode, setAuthModalMode] = useState<"login" | "signup" | null>(null);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const tokenRef = useRef<string | null>(token);
   const marketRef = useRef(market);
+  const [wsReady, setWsReady] = useState(false);
   const [wsReconnectNonce, setWsReconnectNonce] = useState(0);
 
   useEffect(() => {
@@ -97,24 +102,21 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [market]);
 
   useEffect(() => {
-    const tick = () =>
-      setFundingCountdown(formatCountdown(fundingMsRemaining(fundingDeadline)));
+    const tick = () => setFundingCountdown(formatCountdown(fundingMsRemaining(fundingDeadline)));
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [fundingDeadline]);
 
-  // Load auth state from localStorage on mount
   useEffect(() => {
-    const savedToken = localStorage.getItem("perp_token");
-    const savedUser = localStorage.getItem("perp_user");
+    const savedToken = localStorage.getItem('perp_token');
+    const savedUser = localStorage.getItem('perp_user');
     if (savedToken && savedUser) {
       setToken(savedToken);
       setUser(JSON.parse(savedUser));
     }
   }, []);
 
-  // Reset stats when market changes
   useEffect(() => {
     setBids([]);
     setAsks([]);
@@ -125,7 +127,6 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setFundingDeadline(startFundingTimer());
   }, [market]);
 
-  // Periodic user data refresh
   useEffect(() => {
     if (!token) return;
     const interval = setInterval(() => {
@@ -134,19 +135,13 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => clearInterval(interval);
   }, [market, token]);
 
-  // WebSocket connection management
   useEffect(() => {
-    console.log(`Connecting to WebSocket: ${WS_BASE}`);
+    let closedByCleanup = false;
     const ws = new WebSocket(WS_BASE);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("WebSocket connected successfully");
-      // 1. Subscribe to streams for the current market
-      subscribeToMarket(ws, market);
-      // 2. Perform one-time initial HTTP requests after WS is set up
-      fetchDepth();
-      fetchLastPrice();
+      setWsReady(true);
       if (tokenRef.current) {
         refreshUserData();
       }
@@ -157,15 +152,15 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const payload = JSON.parse(event.data);
         if (payload.data && payload.stream) {
           const { stream, data } = payload;
-          const streamMarket = stream.split(".")[1];
+          const streamMarket = stream.split('.')[1];
           if (streamMarket !== marketRef.current) return;
 
-          if (stream.startsWith("depth")) {
+          if (stream.startsWith('depth')) {
             const { bids: rawBids, asks: rawAsks } = parseDepthSnapshot(data.bids, data.asks);
             setBids(rawBids);
             setAsks(rawAsks);
             setLoadingDepth(false);
-          } else if (stream.startsWith("trade")) {
+          } else if (stream.startsWith('trade')) {
             const trade: MarketTrade = {
               price: Number(data.price),
               qty: Number(data.qty),
@@ -174,13 +169,13 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (trade.price > 0 && trade.qty > 0) {
               setMarketTrades((prev) => [trade, ...prev].slice(0, MAX_MARKET_TRADES));
             }
-          } else if (stream.startsWith("lastTradedPrice")) {
+          } else if (stream.startsWith('lastTradedPrice')) {
             const price = Number(data.price);
             if (price > 0) setLastPrice(price);
-          } else if (stream.startsWith("markPrice")) {
+          } else if (stream.startsWith('markPrice')) {
             const price = Number(data.price);
             if (price > 0) setMarkPrice(price);
-          } else if (stream.startsWith("funding")) {
+          } else if (stream.startsWith('funding')) {
             setFundingDeadline(startFundingTimer());
             if (tokenRef.current) {
               refreshUserData();
@@ -188,28 +183,50 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
       } catch (err) {
-        console.error("WebSocket message parse error:", err);
+        console.log('WebSocket message parse error:', err);
       }
     };
 
-    ws.onerror = (err) => {
-      console.error("WebSocket connection error:", err);
+    ws.onerror = () => {
+      if (!closedByCleanup) {
+        console.log(`WebSocket connection error (${WS_BASE})`);
+      }
     };
 
-    ws.onclose = () => {
-      console.log("WebSocket connection closed, reconnecting in 3 seconds...");
+    ws.onclose = (event) => {
+      setWsReady(false);
+      if (closedByCleanup) return;
+      console.log(`WebSocket closed (code ${event.code}), reconnecting in 3 seconds...`);
       setTimeout(() => {
         setWsReconnectNonce((n) => n + 1);
       }, 3000);
     };
 
     return () => {
+      closedByCleanup = true;
+      const activeWs = wsRef.current;
+      if (activeWs?.readyState === WebSocket.OPEN) {
+        unsubscribeFromMarket(activeWs, marketRef.current);
+      }
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [wsReconnectNonce]);
+
+  useEffect(() => {
+    const ws = wsRef.current;
+    if (!wsReady || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    subscribeToMarket(ws, market);
+    fetchDepth();
+    fetchLastPrice();
+
+    return () => {
       if (ws.readyState === WebSocket.OPEN) {
         unsubscribeFromMarket(ws, market);
       }
-      ws.close();
     };
-  }, [market, wsReconnectNonce]);
+  }, [market, wsReady]);
 
   const subscribeToMarket = (ws: WebSocket, targetMarket: string) => {
     const streams = [
@@ -219,11 +236,13 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       `trade.${targetMarket}`,
       `funding.${targetMarket}`,
     ];
-    ws.send(JSON.stringify({
-      method: "SUBSCRIBE",
-      params: streams,
-      id: 1
-    }));
+    ws.send(
+      JSON.stringify({
+        method: 'SUBSCRIBE',
+        params: streams,
+        id: 1,
+      }),
+    );
   };
 
   const unsubscribeFromMarket = (ws: WebSocket, targetMarket: string) => {
@@ -234,11 +253,13 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       `trade.${targetMarket}`,
       `funding.${targetMarket}`,
     ];
-    ws.send(JSON.stringify({
-      method: "UNSUBSCRIBE",
-      params: streams,
-      id: 2
-    }));
+    ws.send(
+      JSON.stringify({
+        method: 'UNSUBSCRIBE',
+        params: streams,
+        id: 2,
+      }),
+    );
   };
 
   const applyDepthFromApi = (rawBids: unknown, rawAsks: unknown) => {
@@ -248,18 +269,15 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setLoadingDepth(false);
   };
 
-  // Initial book snapshot only — live updates come from depth_updated over WS
   const fetchDepth = async () => {
     try {
       const json = await api.getDepth(market);
       if (json.ok && json.data) {
         applyDepthFromApi(json.data.bids, json.data.asks);
       }
-    } catch {
-    }
+    } catch {}
   };
 
-  // API Call: Fetch Last Traded Price (from local fills — only updates when a real trade occurs)
   const fetchLastPrice = async () => {
     try {
       const json = await api.getTickerPrice(market);
@@ -267,11 +285,9 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setLastPrice(Number(json.price));
       }
     } catch {
-      // Backend not yet reachable — silently skip
     }
   };
 
-  // API Call: Refresh user balance, positions, open orders, and fills
   const refreshUserData = async (authToken?: string) => {
     const activeToken = authToken ?? token;
     if (!activeToken) return;
@@ -290,18 +306,25 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         const formatted: Position[] = positionsList
           .filter((pos: { qty: number }) => pos.qty !== 0)
-          .map((pos: { market: string; qty: number; costBasis: number; margin: number; kind: string }) => ({
-            userId: "",
-            market: pos.market,
-            qty: pos.kind === "SHORT" ? -Math.abs(pos.qty) : Math.abs(pos.qty),
-            entryPrice: pos.qty !== 0 ? Math.abs(pos.costBasis / pos.qty) : 0,
-            margin: pos.margin,
-          }));
-        
-        // Calculate dynamic PnL using the current markPrice
-        const withPnl = formatted.map(pos => {
+          .map(
+            (pos: {
+              market: string;
+              qty: number;
+              costBasis: number;
+              margin: number;
+              kind: string;
+            }) => ({
+              userId: '',
+              market: pos.market,
+              qty: pos.kind === 'SHORT' ? -Math.abs(pos.qty) : Math.abs(pos.qty),
+              entryPrice: pos.qty !== 0 ? Math.abs(pos.costBasis / pos.qty) : 0,
+              margin: pos.margin,
+            }),
+          );
+
+        const withPnl = formatted.map((pos) => {
           const sign = pos.qty > 0 ? 1 : -1;
-          const currentP = (pos.market === market && markPrice > 0) ? markPrice : pos.entryPrice;
+          const currentP = pos.market === market && markPrice > 0 ? markPrice : pos.entryPrice;
           const pnl = sign * Math.abs(pos.qty) * (currentP - pos.entryPrice);
           return { ...pos, pnl };
         });
@@ -321,7 +344,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           margin: ord.margin,
           kind: ord.kind,
           market: ord.market,
-          transactionTime: String(ord.createdAt || ord.transactionTime)
+          transactionTime: String(ord.createdAt || ord.transactionTime),
         }));
         setOpenOrders(formattedOrders);
       }
@@ -338,55 +361,51 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           type: f.type,
           kind: f.kind,
           status: f.status,
-          transactionTime: String(f.createdAt || f.transactionTime)
+          transactionTime: String(f.createdAt || f.transactionTime),
         }));
         setFills(formattedFills);
       }
     } catch {
-      // Backend not yet reachable or temporarily down — silently skip refresh
     }
   };
 
-  // Action: Register/Signup
   const signup = async (username: string, password?: string): Promise<boolean> => {
     try {
       const json = await api.signup(username, password);
       if (json.status === 201 && json.token && json.user) {
         setToken(json.token);
         setUser(json.user);
-        localStorage.setItem("perp_token", json.token);
-        localStorage.setItem("perp_user", JSON.stringify(json.user));
-        
+        localStorage.setItem('perp_token', json.token);
+        localStorage.setItem('perp_user', JSON.stringify(json.user));
+
         await performOnramp(json.token, 10000);
         return true;
       }
       return false;
     } catch (err) {
-      console.error("Signup failed:", err);
+      console.log('Signup failed:', err);
       return false;
     }
   };
 
-  // Action: Login/Signin
   const login = async (username: string, password?: string): Promise<boolean> => {
     try {
       const json = await api.signin(username, password);
       if (json.status === 200 && json.token && json.user) {
         setToken(json.token);
         setUser(json.user);
-        localStorage.setItem("perp_token", json.token);
-        localStorage.setItem("perp_user", JSON.stringify(json.user));
+        localStorage.setItem('perp_token', json.token);
+        localStorage.setItem('perp_user', JSON.stringify(json.user));
         await refreshUserData(json.token);
         return true;
       }
       return false;
     } catch (err) {
-      console.error("Login failed:", err);
+      console.log('Login failed:', err);
       return false;
     }
   };
 
-  // Action: Logout
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -394,11 +413,10 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setOpenPositions([]);
     setOpenOrders([]);
     setFills([]);
-    localStorage.removeItem("perp_token");
-    localStorage.removeItem("perp_user");
+    localStorage.removeItem('perp_token');
+    localStorage.removeItem('perp_user');
   };
 
-  // Helper deposit function
   const performOnramp = async (authToken: string, amount: number): Promise<boolean> => {
     try {
       const json = await api.onramp(authToken, amount);
@@ -408,30 +426,27 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return false;
     } catch (err) {
-      console.error("Deposit onramp failed:", err);
+      console.log('Deposit onramp failed:', err);
       return false;
     }
   };
 
-  // Action: Deposit USD
   const deposit = async (amount: number): Promise<boolean> => {
     if (!token) return false;
     return performOnramp(token, amount);
   };
 
-  // Action: Place Order
   const placeOrder = async (
     qty: string,
     price: number,
-    type: "LIMIT" | "MARKET",
-    kind: "LONG" | "SHORT",
-    margin: number
+    type: 'LIMIT' | 'MARKET',
+    kind: 'LONG' | 'SHORT',
+    margin: number,
   ): Promise<any> => {
     if (!token) {
-      throw new Error("User must be logged in to trade");
+      throw new Error('User must be logged in to trade');
     }
 
-    
     try {
       const json = await api.placeOrder(token, {
         qty,
@@ -439,35 +454,34 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         market,
         type,
         kind,
-        margin
+        margin,
       });
-      
+
       if (json.status === 200 && json.ok) {
         refreshUserData();
         return json.data;
       } else {
-        throw new Error(json.msg || "parse error ");
+        throw new Error(json.msg || 'parse error ');
       }
     } catch (err: any) {
-    console.error("Order submission failed:", err);
+      console.log('Order submission failed:', err);
       throw err;
     }
   };
 
-  // Action: Cancel Order
   const cancelOrder = async (orderId: string): Promise<boolean> => {
     if (!token) return false;
 
     try {
       const json = await api.cancelOrder(token, orderId);
-      
+
       if (json.status === 200 && json.ok) {
         refreshUserData();
         return true;
       }
       return false;
     } catch (err) {
-      console.error("Cancel order failed:", err);
+      console.log('Cancel order failed:', err);
       return false;
     }
   };
@@ -499,11 +513,10 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deposit,
         placeOrder,
         cancelOrder,
-        refreshUserData
+        refreshUserData,
       }}
     >
       {children}
     </TradingContext.Provider>
   );
 };
-

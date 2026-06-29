@@ -227,7 +227,6 @@ export async function getOpenPositions(req: Request, res: Response) {
 }
 
 export async function getOpenOrders(req: Request, res: Response) {
-  // get open orders from db instead of engine
   let marketId = req.params.marketId;
   if (Array.isArray(marketId)) {
     marketId = marketId[0];
@@ -292,7 +291,7 @@ export async function getOpenOrders(req: Request, res: Response) {
       data: openOrders,
     });
   } catch (err: any) {
-    console.error('[orders/open] DB error:', err);
+    console.log('[orders/open] DB error:', err);
     return res.status(500).json({ msg: 'failed to fetch open orders' });
   }
 }
@@ -361,11 +360,10 @@ export async function getDepth(req: Request, res: Response) {
 
     return res.status(500).json({ msg: 'unexpected engine response type' });
   } catch (err: any) {
-    // Engine timeout or Redis connection failure — return empty depth so the UI stays clean
     if (err?.message?.includes('Timeout')) {
       return res.status(200).json({ ok: true, data: { bids: {}, asks: {} } });
     }
-    console.error('[depth] Unexpected error:', err);
+    console.log('[depth] Unexpected error:', err);
     return res.status(503).json({ msg: 'engine unavailable' });
   }
 }
@@ -403,8 +401,7 @@ export async function getTickerPrice(req: Request, res: Response) {
       price: price,
     });
   } catch (error) {
-    console.error('[ticker/price] DB error:', error);
-    // Return 0 price instead of 500 so the frontend degrades gracefully
+    console.log('[ticker/price] DB error:', error);
     return res.status(200).json({ ok: true, price: 0 });
   }
 }

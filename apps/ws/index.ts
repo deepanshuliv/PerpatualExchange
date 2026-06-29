@@ -1,9 +1,6 @@
 import { WS_SUBSCRIBE_SCHEMA } from '@repo/shared-types';
 import { WebSocketServer } from 'ws';
-import {
-  registerClient,
-  unregisterClient,
-} from './src/broadcast';
+import { registerClient, unregisterClient } from './src/broadcast';
 import { startConsumerGroup } from './src/redis';
 
 async function bootstrap() {
@@ -17,7 +14,7 @@ async function bootstrap() {
     });
 
     wss.on('connection', function connection(ws) {
-      ws.on('error', console.error);
+      ws.on('error', console.log);
 
       const client = {
         ws,
@@ -36,7 +33,10 @@ async function bootstrap() {
         const subscriptionParse = WS_SUBSCRIBE_SCHEMA.safeParse(parsedData);
         if (!subscriptionParse.success) {
           return ws.send(
-            JSON.stringify({ success: false, error: 'Please provide valid subscription parameters' }),
+            JSON.stringify({
+              success: false,
+              error: 'Please provide valid subscription parameters',
+            }),
           );
         }
 
@@ -61,7 +61,7 @@ async function bootstrap() {
       });
     });
   } catch (error) {
-    console.error('Failed to start WS server:', error);
+    console.log('Failed to start WS server:', error);
     process.exit(1);
   }
 }

@@ -72,7 +72,6 @@ export default class PostionManager {
     const userPos = userPositions.find((pos) => pos.market === market) ?? null;
 
     if (!userPos) {
-  
       const positionDetails: PositionDetails = { costBasis, kind, margin, market, qty };
       if (!this.markteIndex.has(market)) {
         this.markteIndex.set(market, new Set());
@@ -126,7 +125,6 @@ export default class PostionManager {
               ? priceOfPostionAccordingToMarkPrice - pos.costBasis
               : pos.costBasis - priceOfPostionAccordingToMarkPrice;
 
-          // Liquidate when unrealized loss reaches 95% of position margin
           if (uPnl + maxLoss <= 0) {
             userMarketOrder.push({
               userId,
@@ -208,7 +206,6 @@ export default class PostionManager {
     markPrice: number,
     excludeUserId?: string,
   ) {
-    // Opposite side to the closing order (LONG close → find SHORT positions, etc.)
     const adlSide: Shared.KIND = closeKind === 'SHORT' ? 'LONG' : 'SHORT';
 
     if (!this.markteIndex?.get) return { profitableUser: null, markPrice };

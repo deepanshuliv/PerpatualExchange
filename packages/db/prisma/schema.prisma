@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -37,7 +32,7 @@ enum Market {
 }
 
 model user {
-  id        String   @id @default(uuid()) // Keep this as String for flexibility (or UUID)
+  id        String   @id @default(uuid())
   username  String   @unique
   password  String
   orders    order[]
@@ -48,7 +43,7 @@ model user {
 }
 
 model order {
-  id              String   @id // Ever-increasing sequential order ID from engine
+  id              String   @id
   userId          String
   user            user     @relation(fields: [userId], references: [id])
   type            Type

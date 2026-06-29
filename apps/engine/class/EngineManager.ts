@@ -3,7 +3,11 @@ import { EngineRequest, EngineResponse, type RedisStreamResponse } from '@repo/s
 import type { EngineSnapShotInstanceType } from '@repo/shared-types/internal-types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { allMarketsList, type KIND, type MARKET_AVAILABEL } from '../../../packages/shared-types/shared';
+import {
+  allMarketsList,
+  type KIND,
+  type MARKET_AVAILABEL,
+} from '../../../packages/shared-types/shared';
 import BinanceClassListner from './binanceListner';
 import MatchingEngine from './matchingEngine';
 import PostionManager from './PositionManager';
@@ -116,11 +120,9 @@ export default class EngineManager {
         payload: { ...createOrder, market, kind, userId, transactionTime },
       });
       this.publishMarketUpdates(market, createOrder.fills ?? [], transactionTime).catch((err) =>
-        console.error('[Engine] Failed to publish market updates after create_order:', err),
+        console.log('[Engine] Failed to publish market updates after create_order:', err),
       );
-
-    } 
-    else if (request.type === 'add_balance') {
+    } else if (request.type === 'add_balance') {
       const { correlationId } = request;
       const { userId, amount } = request.payload;
       this.matchingManger.addBalance(userId, amount);
@@ -154,7 +156,7 @@ export default class EngineManager {
         },
       });
       this.publishMarketUpdates(cancelled.market, [], transactionTime).catch((err) =>
-        console.error('[Engine] Failed to publish market updates after cancel_order:', err),
+        console.log('[Engine] Failed to publish market updates after cancel_order:', err),
       );
     } else if (request.type === 'get_position') {
       const { correlationId } = request;
@@ -233,25 +235,21 @@ export default class EngineManager {
           },
         });
         this.publishMarketUpdates(market, liquidationOrder.fills ?? [], transactionTime).catch(
-          (err) =>
-            console.error('[Engine] Failed to publish market updates after liquidation:', err),
+          (err) => console.log('[Engine] Failed to publish market updates after liquidation:', err),
         );
       });
     } else if (request.type === 'run_funding_rate') {
       if (!this.fundingRateTimerStarted) {
         this.fundingRateTimerStarted = true;
-        setInterval(
-          async () => {
-            const publisher = await connectRedisClient(
-              this.publisherRedisClient,
-              'MatchingEngine-funding-publisher',
-            );
-            publisher.xAdd('to-engine', '*', {
-              data: JSON.stringify({ type: 'run_funding_rate' }),
-            });
-          },
-          FUNDING_INTERVAL_MS,
-        );
+        setInterval(async () => {
+          const publisher = await connectRedisClient(
+            this.publisherRedisClient,
+            'MatchingEngine-funding-publisher',
+          );
+          publisher.xAdd('to-engine', '*', {
+            data: JSON.stringify({ type: 'run_funding_rate' }),
+          });
+        }, FUNDING_INTERVAL_MS);
       }
       const now = Date.now();
       allMarketsList.forEach((market) => {
@@ -273,7 +271,6 @@ export default class EngineManager {
   }
 
   async loadLatestSnapShotfromFile() {
-    //
     const pathLocation = await this.getSnapShotFolderPath();
 
     const files = await fs.readdir(pathLocation);
@@ -311,7 +308,7 @@ export default class EngineManager {
         this.redisReadPointer = parsedSnapShot.redisReadPointer || '';
       }
     } catch (err) {
-      console.error('[EngineManager] Error loading snapshot file:', err);
+      console.log('[EngineManager] Error loading snapshot file:', err);
     }
   }
 
@@ -352,10 +349,9 @@ export default class EngineManager {
           redisReadPointer: this.redisReadPointer,
         });
       },
-      8 * 60 * 60 * 1000, // 8 hours
+      8 * 60 * 60 * 1000,
     );
 
-    //read if availabel startpointer else from start
     while (1) {
       const readFrom = this.redisReadPointer === '' ? '$' : this.redisReadPointer;
 
@@ -367,7 +363,6 @@ export default class EngineManager {
       if (!response || !Array.isArray(response)) {
         continue;
       }
-      // loop to read msga and give to handler
       for (const stream of response) {
         for (const msg of stream.messages) {
           this.redisReadPointer = msg.id;
@@ -384,7 +379,7 @@ export default class EngineManager {
             const { success, data, error } =
               EngineRequest.GET_MARKET_PRICE_SCHEMA.safeParse(parsedMessage);
             if (!success) {
-              console.error(`[Engine] Schema validation failed for markprice_updated:`, error);
+              console.log(`[Engine] Schema validation failed for markprice_updated:`, error);
               continue;
             }
             this.handleBackendRequest(data);
@@ -392,7 +387,7 @@ export default class EngineManager {
             const { success, data, error } =
               EngineRequest.ENGINE_REQUEST_SCHEMA.safeParse(parsedMessage);
             if (!success) {
-              console.error(
+              console.log(
                 `[Engine] Schema validation failed for message type=${type} | correlationId=${correlationId}:`,
                 error,
               );

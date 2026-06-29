@@ -27,7 +27,6 @@ function sendToSubscribers(stream: string, data: Record<string, unknown>) {
 
 type ProcessableEngineMessage = WebsocketTypes.WsStreamingMessage;
 
-/** Mark price ticks are high-frequency; drop stale ones on backlog drain. */
 const MAX_MARKPRICE_AGE_MS = 5_000;
 
 export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngineMessage) {

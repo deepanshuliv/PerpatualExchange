@@ -4,7 +4,10 @@ import { EngineResponse, type EngineRequest, type RedisStreamResponse } from '@r
 const publisher = redisClient.duplicate();
 const subscriber = redisClient.duplicate();
 
-const correlationIdToResolveMap = new Map<string, (data: EngineResponse.BACKEND_RESPONSE) => void>();
+const correlationIdToResolveMap = new Map<
+  string,
+  (data: EngineResponse.BACKEND_RESPONSE) => void
+>();
 
 export async function sendToEngine(
   engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST,
@@ -30,7 +33,7 @@ export async function sendToEngine(
       .catch((err) => {
         clearTimeout(timer);
         correlationIdToResolveMap.delete(engineRequest.correlationId);
-        console.error(`[Backend] Failed to push to Redis stream '${streamKey}':`, err);
+        console.log(`[Backend] Failed to push to Redis stream '${streamKey}':`, err);
         reject(err);
       });
   });
@@ -53,7 +56,7 @@ function handleEngineResponse(rawMessage: unknown) {
 
   const { success, data, error } = EngineResponse.BACKEND_RESPONSE_SCHEMA.safeParse(rawMessage);
   if (!success) {
-    console.error('[Backend] Could not parse engine response:', rawMessage, error?.format());
+    console.log('[Backend] Could not parse engine response:', rawMessage, error?.format());
     return;
   }
 
@@ -63,7 +66,7 @@ function handleEngineResponse(rawMessage: unknown) {
 
   const resolve = correlationIdToResolveMap.get(data.correlationId);
   if (!resolve) {
-    console.warn(`[Backend] No pending resolve found for correlationId=${data.correlationId}`);
+    console.log(`[Backend] No pending resolve found for correlationId=${data.correlationId}`);
     return;
   }
   resolve(data);
@@ -94,7 +97,7 @@ async function engineToBackendLoop() {
         }
       }
     } catch (err) {
-      console.error('[Backend] Error in engineToBackendLoop:', err);
+      console.log('[Backend] Error in engineToBackendLoop:', err);
       await new Promise((res) => setTimeout(res, 1000));
     }
   }
@@ -106,9 +109,8 @@ export async function initializeRedis() {
     connectRedisClient(publisher, 'Backend-Publisher'),
   ]);
 
-  // Run the read loop in the background
   engineToBackendLoop().catch((err) => {
-    console.error('[Backend] Engine loop fatal error:', err);
+    console.log('[Backend] Engine loop fatal error:', err);
     process.exit(1);
   });
 }

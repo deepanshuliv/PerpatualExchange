@@ -96,7 +96,6 @@ export default class OrderBookManager {
     margin: number,
     market: Shared.MARKET_AVAILABEL,
   ) {
-    // create order with status OPEN
     const currentOrder = this.createUserOrder(userId, kind, type, qty, margin, market, price);
 
     let fillInfo: FillInfo[] = [];
@@ -113,7 +112,6 @@ export default class OrderBookManager {
       }
 
       if (bestPrice <= price) {
-        // eat as much as you can
         while (PriceLevel.openOrder.length > 0 && remianingQty > 0) {
           let topOrder = PriceLevel.openOrder[0]!;
           const priceLevelRemianingQty = topOrder.totalQty - topOrder.filledQty;
@@ -122,7 +120,6 @@ export default class OrderBookManager {
           topOrder.filledQty += priceLevelMaxFill;
 
           this.orderBook[market]!.lastTradedPrice = bestPrice;
-          // deduct the fees
 
           fillInfo.push({ price: bestPrice, qty: priceLevelMaxFill });
 
@@ -190,7 +187,6 @@ export default class OrderBookManager {
       }
     }
 
-    // any type complete
     if (remianingQty === 0) {
       const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
       return {
@@ -207,7 +203,6 @@ export default class OrderBookManager {
     }
 
     if (type === 'LIMIT') {
-      // sit on same side
       const sameSide = this.getSameSide(market, kind);
       const sameSideOpenOrderDetail: openOrder = {
         filledQty: 0,
@@ -221,16 +216,13 @@ export default class OrderBookManager {
         alreadyPriceOrder.openOrder.push(sameSideOpenOrderDetail);
         sameSide?.setElement(currentOrder.data.price, alreadyPriceOrder);
       } else {
-        // create new entry only when price level doesn't already exist
         const newBid: Bids = {
           totalqty: remianingQty,
           openOrder: [sameSideOpenOrderDetail],
         };
         sameSide?.setElement(currentOrder.data.price, newBid);
       }
-      // if kind market return with as much filled
     }
-    // return with partial filled qty happen in type case
     const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
     return {
       filledQty: totalQty,
@@ -261,7 +253,6 @@ export default class OrderBookManager {
     const oppSide = this.getOppositeSide(market, kind);
 
     let remianingQty = qty;
-    // eat as much as we can
     while (remianingQty > 0 && oppSide?.front()) {
       const [bestPrice, PriceLevel] = oppSide.front()!;
 
@@ -349,7 +340,6 @@ export default class OrderBookManager {
       }
     }
 
-    // if complete filled any type
     if (remianingQty === 0) {
       const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
       return {
@@ -365,7 +355,6 @@ export default class OrderBookManager {
       };
     }
 
-    // sit on same side
     if (type === 'LIMIT') {
       const sameSide = this.getSameSide(market, kind);
 
@@ -381,7 +370,6 @@ export default class OrderBookManager {
         priceOrder.openOrder.push(pushOpenOrderDetails);
         sameSide?.setElement(currrentOrder.data.price, priceOrder);
       } else {
-        // create a new price Order only when price level doesn't already exist
         const newBid: Bids = {
           openOrder: [pushOpenOrderDetails],
           totalqty: remianingQty,
@@ -389,7 +377,6 @@ export default class OrderBookManager {
         sameSide?.setElement(currrentOrder.data.price, newBid);
       }
     }
-    // if market return with partial
     const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
     return {
       filledQty: totalQty,
@@ -464,14 +451,10 @@ export default class OrderBookManager {
   }
 
   cancelOrder(userId: string, orderId: string) {
-    // find and delete in open orders that order
-    // chnage the order status to cancelled in orders array
-
     const userOrderDetails = this.getOrder(userId, orderId);
     if (!userOrderDetails) {
       return null;
     }
-    // changed order status
     this.changeOrderStatus(userId, orderId, 'CANCELLED');
 
     const kind = userOrderDetails.kind;
@@ -515,8 +498,6 @@ export default class OrderBookManager {
     kind: Shared.KIND,
     status: Shared.STATUS,
   ) {
-    // orderId is for one either seller or buyer
-    // status is either "FILLED" and "PARTIALLY_FLLED"
     const fillDetail: Fills = {
       buyerId,
       sellerId,

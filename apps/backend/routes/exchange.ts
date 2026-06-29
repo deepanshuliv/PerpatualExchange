@@ -15,9 +15,9 @@ import {
 const exchangeRoutes = Router();
 
 exchangeRoutes.post('/onramp', isAuth, onRamp);
-exchangeRoutes.post('/order', isAuth, createOrder); // create_order
-exchangeRoutes.post('/order/cancel', isAuth, cancelOrder); // cancel_order
-exchangeRoutes.get('/equity/available', isAuth, getAvailableEquity); // get_positions
+exchangeRoutes.post('/order', isAuth, createOrder);
+exchangeRoutes.post('/order/cancel', isAuth, cancelOrder);
+exchangeRoutes.get('/equity/available', isAuth, getAvailableEquity);
 exchangeRoutes.get('/positions/open/:marketId', isAuth, getOpenPositions);
 exchangeRoutes.get('/orders/open/:marketId', isAuth, getOpenOrders);
 exchangeRoutes.get('/fills', isAuth, getFills);

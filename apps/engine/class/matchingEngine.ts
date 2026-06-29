@@ -47,7 +47,6 @@ export default class MatchingEngine {
     price: number,
     equity: number,
   ) {
-
     const userCurrentPostion = this.positons.getPosition(userId, market);
 
     if (!userCurrentPostion || userCurrentPostion.kind === kind) {
@@ -181,7 +180,6 @@ export default class MatchingEngine {
       const existingKind = userCurrentPostion.kind;
 
       if (existingQty > orderDetails.filledQty) {
-        // PARTIAL CLOSE — reduce position, release proportional margin + PnL
         const reductionRatio = orderDetails.filledQty / existingQty;
         const releasedMargin = existingMargin * reductionRatio;
         const entryCostBasisOfReduced = existingCostBasis * reductionRatio;
@@ -208,7 +206,6 @@ export default class MatchingEngine {
           releasedMargin,
         );
       } else if (existingQty === orderDetails.filledQty) {
-        // FULL CLOSE — close entire position, release all margin + PnL
         let pnl = 0;
         if (existingKind === 'LONG') {
           pnl = orderDetails.totalSpent - existingCostBasis;
@@ -231,7 +228,6 @@ export default class MatchingEngine {
           existingMargin,
         );
       } else {
-        // FLIP — close existing position and open opposite-side position
         const closeRatio = existingQty / orderDetails.filledQty;
         const closedTotalSpent = orderDetails.totalSpent * closeRatio;
 
@@ -328,10 +324,8 @@ export default class MatchingEngine {
       return null;
     }
 
-    // SHORT position → close with LONG | LONG position → close with SHORT
     const closeKind: Shared.KIND = kind === 'SHORT' ? 'LONG' : 'SHORT';
 
-    // Phase 1 — MARKET closing order against the book
     const bookOrder =
       closeKind === 'LONG'
         ? this.orderBook.createLongOrder(
@@ -369,7 +363,6 @@ export default class MatchingEngine {
       closedQty += bookOrder.filledQty;
     }
 
-    // Phase 2 — ADL remaining qty at markPrice against most profitable counterparty
     let remainingQty = qty - bookOrder.filledQty;
     let remainingMargin = margin * (remainingQty / qty);
     let remainingCostBasis = costBasis * (remainingQty / qty);
@@ -394,7 +387,6 @@ export default class MatchingEngine {
       allFills.push(...adlResult.fills);
     }
 
-    // Phase 3 — if no ADL counterparty left, force-close remainder at markPrice
     if (remainingQty > 0) {
       this.settleLiquidatedCloseAtMark(
         userId,
@@ -514,7 +506,6 @@ export default class MatchingEngine {
     const adlCostBasis = remainingCostBasis * (adlQty / remainingQty);
     const adlUserMarginPortion = adlPosition.margin * (adlQty / adlPosition.qty);
 
-    // Place counterparty maker on book at markPrice, then liquidated closing order crosses it
     let adlFills: Fills[] = [];
     if (closeKind === 'LONG') {
       const makerOrder = this.orderBook.createShortOrder(
@@ -613,7 +604,6 @@ export default class MatchingEngine {
       const makerPosition = this.positons.getPosition(makerUserId, makerOrder.market);
 
       if (!makerPosition || makerPosition.kind === makerOrder.kind) {
-        // Maker opening / adding — move filled margin from locked into position
         if (fill.qty > 0) {
           this.positons.changePosition(
             makerUserId,
@@ -626,7 +616,6 @@ export default class MatchingEngine {
           this.balance.updateLockedBalance(makerUserId, -fillMargin);
         }
       } else {
-        // Maker closing — reduce position, release locked margin + PnL to balance
         this.applyCloseFill(
           makerUserId,
           makerOrder.market,

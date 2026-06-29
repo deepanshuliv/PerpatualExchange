@@ -179,7 +179,6 @@ const FUNDING_TIMER_RESET_SCHEMA = z.object({
 });
 type FUNDING_TIMER_RESET = z.infer<typeof FUNDING_TIMER_RESET_SCHEMA>;
 
-// RPC replies the backend waits on (always have correlationId)
 const BACKEND_RESPONSE_SCHEMA = z.discriminatedUnion('type', [
   CREATE_ORDER_RESPONSE_SCHEMA,
   CANCEL_ORDER_RESPONSE_SCHEMA,
@@ -192,7 +191,6 @@ const BACKEND_RESPONSE_SCHEMA = z.discriminatedUnion('type', [
 ]);
 type BACKEND_RESPONSE = z.infer<typeof BACKEND_RESPONSE_SCHEMA>;
 
-// broadcast-only events for ws (no correlationId)
 const WS_BROADCAST_EVENT_SCHEMA = z.discriminatedUnion('type', [
   LIQUIDATION_EVENT_SCHEMA,
   MARKPRICE_UPDATED_RESPONSE_SCHEMA,
@@ -203,14 +201,12 @@ const WS_BROADCAST_EVENT_SCHEMA = z.discriminatedUnion('type', [
 ]);
 type WS_BROADCAST_EVENT = z.infer<typeof WS_BROADCAST_EVENT_SCHEMA>;
 
-// everything the engine publishes to the to-backend stream
 const ENGINE_STREAM_MESSAGE_SCHEMA = z.union([
   BACKEND_RESPONSE_SCHEMA,
   WS_BROADCAST_EVENT_SCHEMA,
 ]);
 type ENGINE_STREAM_MESSAGE = z.infer<typeof ENGINE_STREAM_MESSAGE_SCHEMA>;
 
-// order events the db consumer persists
 const DB_PERSISTENCE_EVENT_SCHEMA = z.discriminatedUnion('type', [
   CREATE_ORDER_RESPONSE_SCHEMA,
   CANCEL_ORDER_RESPONSE_SCHEMA,
