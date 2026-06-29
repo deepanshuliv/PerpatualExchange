@@ -9,12 +9,6 @@ const BASE_RESPONSE = z.object({
   correlationId: z.string(),
 });
 
-const FILL_INFO_SCHEMA = z.object({
-  price: z.number(),
-  qty: z.number(),
-});
-type FILL_INFO = z.infer<typeof FILL_INFO_SCHEMA>;
-
 const FILL_DETAIL_SCHEMA = z.object({
   buyerId: z.string(),
   sellerId: z.string(),
@@ -125,8 +119,8 @@ type GET_FILLS_RESPONSE = z.infer<typeof GET_FILLS_RESPONSE_SCHEMA>;
 const GET_DEPTH_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("get_depth"),
   payload: z.object({
-    bids: z.array(z.tuple([z.number(), z.number()])),
-    asks: z.array(z.tuple([z.number(), z.number()])),
+    bids: z.array(z.tuple([z.coerce.number(), z.coerce.number()])),
+    asks: z.array(z.tuple([z.coerce.number(), z.coerce.number()])),
   }),
 });
 type GET_DEPTH_RESPONSE = z.infer<typeof GET_DEPTH_RESPONSE_SCHEMA>;
@@ -142,18 +136,48 @@ const MARKPRICE_UPDATED_RESPONSE_SCHEMA = z.object({
 type MARKPRICE_UPDATED_RESPONSE = z.infer<typeof MARKPRICE_UPDATED_RESPONSE_SCHEMA>;
 
 
-const BOOKTICKER_UPDATED_RESPONSE_SCHEMA = z.object({
-  type: z.literal('bookticker_updated'),
+const DEPTH_LEVEL_SCHEMA = z.tuple([z.coerce.number(), z.coerce.number()]);
+
+const DEPTH_UPDATED_RESPONSE_SCHEMA = z.object({
+  type: z.literal('depth_updated'),
   payload: z.object({
     market: MARKET_AVAILABEL_SCHEMA,
-    bestBidPrice: z.number(),
-    bestBidQty: z.number(),
-    bestAskPrice: z.number(),
-    bestAskQty: z.number(),
+    bids: z.array(DEPTH_LEVEL_SCHEMA),
+    asks: z.array(DEPTH_LEVEL_SCHEMA),
     transactionTime: z.number(),
   }),
 });
-type BOOKTICKER_UPDATED_RESPONSE = z.infer<typeof BOOKTICKER_UPDATED_RESPONSE_SCHEMA>;
+type DEPTH_UPDATED_RESPONSE = z.infer<typeof DEPTH_UPDATED_RESPONSE_SCHEMA>;
+
+const TRADE_EXECUTED_RESPONSE_SCHEMA = z.object({
+  type: z.literal('trade_executed'),
+  payload: z.object({
+    market: MARKET_AVAILABEL_SCHEMA,
+    price: z.number(),
+    qty: z.number(),
+    transactionTime: z.number(),
+  }),
+});
+type TRADE_EXECUTED_RESPONSE = z.infer<typeof TRADE_EXECUTED_RESPONSE_SCHEMA>;
+
+const LAST_TRADED_PRICE_UPDATED_RESPONSE_SCHEMA = z.object({
+  type: z.literal('last_traded_price_updated'),
+  payload: z.object({
+    market: MARKET_AVAILABEL_SCHEMA,
+    price: z.number(),
+    transactionTime: z.number(),
+  }),
+});
+type LAST_TRADED_PRICE_UPDATED_RESPONSE = z.infer<typeof LAST_TRADED_PRICE_UPDATED_RESPONSE_SCHEMA>;
+
+const FUNDING_TIMER_RESET_SCHEMA = z.object({
+  type: z.literal('funding_timer_reset'),
+  payload: z.object({
+    market: MARKET_AVAILABEL_SCHEMA,
+    transactionTime: z.number(),
+  }),
+});
+type FUNDING_TIMER_RESET = z.infer<typeof FUNDING_TIMER_RESET_SCHEMA>;
 
 // RPC replies the backend waits on (always have correlationId)
 const BACKEND_RESPONSE_SCHEMA = z.discriminatedUnion('type', [
@@ -172,7 +196,10 @@ type BACKEND_RESPONSE = z.infer<typeof BACKEND_RESPONSE_SCHEMA>;
 const WS_BROADCAST_EVENT_SCHEMA = z.discriminatedUnion('type', [
   LIQUIDATION_EVENT_SCHEMA,
   MARKPRICE_UPDATED_RESPONSE_SCHEMA,
-  BOOKTICKER_UPDATED_RESPONSE_SCHEMA,
+  DEPTH_UPDATED_RESPONSE_SCHEMA,
+  TRADE_EXECUTED_RESPONSE_SCHEMA,
+  LAST_TRADED_PRICE_UPDATED_RESPONSE_SCHEMA,
+  FUNDING_TIMER_RESET_SCHEMA,
 ]);
 type WS_BROADCAST_EVENT = z.infer<typeof WS_BROADCAST_EVENT_SCHEMA>;
 
@@ -193,35 +220,8 @@ type DB_PERSISTENCE_EVENT = z.infer<typeof DB_PERSISTENCE_EVENT_SCHEMA>;
 
 export {
   BACKEND_RESPONSE_SCHEMA,
-  WS_BROADCAST_EVENT_SCHEMA,
-  ENGINE_STREAM_MESSAGE_SCHEMA,
   DB_PERSISTENCE_EVENT_SCHEMA,
-  CREATE_ORDER_RESPONSE_SCHEMA,
-  CANCEL_ORDER_RESPONSE_SCHEMA,
+  WS_BROADCAST_EVENT_SCHEMA,
   type BACKEND_RESPONSE,
-  type WS_BROADCAST_EVENT,
   type ENGINE_STREAM_MESSAGE,
-  type DB_PERSISTENCE_EVENT,
-  type CREATE_ORDER_RESPONSE,
-  type CANCEL_ORDER_RESPONSE,
-  type GET_BALANCE_RESPONSE,
-  type ADD_BALANCE_RESPONSE,
-  type ERROR_RESPONSE,
-  LIQUIDATION_EVENT_SCHEMA,
-  type LIQUIDATION_EVENT,
-  type FILL_INFO,
-  POSITION_DETAILS_SCHEMA,
-  type POSITION_DETAILS,
-  GET_POSITION_RESPONSE_SCHEMA,
-  type GET_POSITION_RESPONSE,
-  FILL_DETAIL_SCHEMA,
-  type FILL_DETAIL,
-  GET_FILLS_RESPONSE_SCHEMA,
-  type GET_FILLS_RESPONSE,
-  GET_DEPTH_RESPONSE_SCHEMA,
-  type GET_DEPTH_RESPONSE,
-  MARKPRICE_UPDATED_RESPONSE_SCHEMA,
-  type MARKPRICE_UPDATED_RESPONSE,
-  BOOKTICKER_UPDATED_RESPONSE_SCHEMA,
-  type BOOKTICKER_UPDATED_RESPONSE,
 };

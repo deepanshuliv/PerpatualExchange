@@ -1,6 +1,5 @@
-import type { RedisClientType } from "redis";
+import { connectRedisClient, type RedisClientType } from "@repo/redis";
 import WebSocket from "ws";
-import { connectRedisClient } from "@repo/redis";
 
 const STREAM_URL =
     process.env.BINANCE_STREAM_URL ||

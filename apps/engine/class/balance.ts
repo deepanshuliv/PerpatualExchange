@@ -13,12 +13,22 @@ export default class Balance {
   loadSnapShot(balanceSnapShot: string) {
     if (!balanceSnapShot) return;
     this.user = JSON.parse(balanceSnapShot || '{}');
+    for (const userId of Object.keys(this.user)) {
+      const account = this.user[userId];
+      if (!account) continue;
+      if (account.balance < 0) {
+        account.balance = 0;
+      }
+      if (account.lockedBalance < 0) {
+        account.lockedBalance = 0;
+      }
+    }
   }
 
   createUserBalanceAccount(userId: string) {
     if (!this.user[userId]) {
       this.user[userId] = {
-        balance: 1000,
+        balance: 10000,
         lockedBalance: 0,
       };
     }
@@ -38,6 +48,9 @@ export default class Balance {
       return null;
     }
     this.user[userId].balance += signedAmount;
+    if (this.user[userId].balance < 0) {
+      this.user[userId].balance = 0;
+    }
   }
 
   addBalance(userId: string, amount: number) {
@@ -46,6 +59,9 @@ export default class Balance {
     }
     const account = this.user[userId]!;
     account.balance += amount;
+    if (account.balance < 0) {
+      account.balance = 0;
+    }
     return account.balance;
   }
 
@@ -54,19 +70,8 @@ export default class Balance {
       return null;
     }
     this.user[userId].lockedBalance += signedAmount;
-  }
-
-  addLockedBalance(userId: string, amount: number) {
-    if (!this.user[userId]) {
-      return null;
+    if (this.user[userId].lockedBalance < 0) {
+      this.user[userId].lockedBalance = 0;
     }
-    this.user[userId].lockedBalance += amount;
-  }
-
-  getLockedBalance(userId: string) {
-    if (!this.user[userId]) {
-      return null;
-    }
-    return this.user[userId].lockedBalance;
   }
 }

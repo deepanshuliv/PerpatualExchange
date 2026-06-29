@@ -10,9 +10,7 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "types": "workspace:*",
     "@repo/redis": "workspace:*",
-    "@repo/db": "workspace:*",
     "typescript": "^5",
     "@repo/shared-types": "workspace:*"
   },

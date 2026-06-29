@@ -119,14 +119,15 @@ export default class PostionManager {
       const userPositions = this.positions.get(userId);
       userPositions?.forEach((pos) => {
         if (pos.market === market) {
-          const liquidationMarginLimit = pos.margin * 0.95;
+          const maxLoss = pos.margin * 0.95;
           const priceOfPostionAccordingToMarkPrice = markPrice * pos.qty;
           const uPnl =
             pos.kind === 'LONG'
               ? priceOfPostionAccordingToMarkPrice - pos.costBasis
               : pos.costBasis - priceOfPostionAccordingToMarkPrice;
 
-          if (uPnl + liquidationMarginLimit <= 0) {
+          // Liquidate when unrealized loss reaches 95% of position margin
+          if (uPnl + maxLoss <= 0) {
             userMarketOrder.push({
               userId,
               qty: pos.qty,
@@ -147,7 +148,7 @@ export default class PostionManager {
     externalPrice: number,
     localPrice: number,
     market: Shared.MARKET_AVAILABEL,
-  ) {
+  ): number | null {
     if (!externalPrice || !localPrice) return null;
     if (!this.markteIndex || !this.markteIndex.get) return null;
 
@@ -189,6 +190,8 @@ export default class PostionManager {
         pos.margin += pos.qty * externalPrice * rate;
       });
     }
+
+    return fundingRate;
   }
 
   updateMarkpriceMap(market: Shared.MARKET_AVAILABEL, price: number) {

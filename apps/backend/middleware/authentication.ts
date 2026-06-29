@@ -1,7 +1,5 @@
-import { log } from "console";
 import type { NextFunction, Request, Response } from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
-import { totalmem } from "os";
 
 export const isAuth = (req: Request, res: Response, next: NextFunction) => {
     const header = req.headers.authorization;
@@ -17,7 +15,7 @@ export const isAuth = (req: Request, res: Response, next: NextFunction) => {
             msg: "invalid token"
         });
     }
-    console.log("token", token)
+
     try {
         const isValid = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
         if (!isValid || !isValid.userId) {

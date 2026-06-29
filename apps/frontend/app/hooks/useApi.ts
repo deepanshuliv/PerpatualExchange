@@ -2,6 +2,8 @@
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+export const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
+
 export interface PlaceOrderParams {
   qty: string;
   price: number;
@@ -60,12 +62,7 @@ export const apiService = {
   getFills: async (token: string) => {
     const res = await fetch(`${API_BASE}/fills`, {
       headers: getHeaders(token),
-      method: 'POST',
-      body: JSON.stringify({
-        correlationId: crypto.randomUUID(),
-      }),
     });
-
     return res.json();
   },
 

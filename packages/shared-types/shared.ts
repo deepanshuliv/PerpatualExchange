@@ -1,15 +1,5 @@
 import z from "zod";
 
-const REQUEST_TYPE_SCHEMA = z.union([
-    z.literal("create_order"),
-    z.literal("cancel_order"),
-    z.literal("add_balance"),
-    z.literal("get_balance"),
-    z.literal("get_order"),
-])
-
-type REQUEST_TYPE = z.infer<typeof REQUEST_TYPE_SCHEMA>
-
 const MARKET_AVAILABEL_SCHEMA = z.union([
     z.literal("BTCUSD"),
     z.literal("USD"),
@@ -28,12 +18,10 @@ type MARKET_AVAILABEL = z.infer<typeof MARKET_AVAILABEL_SCHEMA>
 const allMarketsList = MARKET_AVAILABEL_SCHEMA.options.map((o) => o.value)
 
 export {
-    REQUEST_TYPE_SCHEMA,
     MARKET_AVAILABEL_SCHEMA,
     type MARKET_AVAILABEL,
     KIND_SCHEMA,
     TYPE_SCHEMA,
-    type REQUEST_TYPE,
     type KIND,
     type TYPE,
     type STATUS,

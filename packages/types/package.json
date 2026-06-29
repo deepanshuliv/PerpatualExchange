@@ -8,11 +8,6 @@
     ".": "./index.ts"
   },
   "peerDependencies": {
-    "typescript": "^5",
-    "@repo/shared-types": "workspace:*"
-  },
-  "dependencies": {
-    "js-sdsl": "^4.4.2",
-    "zod": "^4.4.3"
+    "typescript": "^5"
   }
 }

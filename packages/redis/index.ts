@@ -1,31 +1,51 @@
-import { createClient, type RedisClientType } from "redis";
+import { createClient } from "redis";
 
-const redisClient = createClient({ url: process.env.REDIS_URL! });
+// read redis url from environment variable
+const redisUrl = process.env.REDIS_URL;
 
-redisClient.on("error", (err) => {
-    console.log("redis error : ", err);
+if (!redisUrl) {
+  throw new Error("REDIS_URL is missing in environment variables");
+}
+
+// main redis client used across the app
+const redisClient = createClient({
+  url: redisUrl,
 });
 
-export async function connectRedisClient(client: any, serviceName: string): Promise<any> {
-  if (!client._listenersAttached) {
-    client._listenersAttached = true;
-    const handleDisconnect = (err: any) => {
-      console.error(`[${serviceName}] Redis connection went down, exiting process:`, err);
-      process.exit(1);
-    };
+type RedisClientType = typeof redisClient;
 
-    client.on('error', (err: any) => {
+// log errors from the default client
+redisClient.on("error", (err) => {
+  console.log("redis error : ", err);
+});
+
+// we only want to attach listeners one time per client
+const setupClients = new Set<RedisClientType>();
+
+export async function connectRedisClient(
+  client: RedisClientType,
+  serviceName: string,
+): Promise<RedisClientType> {
+  // attach error handlers the first time we see this client
+  if (!setupClients.has(client)) {
+    setupClients.add(client);
+
+    client.on("error", (err) => {
       console.error(`[${serviceName}] Redis error:`, err);
-      handleDisconnect(err);
+      console.error(`[${serviceName}] shutting down because redis failed`);
+      process.exit(1);
     });
 
-    client.on('end', () => {
-      handleDisconnect(new Error("Connection ended by Redis server"));
+    client.on("end", () => {
+      console.error(`[${serviceName}] Redis connection ended`);
+      process.exit(1);
     });
   }
 
-  if (!client.isOpen) {
+  // connect only if not connected yet
+  if (client.isOpen === false) {
     await client.connect();
+    console.log(`[${serviceName}] connected to redis`);
   }
 
   return client;

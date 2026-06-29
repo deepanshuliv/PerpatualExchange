@@ -15,7 +15,6 @@ export async function sendToEngine(
 
   return new Promise((resolve, reject) => {
     correlationIdToResolveMap.set(engineRequest.correlationId, resolve);
-    console.log('map', correlationIdToResolveMap);
     const timer = setTimeout(() => {
       correlationIdToResolveMap.delete(engineRequest.correlationId);
       reject(new Error('Timeout waiting for engine response'));
@@ -37,12 +36,17 @@ export async function sendToEngine(
   });
 }
 
-
-// give a look
 function handleEngineResponse(rawMessage: unknown) {
   if (typeof rawMessage === 'object' && rawMessage !== null && 'type' in rawMessage) {
     const type = (rawMessage as { type: string }).type;
-    if (type === 'liquidation' || type === 'markprice_updated' || type === 'bookticker_updated') {
+    if (
+      type === 'liquidation' ||
+      type === 'markprice_updated' ||
+      type === 'depth_updated' ||
+      type === 'trade_executed' ||
+      type === 'last_traded_price_updated' ||
+      type === 'funding_timer_reset'
+    ) {
       return;
     }
   }

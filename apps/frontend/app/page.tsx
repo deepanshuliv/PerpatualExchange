@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Image from "next/image";
+import React, { useState } from "react";
 import { useTrading } from "./context/TradingContext";
 import TradingChart from "./components/TradingChart";
 import OrderBook from "./components/OrderBook";
 import OrderEntryPanel from "./components/OrderEntryPanel";
 import DashboardTabs from "./components/DashboardTabs";
 import AuthModal from "./components/AuthModal";
+import ConfirmModal from "./components/ConfirmModal";
+import { formatFundingRate } from "./utils/funding";
 import {
   Search,
   Sun,
@@ -23,37 +24,15 @@ export default function Home() {
     setMarket,
     lastPrice,
     markPrice,
-    high24h,
-    low24h,
-    volume24h,
-    openInterest,
+    previewFundingRate,
+    fundingCountdown,
     user,
     logout,
     setAuthModalMode
   } = useTrading();
 
   const [marketDropdownOpen, setMarketDropdownOpen] = useState(false);
-  const [countdown, setCountdown] = useState("00:49:08");
-
-  // Simple countdown timer for funding countdown
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setCountdown((prev) => {
-        const parts = prev.split(":").map(Number);
-        let seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-        if (seconds <= 0) {
-          return "01:00:00"; // Reset to 1 hour
-        }
-        seconds -= 1;
-        const h = Math.floor(seconds / 3600).toString().padStart(2, "0");
-        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, "0");
-        const s = (seconds % 60).toString().padStart(2, "0");
-        return `${h}:${m}:${s}`;
-      });
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, []);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   // Map market to display text
   const getMarketLabel = (mkt: string) => {
@@ -176,7 +155,7 @@ export default function Home() {
                 Account: <strong className="text-white">{user.username}</strong>
               </span>
               <button
-                onClick={logout}
+                onClick={() => setLogoutConfirmOpen(true)}
                 className="flex items-center space-x-1.5 bg-[#171a1f] border border-[#242b35] hover:bg-red-500/10 hover:text-red-400 text-zinc-300 font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
                 title="Logout"
               >
@@ -281,42 +260,35 @@ export default function Home() {
 
           {/* Funding / Countdown */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
-            <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">1H Funding / Countdown</span>
+            <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">8H Funding / Countdown</span>
             <span className="font-mono text-[#f59e0b] font-bold mt-0.5">
-              0.0006% <span className="text-[#8491a5] font-semibold">/</span> {countdown}
+              {previewFundingRate !== null ? formatFundingRate(previewFundingRate) : "—"}{" "}
+              <span className="text-[#8491a5] font-semibold">/</span> {fundingCountdown}
             </span>
           </div>
 
           {/* 24h High */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">24H High</span>
-            <span className="font-mono text-white font-bold mt-0.5">
-              {high24h > 0 ? high24h.toLocaleString(undefined, { minimumFractionDigits: 1 }) : "63,140.8"}
-            </span>
+            <span className="font-mono text-white font-bold mt-0.5">63,140.8</span>
           </div>
 
           {/* 24h Low */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">24H Low</span>
-            <span className="font-mono text-white font-bold mt-0.5">
-              {low24h > 0 ? low24h.toLocaleString(undefined, { minimumFractionDigits: 1 }) : "59,024.5"}
-            </span>
+            <span className="font-mono text-white font-bold mt-0.5">59,024.5</span>
           </div>
 
           {/* 24h Volume */}
           <div className="flex flex-col px-4 border-r border-[#171a1f]/60 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">24H Volume (USD)</span>
-            <span className="font-mono text-white font-bold mt-0.5">
-              {volume24h > 0 ? volume24h.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "144,610,805.49"}
-            </span>
+            <span className="font-mono text-white font-bold mt-0.5">144,610,805.49</span>
           </div>
 
           {/* Open Interest */}
           <div className="flex flex-col px-4 shrink-0">
             <span className="text-[10px] text-[#5d6b7e] uppercase font-bold">Open Interest ({market === "ETHUSD" ? "ETH" : market === "SOLUSD" ? "SOL" : "BTC"})</span>
-            <span className="font-mono text-white font-bold mt-0.5">
-              {openInterest > 0 ? openInterest.toLocaleString(undefined, { minimumFractionDigits: 5, maximumFractionDigits: 5 }) : "440.78862"}
-            </span>
+            <span className="font-mono text-white font-bold mt-0.5">440.78862</span>
           </div>
 
           {/* Carousel scroll right arrow */}
@@ -403,6 +375,21 @@ export default function Home() {
 
       {/* Auth Modals */}
       <AuthModal />
+
+      <ConfirmModal
+        open={logoutConfirmOpen}
+        onClose={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => {
+          logout();
+          setLogoutConfirmOpen(false);
+        }}
+        title="Log out"
+        description="You are about to sign out of your account. You'll need to log in again to place trades or manage your portfolio."
+        confirmLabel="Log out"
+        variant="danger"
+        icon={<LogOut className="h-6 w-6 text-white" />}
+        details={user ? [{ label: "Account", value: user.username }] : undefined}
+      />
     </div>
   );
 }

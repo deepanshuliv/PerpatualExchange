@@ -63,20 +63,6 @@ export default class OrderBookManager {
     this.lastOrderId = orderManagerSnapShotInstance.lastOrderId ?? 0;
   }
 
-  getFundingInsurance() {
-    return this.fundingInsurance;
-  }
-  getExchangeProfit() {
-    return this.exchangeProfit;
-  }
-  updateExchangeProfit(signedAmount: number) {
-    this.exchangeProfit += signedAmount;
-  }
-
-  updateFundingInsurance(signedAmount: number) {
-    this.fundingInsurance += signedAmount;
-  }
-
   getLastTradedPriceOFMarket(market: Shared.MARKET_AVAILABEL) {
     return this.orderBook[market]?.lastTradedPrice;
   }

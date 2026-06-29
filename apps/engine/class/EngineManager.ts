@@ -1,12 +1,22 @@
 import { connectRedisClient, redisClient, type RedisClientType } from '@repo/redis';
-import { EngineRequest, EngineResponse } from '@repo/shared-types';
+import { EngineRequest, EngineResponse, type RedisStreamResponse } from '@repo/shared-types';
 import type { EngineSnapShotInstanceType } from '@repo/shared-types/internal-types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { allMarketsList, type KIND } from '../../../packages/shared-types/shared';
+import { allMarketsList, type KIND, type MARKET_AVAILABEL } from '../../../packages/shared-types/shared';
 import BinanceClassListner from './binanceListner';
 import MatchingEngine from './matchingEngine';
 import PostionManager from './PositionManager';
+
+const FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
+
+const SILENT_BROADCAST_TYPES = new Set([
+  'markprice_updated',
+  'depth_updated',
+  'trade_executed',
+  'last_traded_price_updated',
+  'funding_timer_reset',
+]);
 
 export default class EngineManager {
   private binanceListner: BinanceClassListner;
@@ -32,11 +42,39 @@ export default class EngineManager {
     );
 
     await publisher.xAdd('to-backend', '*', { data: JSON.stringify(response) });
-    if (response.type !== 'markprice_updated' && response.type !== 'bookticker_updated') {
+    if (!SILENT_BROADCAST_TYPES.has(response.type)) {
       const correlationId = 'correlationId' in response ? response.correlationId : 'N/A';
       console.log(
         `[Engine] Sent response to backend: type=${response.type} | correlationId=${correlationId}`,
       );
+    }
+  }
+
+  private async publishMarketUpdates(
+    market: MARKET_AVAILABEL,
+    fills: Array<{ price: number; qty: number }> = [],
+    transactionTime = Date.now(),
+  ) {
+    const depth = this.matchingManger.getDepth(market);
+
+    await this.sendTobackend({
+      type: 'depth_updated',
+      payload: { market, bids: depth.bids, asks: depth.asks, transactionTime },
+    });
+
+    for (const fill of fills) {
+      await this.sendTobackend({
+        type: 'trade_executed',
+        payload: { market, price: fill.price, qty: fill.qty, transactionTime },
+      });
+    }
+
+    if (fills.length > 0) {
+      const lastFill = fills[fills.length - 1]!;
+      await this.sendTobackend({
+        type: 'last_traded_price_updated',
+        payload: { market, price: lastFill.price, transactionTime },
+      });
     }
   }
 
@@ -71,11 +109,15 @@ export default class EngineManager {
         });
         return;
       }
+      const transactionTime = Date.now();
       this.sendTobackend({
         correlationId,
         type: 'create_order',
-        payload: { ...createOrder, market, kind, userId, transactionTime: Date.now() },
+        payload: { ...createOrder, market, kind, userId, transactionTime },
       });
+      this.publishMarketUpdates(market, createOrder.fills ?? [], transactionTime).catch((err) =>
+        console.error('[Engine] Failed to publish market updates after create_order:', err),
+      );
 
     } 
     else if (request.type === 'add_balance') {
@@ -95,6 +137,7 @@ export default class EngineManager {
         });
         return;
       }
+      const transactionTime = Date.now();
       this.sendTobackend({
         correlationId,
         type: 'cancel_order',
@@ -107,11 +150,12 @@ export default class EngineManager {
           totalQty: cancelled.totalQty!,
           filledQty: cancelled.filledQty!,
           margin: cancelled.margin,
-          transactionTime: Date.now(),
+          transactionTime,
         },
       });
-
-      const market = cancelled.market;
+      this.publishMarketUpdates(cancelled.market, [], transactionTime).catch((err) =>
+        console.error('[Engine] Failed to publish market updates after cancel_order:', err),
+      );
     } else if (request.type === 'get_position') {
       const { correlationId } = request;
       const { market, userId } = request.payload;
@@ -153,6 +197,11 @@ export default class EngineManager {
 
       this.positionManager.updateMarkpriceMap(market, price);
 
+      this.sendTobackend({
+        type: 'markprice_updated',
+        payload: { market, price, transactionTime: Date.now() },
+      });
+
       const userToLiquidate = this.positionManager.calculateLiquidation(market, price);
 
       userToLiquidate?.forEach((user) => {
@@ -168,6 +217,7 @@ export default class EngineManager {
         );
         if (!liquidationOrder) return;
 
+        const transactionTime = Date.now();
         this.sendTobackend({
           type: 'liquidation',
           payload: {
@@ -179,24 +229,13 @@ export default class EngineManager {
             totalQty: liquidationOrder.totalQty,
             totalSpent: liquidationOrder.totalSpent,
             fills: liquidationOrder.fills,
-            transactionTime: Date.now(),
+            transactionTime,
           },
         });
-
-        const depth = this.matchingManger.getDepth(market);
-        const bestBid = depth.bids[0] || [0, 0];
-        const bestAsk = depth.asks[0] || [0, 0];
-        this.sendTobackend({
-          type: 'bookticker_updated',
-          payload: {
-            market,
-            bestBidPrice: bestBid[0],
-            bestBidQty: bestBid[1],
-            bestAskPrice: bestAsk[0],
-            bestAskQty: bestAsk[1],
-            transactionTime: Date.now(),
-          },
-        });
+        this.publishMarketUpdates(market, liquidationOrder.fills ?? [], transactionTime).catch(
+          (err) =>
+            console.error('[Engine] Failed to publish market updates after liquidation:', err),
+        );
       });
     } else if (request.type === 'run_funding_rate') {
       if (!this.fundingRateTimerStarted) {
@@ -211,13 +250,18 @@ export default class EngineManager {
               data: JSON.stringify({ type: 'run_funding_rate' }),
             });
           },
-          8 * 60 * 60 * 1000,
+          FUNDING_INTERVAL_MS,
         );
       }
+      const now = Date.now();
       allMarketsList.forEach((market) => {
         const markPrice = this.positionManager.getMarkpriceOfMarket(market) || 0;
         const lastTradedPrice = this.matchingManger.getLastTradedPriceOFMarket(market) || 0;
         this.positionManager.claculateFundingRate(markPrice, lastTradedPrice, market);
+        this.sendTobackend({
+          type: 'funding_timer_reset',
+          payload: { market, transactionTime: now },
+        });
       });
     }
   }
@@ -315,12 +359,12 @@ export default class EngineManager {
     while (1) {
       const readFrom = this.redisReadPointer === '' ? '$' : this.redisReadPointer;
 
-      const response = await subscriber.xRead([{ key: 'to-engine', id: readFrom }], {
+      const response = (await subscriber.xRead([{ key: 'to-engine', id: readFrom }], {
         BLOCK: 0,
         COUNT: 100,
-      });
+      })) as RedisStreamResponse;
 
-      if (!response) {
+      if (!response || !Array.isArray(response)) {
         continue;
       }
       // loop to read msga and give to handler

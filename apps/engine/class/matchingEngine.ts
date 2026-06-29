@@ -194,7 +194,10 @@ export default class MatchingEngine {
         }
 
         this.balance.updateLockedBalance(userId, -releasedMargin);
-        this.balance.addBalance(userId, releasedMargin + pnl);
+        this.balance.addBalance(
+          userId,
+          Math.max(releasedMargin * 0.05, releasedMargin + pnl),
+        );
 
         this.positons.changePosition(
           userId,
@@ -214,7 +217,10 @@ export default class MatchingEngine {
         }
 
         this.balance.updateLockedBalance(userId, -existingMargin);
-        this.balance.addBalance(userId, existingMargin + pnl);
+        this.balance.addBalance(
+          userId,
+          Math.max(existingMargin * 0.05, existingMargin + pnl),
+        );
 
         this.positons.changePosition(
           userId,
@@ -237,7 +243,10 @@ export default class MatchingEngine {
         }
 
         this.balance.updateLockedBalance(userId, -existingMargin);
-        this.balance.addBalance(userId, existingMargin + closePnl);
+        this.balance.addBalance(
+          userId,
+          Math.max(existingMargin * 0.05, existingMargin + closePnl),
+        );
 
         const flippedQty = orderDetails.filledQty - existingQty;
         const flippedCostBasis = orderDetails.totalSpent - closedTotalSpent;
@@ -280,14 +289,6 @@ export default class MatchingEngine {
     this.balance.updateLockedBalance(userId, -marginToRelease);
 
     return cancelOrder;
-  }
-
-  getOrder(userId: string, orderId: string) {
-    const userOrder = this.orderBook.getOrder(userId, orderId);
-    if (!userOrder) {
-      return null;
-    }
-    return userOrder;
   }
 
   getBalance(userId: string) {
@@ -453,7 +454,10 @@ export default class MatchingEngine {
       positionKind === 'SHORT' ? closedCostBasis - totalSpent : totalSpent - closedCostBasis;
 
     this.balance.updateLockedBalance(userId, -marginReleased);
-    this.balance.addBalance(userId, marginReleased + rpnl);
+    this.balance.addBalance(
+      userId,
+      Math.max(marginReleased * 0.05, marginReleased + rpnl),
+    );
   }
 
   private settleLiquidatedCloseAtMark(
@@ -473,7 +477,7 @@ export default class MatchingEngine {
     const rpnl = positionKind === 'SHORT' ? costBasis - closeSpent : closeSpent - costBasis;
 
     this.balance.updateLockedBalance(userId, -margin);
-    this.balance.addBalance(userId, margin + rpnl);
+    this.balance.addBalance(userId, Math.max(margin * 0.05, margin + rpnl));
     this.orderBook.setLastTradedPrice(market, markPrice);
   }
 
@@ -673,7 +677,10 @@ export default class MatchingEngine {
           : entryCostBasisOfReduced - fillSpent;
 
       this.balance.updateLockedBalance(userId, -releasedMargin);
-      this.balance.addBalance(userId, releasedMargin + pnl);
+      this.balance.addBalance(
+        userId,
+        Math.max(releasedMargin * 0.05, releasedMargin + pnl),
+      );
       this.positons.changePosition(
         userId,
         market,
@@ -687,7 +694,10 @@ export default class MatchingEngine {
         existingKind === 'LONG' ? fillSpent - existingCostBasis : existingCostBasis - fillSpent;
 
       this.balance.updateLockedBalance(userId, -existingMargin);
-      this.balance.addBalance(userId, existingMargin + pnl);
+      this.balance.addBalance(
+        userId,
+        Math.max(existingMargin * 0.05, existingMargin + pnl),
+      );
       this.positons.changePosition(
         userId,
         market,
