@@ -1,5 +1,6 @@
 import { WebsocketTypes } from '@repo/shared-types';
 import type { WebSocket } from 'ws';
+import { applyTradeToLiveCandles } from './candleState';
 
 interface ClientConnection {
   ws: WebSocket;
@@ -7,6 +8,7 @@ interface ClientConnection {
 }
 
 const activeClients = new Set<ClientConnection>();
+const MAX_MARKPRICE_AGE_MS = 5_000;
 
 export function registerClient(client: ClientConnection) {
   activeClients.add(client);
@@ -27,8 +29,6 @@ function sendToSubscribers(stream: string, data: Record<string, unknown>) {
 
 type ProcessableEngineMessage = WebsocketTypes.WsStreamingMessage;
 
-const MAX_MARKPRICE_AGE_MS = 5_000;
-
 export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngineMessage) {
   const executionTime = Date.now();
   const transactionTime = update.payload.transactionTime;
@@ -43,8 +43,12 @@ export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngin
       transactionTime,
       executionTime,
     });
-  } else if (update.type === 'trade_executed') {
+    return;
+  }
+
+  if (update.type === 'trade_executed') {
     const { market, price, qty } = update.payload;
+
     sendToSubscribers(`trade.${market}`, {
       type: 'trade',
       market,
@@ -53,7 +57,40 @@ export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngin
       transactionTime,
       executionTime,
     });
-  } else if (update.type === 'last_traded_price_updated') {
+
+    const { candle1h, candle1d } = applyTradeToLiveCandles(market, price, qty, transactionTime);
+
+    sendToSubscribers(`candle.${market}.1h`, {
+      type: 'candle',
+      interval: '1h',
+      market,
+      openTime: candle1h.openTime,
+      open: candle1h.open,
+      high: candle1h.high,
+      low: candle1h.low,
+      close: candle1h.close,
+      volume: candle1h.volume,
+      transactionTime,
+      executionTime,
+    });
+
+    sendToSubscribers(`candle.${market}.1d`, {
+      type: 'candle',
+      interval: '1d',
+      market,
+      openTime: candle1d.openTime,
+      open: candle1d.open,
+      high: candle1d.high,
+      low: candle1d.low,
+      close: candle1d.close,
+      volume: candle1d.volume,
+      transactionTime,
+      executionTime,
+    });
+    return;
+  }
+
+  if (update.type === 'last_traded_price_updated') {
     const { market, price } = update.payload;
     sendToSubscribers(`lastTradedPrice.${market}`, {
       type: 'lastTradedPrice',
@@ -62,8 +99,11 @@ export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngin
       transactionTime,
       executionTime,
     });
-  } else if (update.type === 'markprice_updated') {
-    if (Date.now() - transactionTime > MAX_MARKPRICE_AGE_MS) return;
+    return;
+  }
+
+  if (update.type === 'markprice_updated') {
+    if (Date.now() - (transactionTime ?? Date.now()) > MAX_MARKPRICE_AGE_MS) return;
     const { market, price } = update.payload;
     sendToSubscribers(`markPrice.${market}`, {
       type: 'markPrice',
@@ -72,7 +112,10 @@ export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngin
       transactionTime,
       executionTime,
     });
-  } else if (update.type === 'funding_timer_reset') {
+    return;
+  }
+
+  if (update.type === 'funding_timer_reset') {
     const { market } = update.payload;
     sendToSubscribers(`funding.${market}`, {
       type: 'fundingTimerReset',
@@ -80,7 +123,10 @@ export function checkMarketUpdateAndSendToSubsribedUser(update: ProcessableEngin
       transactionTime,
       executionTime,
     });
-  } else if (update.type === 'liquidation') {
+    return;
+  }
+
+  if (update.type === 'liquidation') {
     const { market, userId, kind, filledQty, totalQty, totalSpent } = update.payload;
     const avgPrice = totalQty > 0 ? totalSpent / totalQty : 0;
     sendToSubscribers(`liquidation.${market}`, {

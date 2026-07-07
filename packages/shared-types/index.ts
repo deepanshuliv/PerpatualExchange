@@ -4,6 +4,7 @@ import * as BackendRequest from "./backend-types/backendRequest";
 import * as Shared from "./shared";
 import * as InternalTypes from "./internal-types";
 import * as WebsocketTypes from "./ws-types/types";
+import * as MarketData from "./market-data";
 
 export {
   EngineRequest,
@@ -12,6 +13,7 @@ export {
   Shared,
   InternalTypes,
   WebsocketTypes,
+  MarketData,
 };
 
 export type { RedisStreamResponse } from "./internal-types";

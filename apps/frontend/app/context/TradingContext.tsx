@@ -27,9 +27,25 @@ export interface MarketLiquidation {
   time: number;
 }
 
+export interface ChartCandle {
+  openTime: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export type ChartInterval = '1h' | '1d';
+
 interface TradingContextType {
   market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD';
   setMarket: (market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD') => void;
+  chartInterval: ChartInterval;
+  setChartInterval: (interval: ChartInterval) => void;
+  candles: ChartCandle[];
+  loadingCandles: boolean;
+  wsReady: boolean;
   token: string | null;
   user: { id: string; username: string } | null;
   balance: number;
@@ -91,6 +107,9 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [marketTrades, setMarketTrades] = useState<MarketTrade[]>([]);
   const [marketLiquidations, setMarketLiquidations] = useState<MarketLiquidation[]>([]);
   const [loadingDepth, setLoadingDepth] = useState<boolean>(true);
+  const [chartInterval, setChartInterval] = useState<ChartInterval>('1h');
+  const [candles, setCandles] = useState<ChartCandle[]>([]);
+  const [loadingCandles, setLoadingCandles] = useState<boolean>(true);
 
   const previewFundingRate = computeFundingRatePreview(markPrice, lastPrice);
 
@@ -102,6 +121,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const wsRef = useRef<WebSocket | null>(null);
   const tokenRef = useRef<string | null>(token);
   const marketRef = useRef(market);
+  const chartIntervalRef = useRef(chartInterval);
   const [wsReady, setWsReady] = useState(false);
   const [wsReconnectNonce, setWsReconnectNonce] = useState(0);
 
@@ -112,6 +132,10 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     marketRef.current = market;
   }, [market]);
+
+  useEffect(() => {
+    chartIntervalRef.current = chartInterval;
+  }, [chartInterval]);
 
   useEffect(() => {
     const tick = () => setFundingCountdown(formatCountdown(fundingMsRemaining(fundingDeadline)));
@@ -137,8 +161,15 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setMarkPrice(0);
     setMarketTrades([]);
     setMarketLiquidations([]);
+    setCandles([]);
+    setLoadingCandles(true);
     setFundingDeadline(startFundingTimer());
   }, [market]);
+
+  useEffect(() => {
+    setCandles([]);
+    setLoadingCandles(true);
+  }, [chartInterval]);
 
   useEffect(() => {
     if (!token) return;
@@ -163,49 +194,94 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload.data && payload.stream) {
-          const { stream, data } = payload;
-          const streamMarket = stream.split('.')[1];
-          if (streamMarket !== marketRef.current) return;
+        if (!payload.data || !payload.stream) return;
 
-          if (stream.startsWith('depth')) {
-            const { bids: rawBids, asks: rawAsks } = parseDepthSnapshot(data.bids, data.asks);
-            setBids(rawBids);
-            setAsks(rawAsks);
-            setLoadingDepth(false);
-          } else if (stream.startsWith('trade')) {
-            const trade: MarketTrade = {
-              price: Number(data.price),
-              qty: Number(data.qty),
-              time: Number(data.transactionTime ?? data.executionTime ?? Date.now()),
-            };
-            if (trade.price > 0 && trade.qty > 0) {
-              setMarketTrades((prev) => [trade, ...prev].slice(0, MAX_MARKET_TRADES));
-            }
-          } else if (stream.startsWith('lastTradedPrice')) {
-            const price = Number(data.price);
-            if (price > 0) setLastPrice(price);
-          } else if (stream.startsWith('markPrice')) {
-            const price = Number(data.price);
-            if (price > 0) setMarkPrice(price);
-          } else if (stream.startsWith('funding')) {
-            setFundingDeadline(startFundingTimer());
-            if (tokenRef.current) {
-              refreshUserData();
-            }
-          } else if (stream.startsWith('liquidation')) {
-            const liquidation: MarketLiquidation = {
-              userId: String(data.userId),
-              kind: data.kind as 'LONG' | 'SHORT',
-              price: Number(data.price),
-              qty: Number(data.qty),
-              totalQty: Number(data.totalQty),
-              time: Number(data.transactionTime ?? data.executionTime ?? Date.now()),
-            };
-            if (liquidation.qty > 0) {
-              setMarketLiquidations((prev) => [liquidation, ...prev].slice(0, MAX_MARKET_LIQUIDATIONS));
-            }
+        const { stream, data } = payload;
+        const streamMarket = stream.split('.')[1];
+        if (streamMarket !== marketRef.current) return;
+
+        if (stream.startsWith('depth')) {
+          const { bids: rawBids, asks: rawAsks } = parseDepthSnapshot(data.bids, data.asks);
+          setBids(rawBids);
+          setAsks(rawAsks);
+          setLoadingDepth(false);
+          return;
+        }
+
+        if (stream.startsWith('trade')) {
+          const trade: MarketTrade = {
+            price: Number(data.price),
+            qty: Number(data.qty),
+            time: Number(data.transactionTime ?? data.executionTime ?? Date.now()),
+          };
+          if (trade.price > 0 && trade.qty > 0) {
+            setMarketTrades((prev) => [trade, ...prev].slice(0, MAX_MARKET_TRADES));
           }
+          return;
+        }
+
+        if (stream.startsWith('lastTradedPrice')) {
+          const price = Number(data.price);
+          if (price > 0) setLastPrice(price);
+          return;
+        }
+
+        if (stream.startsWith('markPrice')) {
+          const price = Number(data.price);
+          if (price > 0) setMarkPrice(price);
+          return;
+        }
+
+        if (stream.startsWith('funding')) {
+          setFundingDeadline(startFundingTimer());
+          if (tokenRef.current) refreshUserData();
+          return;
+        }
+
+        if (stream.startsWith('liquidation')) {
+          const liquidation: MarketLiquidation = {
+            userId: String(data.userId),
+            kind: data.kind as 'LONG' | 'SHORT',
+            price: Number(data.price),
+            qty: Number(data.qty),
+            totalQty: Number(data.totalQty),
+            time: Number(data.transactionTime ?? data.executionTime ?? Date.now()),
+          };
+          if (liquidation.qty > 0) {
+            setMarketLiquidations((prev) =>
+              [liquidation, ...prev].slice(0, MAX_MARKET_LIQUIDATIONS),
+            );
+          }
+          return;
+        }
+
+        if (stream.startsWith('candle.')) {
+          const interval = stream.split('.')[2];
+          if (interval !== chartIntervalRef.current) return;
+
+          const candle: ChartCandle = {
+            openTime: Number(data.openTime),
+            open: Number(data.open),
+            high: Number(data.high),
+            low: Number(data.low),
+            close: Number(data.close),
+            volume: Number(data.volume),
+          };
+
+          if (!Number.isFinite(candle.openTime) || candle.open <= 0) return;
+
+          setCandles((prev) => {
+            if (prev.length === 0) return [candle];
+            const last = prev[prev.length - 1]!;
+            if (last.openTime === candle.openTime) {
+              return [...prev.slice(0, -1), candle];
+            }
+            if (last.openTime < candle.openTime) {
+              return [...prev, candle];
+            }
+            return prev;
+          });
+          setLoadingCandles(false);
         }
       } catch (err) {
         console.log('WebSocket message parse error:', err);
@@ -243,16 +319,21 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!wsReady || !ws || ws.readyState !== WebSocket.OPEN) return;
 
     subscribeToMarket(ws, market);
+    subscribeToCandleInterval(ws, market, chartInterval);
+
+    // HTTP endpoints load after WS is connected and subscribed.
     fetchDepth();
     fetchLastPrice();
     fetchLiquidations();
+    fetchCandles();
 
     return () => {
       if (ws.readyState === WebSocket.OPEN) {
         unsubscribeFromMarket(ws, market);
+        unsubscribeFromCandleInterval(ws, market, chartInterval);
       }
     };
-  }, [market, wsReady]);
+  }, [market, chartInterval, wsReady]);
 
   const subscribeToMarket = (ws: WebSocket, targetMarket: string) => {
     const streams = [
@@ -263,11 +344,19 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       `funding.${targetMarket}`,
       `liquidation.${targetMarket}`,
     ];
+    ws.send(JSON.stringify({ method: 'SUBSCRIBE', params: streams, id: 1 }));
+  };
+
+  const subscribeToCandleInterval = (
+    ws: WebSocket,
+    targetMarket: string,
+    interval: ChartInterval,
+  ) => {
     ws.send(
       JSON.stringify({
         method: 'SUBSCRIBE',
-        params: streams,
-        id: 1,
+        params: [`candle.${targetMarket}.${interval}`],
+        id: 3,
       }),
     );
   };
@@ -281,11 +370,19 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       `funding.${targetMarket}`,
       `liquidation.${targetMarket}`,
     ];
+    ws.send(JSON.stringify({ method: 'UNSUBSCRIBE', params: streams, id: 2 }));
+  };
+
+  const unsubscribeFromCandleInterval = (
+    ws: WebSocket,
+    targetMarket: string,
+    interval: ChartInterval,
+  ) => {
     ws.send(
       JSON.stringify({
         method: 'UNSUBSCRIBE',
-        params: streams,
-        id: 2,
+        params: [`candle.${targetMarket}.${interval}`],
+        id: 4,
       }),
     );
   };
@@ -343,12 +440,52 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const fetchCandles = async () => {
+    try {
+      const json = await api.getCandles(market, chartInterval);
+      if (json.ok && Array.isArray(json.data)) {
+        const formatted: ChartCandle[] = json.data.map(
+          (item: {
+            openTime: number;
+            open: number;
+            high: number;
+            low: number;
+            close: number;
+            volume: number;
+          }) => ({
+            openTime: Number(item.openTime),
+            open: Number(item.open),
+            high: Number(item.high),
+            low: Number(item.low),
+            close: Number(item.close),
+            volume: Number(item.volume),
+          }),
+        );
+
+        setCandles((prev) => {
+          if (prev.length === 0) return formatted;
+          const lastHttp = formatted[formatted.length - 1];
+          const lastLive = prev[prev.length - 1];
+          if (!lastHttp || !lastLive) return formatted;
+          if (lastLive.openTime >= lastHttp.openTime) {
+            const older = formatted.filter((c) => c.openTime < lastLive.openTime);
+            return [...older, lastLive];
+          }
+          return formatted;
+        });
+      }
+    } catch {
+    } finally {
+      setLoadingCandles(false);
+    }
+  };
+
   const refreshUserData = async (authToken?: string) => {
     const activeToken = authToken ?? token;
     if (!activeToken) return;
 
     try {
-      const balanceJson = await api.getAvailableEquity(activeToken, market);
+      const balanceJson = await api.getAvailableEquity(activeToken);
       if (balanceJson.ok && balanceJson.data != null) {
         const available = Number(balanceJson.data);
         setBalance(Number.isFinite(available) ? available : 0);
@@ -546,6 +683,11 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       value={{
         market,
         setMarket,
+        chartInterval,
+        setChartInterval,
+        candles,
+        loadingCandles,
+        wsReady,
         token,
         user,
         balance,

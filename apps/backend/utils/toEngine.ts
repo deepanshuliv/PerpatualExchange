@@ -4,24 +4,27 @@ import { EngineResponse, type EngineRequest, type RedisStreamResponse } from '@r
 const publisher = redisClient.duplicate();
 const subscriber = redisClient.duplicate();
 
-const correlationIdToResolveMap = new Map<
-  string,
-  (data: EngineResponse.BACKEND_RESPONSE) => void
->();
+type PendingRequest = {
+  resolve: (data: EngineResponse.BACKEND_RESPONSE) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+const correlationIdToResolveMap = new Map<string, PendingRequest>();
 
 export async function sendToEngine(
   engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST,
 ): Promise<EngineResponse.BACKEND_RESPONSE> {
   await connectRedisClient(publisher, 'Backend-Publisher');
 
-  const streamKey = process.env.ENGINE_STREAM! || 'to-engine';
+  const streamKey = process.env.ENGINE_STREAM || 'to-engine';
 
   return new Promise((resolve, reject) => {
-    correlationIdToResolveMap.set(engineRequest.correlationId, resolve);
     const timer = setTimeout(() => {
       correlationIdToResolveMap.delete(engineRequest.correlationId);
       reject(new Error('Timeout waiting for engine response'));
     }, 10000);
+
+    correlationIdToResolveMap.set(engineRequest.correlationId, { resolve, timer });
 
     publisher
       .xAdd(streamKey, '*', { data: JSON.stringify(engineRequest) })
@@ -31,8 +34,11 @@ export async function sendToEngine(
         );
       })
       .catch((err) => {
-        clearTimeout(timer);
-        correlationIdToResolveMap.delete(engineRequest.correlationId);
+        const pending = correlationIdToResolveMap.get(engineRequest.correlationId);
+        if (pending) {
+          clearTimeout(pending.timer);
+          correlationIdToResolveMap.delete(engineRequest.correlationId);
+        }
         console.log(`[Backend] Failed to push to Redis stream '${streamKey}':`, err);
         reject(err);
       });
@@ -64,12 +70,13 @@ function handleEngineResponse(rawMessage: unknown) {
     `[Backend] Engine response received: type=${data.type} | correlationId=${data.correlationId}`,
   );
 
-  const resolve = correlationIdToResolveMap.get(data.correlationId);
-  if (!resolve) {
+  const pending = correlationIdToResolveMap.get(data.correlationId);
+  if (!pending) {
     console.log(`[Backend] No pending resolve found for correlationId=${data.correlationId}`);
     return;
   }
-  resolve(data);
+  clearTimeout(pending.timer);
+  pending.resolve(data);
   correlationIdToResolveMap.delete(data.correlationId);
 }
 

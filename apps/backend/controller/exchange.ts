@@ -2,62 +2,35 @@ import { prisma } from '@repo/db';
 import { BackendRequest, EngineRequest, Shared } from '@repo/shared-types';
 import crypto from 'crypto';
 import type { Request, Response } from 'express';
+import { callEngine } from '../utils/callEngine';
 import { sendToEngine } from '../utils/toEngine';
 
-export async function onRamp(req: Request, res: Response) {
+export async function onRamp(req: Request, res: Response){
   const { success, data } = BackendRequest.ADD_BALANCE_SCHEMA.safeParse(req.body);
-
   if (!success) {
-    return res.status(411).json({
-      msg: 'invalid input fields',
-    });
+    return res.status(411).json({ msg: 'invalid input fields' });
   }
 
-  const { amount } = data.data;
-
-  const engineRequest: EngineRequest.ADD_BALANCE = {
-    correlationId: data.correlationId,
-    type: data.type,
-    payload: {
-      userId: req.userId!,
-      amount,
+  return callEngine(
+    res,
+    {
+      correlationId: data.correlationId,
+      type: data.type,
+      payload: { userId: req.userId!, amount: data.data.amount },
     },
-  };
-
-  try {
-    const engineResponse = await sendToEngine(engineRequest);
-    if (!engineResponse) {
-      return res.status(403).json({
-        msg: 'some error occured',
-      });
-    }
-
-    if (engineResponse.type === 'error') {
-      return res.status(400).json({
-        msg: engineResponse.payload.error,
-      });
-    }
-
-    res.status(201).json({
-      ok: true,
-      data: engineResponse.payload,
-    });
-  } catch (err: any) {
-    return res.status(504).json({ msg: err?.message || 'Engine timeout' });
-  }
+    201,
+  );
 }
 
 export async function createOrder(req: Request, res: Response) {
   const { success, data } = BackendRequest.CREATE_ORDER_SCHEMA.safeParse(req.body);
   if (!success) {
-    return res.status(411).json({
-      msg: 'invalid input fields',
-    });
+    return res.status(411).json({ msg: 'invalid input fields' });
   }
 
   const { qty, price, market, type, kind, margin } = data.data;
 
-  const engineRequest: EngineRequest.CREATE_ORDER = {
+  return callEngine(res, {
     correlationId: data.correlationId,
     type: 'create_order',
     payload: {
@@ -69,161 +42,47 @@ export async function createOrder(req: Request, res: Response) {
       type,
       margin: Number(margin),
     },
-  };
-  try {
-    const engineResponse = await sendToEngine(engineRequest);
-
-    if (!engineResponse) {
-      return res.status(403).json({
-        msg: 'some error occured',
-      });
-    }
-
-    if (engineResponse.type === 'error') {
-      return res.status(400).json({
-        msg: engineResponse.payload.error,
-      });
-    }
-
-    return res.status(200).json({
-      ok: true,
-      data: engineResponse.payload,
-    });
-  } catch (err: any) {
-    return res.status(504).json({ msg: err?.message || 'Engine timeout' });
-  }
+  });
 }
 
 export async function cancelOrder(req: Request, res: Response) {
   const { success, data } = BackendRequest.CANCEL_ORDER_SCHEMA.safeParse(req.body);
   if (!success) {
-    return res.status(411).json({
-      msg: 'invalid input fields',
-    });
+    return res.status(411).json({ msg: 'invalid input fields' });
   }
 
-  const { orderId } = data.data;
-
-  const engineRequest: EngineRequest.CANCEL_ORDER = {
+  return callEngine(res, {
     correlationId: data.correlationId,
     type: 'cancel_order',
-    payload: {
-      userId: req.userId!,
-      orderId,
-    },
-  };
-  try {
-    const engineResponse = await sendToEngine(engineRequest);
-
-    if (!engineResponse) {
-      return res.status(403).json({
-        msg: 'some error occured',
-      });
-    }
-
-    if (engineResponse.type === 'error') {
-      return res.status(400).json({
-        msg: engineResponse.payload.error,
-      });
-    }
-
-    return res.status(200).json({
-      ok: true,
-      data: engineResponse.payload,
-    });
-  } catch (err: any) {
-    return res.status(504).json({ msg: err?.message || 'Engine timeout' });
-  }
+    payload: { userId: req.userId!, orderId: data.data.orderId },
+  });
 }
 
 export async function getAvailableEquity(req: Request, res: Response) {
-  const marketRaw = req.query.market as string | undefined;
-  let market: Shared.MARKET_AVAILABEL | undefined;
-  if (marketRaw !== undefined) {
-    const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketRaw);
-    if (!parsed.success) {
-      return res.status(400).json({
-        msg: 'invalid market',
-      });
-    }
-    market = parsed.data;
-  }
-
-  const engineRequest: EngineRequest.GET_BALANCE = {
+  return callEngine(res, {
     correlationId: crypto.randomUUID(),
     type: 'get_balance',
-    payload: {
-      userId: req.userId!,
-      market,
-    },
-  };
-
-  try {
-    const engineResponse = await sendToEngine(engineRequest);
-    if (!engineResponse) {
-      return res.status(403).json({
-        msg: 'some error occured',
-      });
-    }
-
-    if (engineResponse.type === 'error') {
-      return res.status(400).json({
-        msg: engineResponse.payload.error,
-      });
-    }
-
-    res.status(200).json({
-      ok: true,
-      data: engineResponse.payload,
-    });
-  } catch (err: any) {
-    return res.status(504).json({ msg: err?.message || 'Engine timeout' });
-  }
+    payload: { userId: req.userId! },
+  });
 }
 
 export async function getOpenPositions(req: Request, res: Response) {
   const marketId = req.params.marketId === 'all' ? undefined : req.params.marketId;
   let market: Shared.MARKET_AVAILABEL | undefined;
+
   if (marketId !== undefined) {
     const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
     if (!parsed.success) {
-      return res.status(400).json({
-        msg: 'invalid market',
-      });
+      return res.status(400).json({ msg: 'invalid market' });
     }
     market = parsed.data;
   }
 
-  const engineRequest: EngineRequest.GET_POSITION = {
+  return callEngine(res, {
     correlationId: crypto.randomUUID(),
     type: 'get_position',
-    payload: {
-      userId: req.userId!,
-      market,
-    },
-  };
-
-  try {
-    const engineResponse = await sendToEngine(engineRequest);
-    if (!engineResponse) {
-      return res.status(403).json({
-        msg: 'some error occured',
-      });
-    }
-
-    if (engineResponse.type === 'error') {
-      return res.status(400).json({
-        msg: engineResponse.payload.error,
-      });
-    }
-
-    res.status(200).json({
-      ok: true,
-      data: engineResponse.payload,
-    });
-  } catch (err: any) {
-    return res.status(504).json({ msg: err?.message || 'Engine timeout' });
-  }
+    payload: { userId: req.userId!, market },
+  });
 }
 
 export async function getOpenOrders(req: Request, res: Response) {
@@ -232,7 +91,7 @@ export async function getOpenOrders(req: Request, res: Response) {
     marketId = marketId[0];
   }
 
-  let market: Shared.MARKET_AVAILABEL | undefined = undefined;
+  let market: Shared.MARKET_AVAILABEL | undefined;
   if (marketId !== undefined && marketId !== 'all') {
     const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
     if (!parsed.success) {
@@ -242,144 +101,95 @@ export async function getOpenOrders(req: Request, res: Response) {
   }
 
   try {
-    const userId = req.userId!;
-
-    let orders;
+    const where: any = {
+      userId: req.userId!,
+      status: { in: ['OPEN', 'PARTIALLY_FILLED'] },
+    };
     if (market) {
-      orders = await prisma.order.findMany({
-        where: {
-          userId: userId,
-          market: market as any,
-        },
-        orderBy: { transactionTime: 'desc' },
-      });
-    } else {
-      orders = await prisma.order.findMany({
-        where: {
-          userId: userId,
-        },
-        orderBy: { transactionTime: 'desc' },
-      });
+      where.market = market;
     }
+
+    const orders = await prisma.order.findMany({
+      where,
+      orderBy: { transactionTime: 'desc' },
+    });
 
     const openOrders = [];
     for (const order of orders) {
-      const isCancelled = order.status === 'CANCELLED';
-      const stillHasQtyLeft = order.filledQty < order.totalQty;
+      if (order.filledQty >= order.totalQty) continue;
 
-      if (!isCancelled && stillHasQtyLeft) {
-        openOrders.push({
-          orderId: order.id,
-          userId: order.userId,
-          type: order.type,
-          qty: order.totalQty,
-          totalQty: order.totalQty,
-          filledQty: order.filledQty,
-          price: order.price,
-          status: order.status,
-          margin: order.margin,
-          kind: order.kind,
-          market: order.market,
-          createdAt: order.createdAt,
-          transactionTime: order.transactionTime,
-        });
-      }
+      openOrders.push({
+        orderId: order.id,
+        userId: order.userId,
+        type: order.type,
+        qty: order.totalQty,
+        totalQty: order.totalQty,
+        filledQty: order.filledQty,
+        price: order.price,
+        status: order.status,
+        margin: order.margin,
+        kind: order.kind,
+        market: order.market,
+        createdAt: order.createdAt,
+        transactionTime: order.transactionTime,
+      });
     }
 
-    res.status(200).json({
-      ok: true,
-      data: openOrders,
-    });
-  } catch (err: any) {
+    return res.status(200).json({ ok: true, data: openOrders });
+  } catch (err) {
     console.log('[orders/open] DB error:', err);
     return res.status(500).json({ msg: 'failed to fetch open orders' });
   }
 }
 
 export async function getFills(req: Request, res: Response) {
-  const engineRequest: EngineRequest.GET_FILLS = {
+  return callEngine(res, {
     correlationId: crypto.randomUUID(),
     type: 'get_fills',
-    payload: {
-      userId: req.userId!,
-    },
-  };
-
-  try {
-    const engineResponse = await sendToEngine(engineRequest);
-    if (!engineResponse) {
-      return res.status(403).json({
-        msg: 'some error occured',
-      });
-    }
-
-    if (engineResponse.type === 'error') {
-      return res.status(400).json({
-        msg: engineResponse.payload.error,
-      });
-    }
-
-    res.status(200).json({
-      ok: true,
-      data: engineResponse.payload,
-    });
-  } catch (err: any) {
-    return res.status(504).json({ msg: err?.message || 'Engine timeout' });
-  }
+    payload: { userId: req.userId! },
+  });
 }
 
 export async function getDepth(req: Request, res: Response) {
-  const marketId = req.params.marketId;
-  const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+  const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(req.params.marketId);
   if (!parsed.success) {
-    return res.status(400).json({
-      msg: 'invalid market',
-    });
+    return res.status(400).json({ msg: 'invalid market' });
   }
-  const market = parsed.data;
 
   try {
-    const engineRequest: EngineRequest.GET_DEPTH = {
+    const reply = await sendToEngine({
       correlationId: crypto.randomUUID(),
       type: 'get_depth',
-      payload: { market },
-    };
+      payload: { market: parsed.data },
+    });
 
-    const engineResponse = await sendToEngine(engineRequest);
-    if (!engineResponse) {
+    if (!reply) {
       return res.status(503).json({ msg: 'engine unavailable' });
     }
 
-    if (engineResponse.type === 'error') {
-      return res.status(400).json({ msg: engineResponse.payload.error });
+    if (reply.type === 'error') {
+      return res.status(400).json({ msg: reply.payload.error });
     }
 
-    if (engineResponse.type === 'get_depth') {
-      return res.status(200).json({ ok: true, data: engineResponse.payload });
-    }
-
-    return res.status(500).json({ msg: 'unexpected engine response type' });
+    return res.status(200).json({ ok: true, data: reply.payload });
   } catch (err: any) {
     if (err?.message?.includes('Timeout')) {
-      return res.status(200).json({ ok: true, data: { bids: {}, asks: {} } });
+      return res.status(200).json({ ok: true, data: { bids: [], asks: [] } });
     }
-    console.log('[depth] Unexpected error:', err);
     return res.status(503).json({ msg: 'engine unavailable' });
   }
 }
 
 export async function getLiquidations(req: Request, res: Response) {
-  const marketId = req.params.marketId;
-  const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+  const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(req.params.marketId);
   if (!parsed.success) {
     return res.status(400).json({ msg: 'invalid market' });
   }
-  const market = parsed.data;
 
   try {
     const orders = await prisma.order.findMany({
       where: {
-        market: market as any,
+        market: parsed.data as any,
         type: 'MARKET',
         margin: 0,
         status: { in: ['FILLED', 'PARTIALLY_FILLED'] },
@@ -396,14 +206,17 @@ export async function getLiquidations(req: Request, res: Response) {
       },
     });
 
-    const data = orders.map((order) => ({
-      userId: order.userId,
-      kind: order.kind,
-      price: order.price,
-      qty: order.filledQty,
-      totalQty: order.totalQty,
-      time: order.transactionTime.getTime(),
-    }));
+    const data = [];
+    for (const order of orders) {
+      data.push({
+        userId: order.userId,
+        kind: order.kind,
+        price: order.price,
+        qty: order.filledQty,
+        totalQty: order.totalQty,
+        time: order.transactionTime.getTime(),
+      });
+    }
 
     return res.status(200).json({ ok: true, data });
   } catch (error) {
@@ -412,38 +225,78 @@ export async function getLiquidations(req: Request, res: Response) {
   }
 }
 
+export async function getCandles(req: Request, res: Response) {
+  const parsedMarket = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(req.params.marketId);
+  if (!parsedMarket.success) {
+    return res.status(400).json({ msg: 'invalid market' });
+  }
+
+  const interval = req.params.interval;
+  if (interval !== '1h' && interval !== '1d') {
+    return res.status(400).json({ msg: 'invalid interval, use 1h or 1d' });
+  }
+
+  let limit = 200;
+  if (typeof req.query.limit === 'string') {
+    const n = Number(req.query.limit);
+    if (n > 0) limit = Math.min(n, 1000);
+  }
+
+  const market = parsedMarket.data;
+
+  try {
+    let candles;
+    if (interval === '1h') {
+      candles = await prisma.candle1h.findMany({
+        where: { market: market as any },
+        orderBy: { openTime: 'desc' },
+        take: limit,
+      });
+    } else {
+      candles = await prisma.candle1d.findMany({
+        where: { market: market as any },
+        orderBy: { openTime: 'desc' },
+        take: limit,
+      });
+    }
+
+    const data = [];
+    for (let i = candles.length - 1; i >= 0; i--) {
+      const candle = candles[i]!;
+      data.push({
+        market: candle.market,
+        interval,
+        openTime: candle.openTime.getTime(),
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+        volume: candle.volume,
+      });
+    }
+
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    console.log('[candles] DB error:', error);
+    return res.status(200).json({ ok: true, data: [] });
+  }
+}
+
 export async function getTickerPrice(req: Request, res: Response) {
-  const marketId = req.params.marketId;
-  const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(marketId);
+  const parsed = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(req.params.marketId);
   if (!parsed.success) {
     return res.status(400).json({ msg: 'invalid market' });
   }
-  const market = parsed.data;
 
   try {
     const lastFill = await prisma.fill.findFirst({
-      where: {
-        order: {
-          market: market as any,
-        },
-      },
-      orderBy: {
-        transactionTime: 'desc',
-      },
-      select: {
-        price: true,
-      },
+      where: { order: { market: parsed.data as any } },
+      orderBy: { transactionTime: 'desc' },
+      select: { price: true },
     });
 
-    let price = 0;
-    if (lastFill) {
-      price = lastFill.price;
-    }
-
-    return res.status(200).json({
-      ok: true,
-      price: price,
-    });
+    const price = lastFill ? lastFill.price : 0;
+    return res.status(200).json({ ok: true, price });
   } catch (error) {
     console.log('[ticker/price] DB error:', error);
     return res.status(200).json({ ok: true, price: 0 });

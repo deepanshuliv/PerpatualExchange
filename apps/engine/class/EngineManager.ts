@@ -13,6 +13,8 @@ import MatchingEngine from './matchingEngine';
 import PostionManager from './PositionManager';
 
 const FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
+const ENGINE_STREAM = process.env.ENGINE_STREAM || 'to-engine';
+const BACKEND_STREAM = process.env.BACKEND_STREAM || 'to-backend';
 
 const SILENT_BROADCAST_TYPES = new Set([
   'markprice_updated',
@@ -40,7 +42,7 @@ export default class EngineManager {
   }
 
   async sendTobackend(response: EngineResponse.ENGINE_STREAM_MESSAGE) {
-    await this.publisherRedisClient.xAdd('to-backend', '*', { data: JSON.stringify(response) });
+    await this.publisherRedisClient.xAdd(BACKEND_STREAM, '*', { data: JSON.stringify(response) });
     if (!SILENT_BROADCAST_TYPES.has(response.type)) {
       const correlationId = 'correlationId' in response ? response.correlationId : 'N/A';
       console.log(
@@ -67,7 +69,7 @@ export default class EngineManager {
         type: 'trade_executed',
         payload: { market, price: fill.price, qty: fill.qty, transactionTime },
       });
-    }
+    } 
     // TODO THINK:- about it vcan be replaceable as can be sent at ws level after calculating
     if (fills.length > 0) {
       const lastFill = fills[fills.length - 1]!;
@@ -238,7 +240,7 @@ export default class EngineManager {
       if (!this.fundingRateTimerStarted) {
         this.fundingRateTimerStarted = true;
         setInterval(async () => {
-          this.publisherRedisClient.xAdd('to-engine', '*', {
+          this.publisherRedisClient.xAdd(ENGINE_STREAM, '*', {
             data: JSON.stringify({ type: 'run_funding_rate' }),
           });
         }, FUNDING_INTERVAL_MS);
@@ -346,7 +348,7 @@ export default class EngineManager {
       const readFrom = this.redisReadPointer === '' ? '$' : this.redisReadPointer;
 
       const response = (await this.subsciberRedisClient.xRead(
-        [{ key: 'to-engine', id: readFrom }],
+        [{ key: ENGINE_STREAM, id: readFrom }],
         {
           BLOCK: 0,
           COUNT: 100,

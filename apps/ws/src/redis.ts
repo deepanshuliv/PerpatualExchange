@@ -6,9 +6,9 @@ export async function startConsumerGroup() {
   const consumerGroups = redisClient.duplicate();
   await connectRedisClient(consumerGroups, 'WebSocketConsumer');
 
-  const streamKey = process.env.BACKEND_STREAM!;
-  const groupName = process.env.WS_CONSUMER_GROUP!;
-  const consumerName = process.env.WS_CONSUMER_NAME!;
+  const streamKey = process.env.BACKEND_STREAM || 'to-backend';
+  const groupName = process.env.WS_CONSUMER_GROUP || 'ws-group';
+  const consumerName = process.env.WS_CONSUMER_NAME || 'ws';
 
   try {
     await consumerGroups.xGroupCreate(streamKey, groupName, '$', {
@@ -20,9 +20,7 @@ export async function startConsumerGroup() {
       console.log('[WebSocket Consumer] Failed to initialize consumer group:', err);
       process.exit(1);
     }
-    
-    await consumerGroups.sendCommand(['XGROUP', 'SETID', streamKey, groupName, '$']);
-    console.log(`[WebSocket Consumer] Group '${groupName}' reset to stream tail ($)`);
+    console.log(`[WebSocket Consumer] Using existing group '${groupName}'`);
   }
 
   (async () => {
@@ -31,7 +29,7 @@ export async function startConsumerGroup() {
         groupName,
         consumerName,
         { key: streamKey, id: '>' },
-        { BLOCK: 1000, COUNT: 100 },
+        { BLOCK: 1000, COUNT: 0 },
       )) as unknown as RedisStreamResponse;
       if (!response) continue;
       if (!Array.isArray(response)) continue;

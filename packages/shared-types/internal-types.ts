@@ -8,6 +8,7 @@ import {
   type MARKET_AVAILABEL,
 } from './shared';
 
+
 export const ORDERMANAGERINSATNCE_SCHEMA = z.object({
   orderbook: z.string(),
   orders: z.string(),
@@ -16,6 +17,7 @@ export const ORDERMANAGERINSATNCE_SCHEMA = z.object({
   exchangeProfit: z.number(),
   lastOrderId: z.number().optional().default(0),
 });
+
 
 export type OrderManagerSnapShotInstance = z.infer<typeof ORDERMANAGERINSATNCE_SCHEMA>;
 export const POSITIONSNAPSHOTINSTANCE_SCHEMA = z.object({

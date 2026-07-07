@@ -5,6 +5,8 @@ const STREAM_URL =
   process.env.BINANCE_STREAM_URL ||
   'wss://stream.binancefuture.com/stream?streams=btcusdt@markPrice@1s/solusdt@markPrice@1s/ethusdt@markPrice@1s';
 
+const ENGINE_STREAM = process.env.ENGINE_STREAM || 'to-engine';
+
 export default class BinanceClassListner {
   private redisClient: RedisClientType;
 
@@ -54,7 +56,7 @@ export default class BinanceClassListner {
         else if (rawSymbol === 'SOLUSDT') market = 'SOLUSD';
         else market = rawSymbol;
 
-        await this.redisClient.xAdd('to-engine', '*', {
+        await this.redisClient.xAdd(ENGINE_STREAM, '*', {
           data: JSON.stringify({
             type: 'markprice_updated',
             payload: { price: Number(data.p), market },

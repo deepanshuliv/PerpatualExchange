@@ -1,15 +1,38 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useTrading } from "../context/TradingContext";
+import { useTrading, type ChartInterval } from "../context/TradingContext";
 import {
   formatFundingRate,
   fundingRateColorClass,
   FUNDING_INTERVAL_MS,
 } from "../utils/funding";
 
+const CHART_HEIGHT = 320;
+const CHART_PADDING = { top: 16, right: 56, bottom: 24, left: 8 };
+
+function formatCandleTime(openTime: number, interval: ChartInterval): string {
+  const date = new Date(openTime);
+  if (interval === "1d") {
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function TradingChart() {
-  const { market, lastPrice, markPrice, previewFundingRate, fundingCountdown } = useTrading();
+  const {
+    market,
+    lastPrice,
+    markPrice,
+    previewFundingRate,
+    fundingCountdown,
+    chartInterval,
+    setChartInterval,
+    candles,
+    loadingCandles,
+    wsReady,
+  } = useTrading();
+
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<"chart" | "depth" | "margin" | "funding" | "market_info">("chart");
   const [priceType, setPriceType] = useState<"last" | "mark" | "index">("last");
@@ -32,12 +55,6 @@ export default function TradingChart() {
     return { label: "BTC-PERP", precision: 1 };
   }, [market]);
 
-  const chartData = useMemo(() => {
-    const fallbackPrice = lastPrice > 0 ? lastPrice : markPrice > 0 ? markPrice : 0;
-    if (fallbackPrice <= 0) return [];
-    return [{ time: "—", price: fallbackPrice }];
-  }, [lastPrice, markPrice]);
-
   const activePrice =
     (priceType === "mark" || priceType === "index") && markPrice > 0
       ? markPrice
@@ -46,40 +63,44 @@ export default function TradingChart() {
         : markPrice;
 
   const { minPrice, maxPrice, priceRange, scaleY } = useMemo(() => {
-    if (chartData.length === 0) {
+    if (candles.length === 0) {
+      const fallback = activePrice > 0 ? activePrice : 0;
       return {
-        minPrice: 0,
-        maxPrice: 0,
-        priceRange: 0,
-        scaleY: () => 0,
+        minPrice: fallback * 0.998,
+        maxPrice: fallback * 1.002,
+        priceRange: fallback * 0.004 || 1,
+        scaleY: () => CHART_HEIGHT / 2,
       };
     }
 
-    const prices = chartData.map((d) => d.price);
-    const maxVal = Math.max(...prices) * 1.002;
-    const minVal = Math.min(...prices) * 0.998;
+    const lows = candles.map((c) => c.low);
+    const highs = candles.map((c) => c.high);
+    const minVal = Math.min(...lows) * 0.998;
+    const maxVal = Math.max(...highs) * 1.002;
     const range = maxVal - minVal || 1;
-    const chartHeight = 300;
-    const padding = 15;
+    const innerHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom;
 
     return {
       minPrice: minVal,
       maxPrice: maxVal,
       priceRange: range,
       scaleY: (price: number) =>
-        chartHeight - padding - ((price - minVal) / range) * (chartHeight - 2 * padding),
+        CHART_PADDING.top + innerHeight - ((price - minVal) / range) * innerHeight,
     };
-  }, [chartData]);
+  }, [candles, activePrice]);
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
-    if (chartData.length === 0) return;
+    if (candles.length === 0) return;
     const svgRect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - svgRect.left;
-    setMouseCoords({ x, y: e.clientY - svgRect.top });
+    const chartWidth = svgRect.width - CHART_PADDING.left - CHART_PADDING.right;
+    const x = e.clientX - svgRect.left - CHART_PADDING.left;
+    setMouseCoords({ x: e.clientX - svgRect.left, y: e.clientY - svgRect.top });
 
-    const chartWidth = svgRect.width - 55;
-    const step = chartWidth / chartData.length;
-    const index = Math.min(Math.max(Math.floor(x / step), 0), chartData.length - 1);
+    const candleWidth = chartWidth / candles.length;
+    const index = Math.min(
+      Math.max(Math.floor(x / candleWidth), 0),
+      candles.length - 1,
+    );
     setHoveredIndex(index);
   };
 
@@ -90,13 +111,13 @@ export default function TradingChart() {
 
   const getHoverPrice = () => {
     if (!mouseCoords) return 0;
-    const chartHeight = 300;
-    const padding = 15;
-    const relativeY = chartHeight - padding - mouseCoords.y;
-    return minPrice + (relativeY / (chartHeight - 2 * padding)) * priceRange;
+    const innerHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom;
+    const relativeY = mouseCoords.y - CHART_PADDING.top;
+    return minPrice + ((innerHeight - relativeY) / innerHeight) * priceRange;
   };
 
-  const hoveredPoint = hoveredIndex !== null ? chartData[hoveredIndex] : chartData[chartData.length - 1];
+  const hoveredCandle =
+    hoveredIndex !== null ? candles[hoveredIndex] : candles[candles.length - 1];
 
   const displayFundingRate = previewFundingRate;
 
@@ -143,24 +164,42 @@ export default function TradingChart() {
           ))}
         </div>
 
-        <div className="flex items-center bg-[#12161c] border border-[#171a1f] rounded p-0.5 space-x-0.5">
-          {[
-            { id: "last", label: "Last" },
-            { id: "mark", label: "Mark" },
-            { id: "index", label: "Index" },
-          ].map((type) => (
-            <button
-              key={type.id}
-              onClick={() => setPriceType(type.id as typeof priceType)}
-              className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${
-                priceType === type.id
-                  ? "bg-[#171a1f] text-white"
-                  : "text-[#8491a5] hover:text-white"
-              }`}
-            >
-              {type.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-[#12161c] border border-[#171a1f] rounded p-0.5 space-x-0.5">
+            {(["1h", "1d"] as ChartInterval[]).map((interval) => (
+              <button
+                key={interval}
+                onClick={() => setChartInterval(interval)}
+                className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${
+                  chartInterval === interval
+                    ? "bg-[#171a1f] text-white"
+                    : "text-[#8491a5] hover:text-white"
+                }`}
+              >
+                {interval.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center bg-[#12161c] border border-[#171a1f] rounded p-0.5 space-x-0.5">
+            {[
+              { id: "last", label: "Last" },
+              { id: "mark", label: "Mark" },
+              { id: "index", label: "Index" },
+            ].map((type) => (
+              <button
+                key={type.id}
+                onClick={() => setPriceType(type.id as typeof priceType)}
+                className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${
+                  priceType === type.id
+                    ? "bg-[#171a1f] text-white"
+                    : "text-[#8491a5] hover:text-white"
+                }`}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -168,27 +207,39 @@ export default function TradingChart() {
         <div className="flex-1 flex flex-col min-h-0 bg-[#08090b]">
           <div className="px-4 py-2 flex flex-wrap items-center text-[10px] select-none shrink-0 font-semibold text-zinc-500 gap-1.5 bg-[#08090b]">
             <span className="text-white font-bold text-[11px]">{marketDetails.label}</span>
-            <span className="text-zinc-500 font-semibold">· Live · Backpack</span>
+            <span className="text-zinc-500 font-semibold">
+              · {wsReady ? "WS live" : "WS connecting"} · {chartInterval.toUpperCase()} OHLC
+            </span>
             {activePrice > 0 && (
               <span className="text-[#00c087] font-mono font-bold ml-2">
                 {activePrice.toFixed(marketDetails.precision)}
               </span>
             )}
-            {hoveredPoint && chartData.length > 1 && (
+            {hoveredCandle && (
               <span className="text-zinc-500 font-mono ml-2">
-                {hoveredPoint.time} · {hoveredPoint.price.toFixed(marketDetails.precision)}
+                O {hoveredCandle.open.toFixed(marketDetails.precision)} · H{" "}
+                {hoveredCandle.high.toFixed(marketDetails.precision)} · L{" "}
+                {hoveredCandle.low.toFixed(marketDetails.precision)} · C{" "}
+                {hoveredCandle.close.toFixed(marketDetails.precision)} ·{" "}
+                {formatCandleTime(hoveredCandle.openTime, chartInterval)}
               </span>
             )}
           </div>
 
-          <div className="flex-1 w-full bg-[#08090b] relative overflow-hidden">
-            {chartData.length === 0 ? (
+          <div className="flex-1 w-full bg-[#08090b] relative overflow-hidden min-h-[360px]">
+            {loadingCandles && candles.length === 0 ? (
               <div className="flex items-center justify-center h-full text-[#8491a5] text-xs">
-                Waiting for live price data...
+                {wsReady ? "Loading candle history..." : "Connecting WebSocket..."}
+              </div>
+            ) : candles.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-[#8491a5] text-xs">
+                Waiting for trade data to build candles...
               </div>
             ) : (
               <svg
                 className="w-full h-full cursor-crosshair overflow-hidden"
+                viewBox={`0 0 800 ${CHART_HEIGHT}`}
+                preserveAspectRatio="none"
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
               >
@@ -197,13 +248,19 @@ export default function TradingChart() {
                   const y = scaleY(price);
                   return (
                     <g key={`grid-line-${idx}`}>
-                      <line x1={0} y1={y} x2="100%" y2={y} stroke="#12161c" strokeWidth={1} />
+                      <line
+                        x1={CHART_PADDING.left}
+                        y1={y}
+                        x2={800 - CHART_PADDING.right}
+                        y2={y}
+                        stroke="#12161c"
+                        strokeWidth={1}
+                      />
                       <text
-                        x="100%"
-                        dx={-48}
+                        x={800 - CHART_PADDING.right + 4}
                         y={y + 4}
                         fill="#4b5563"
-                        className="font-mono text-[9px] font-bold text-right"
+                        className="font-mono text-[9px] font-bold"
                       >
                         {price.toFixed(marketDetails.precision)}
                       </text>
@@ -211,107 +268,81 @@ export default function TradingChart() {
                   );
                 })}
 
-                {chartData.length > 1 && (
-                  <polyline
-                    fill="none"
-                    stroke="#00c087"
-                    strokeWidth={1.5}
-                    points={chartData
-                      .map((d, idx) => {
-                        const step = 90 / chartData.length;
-                        const x = `${idx * step + 2}%`;
-                        const y = scaleY(d.price);
-                        return `${x},${y}`;
-                      })
-                      .join(" ")}
-                  />
-                )}
+                {candles.map((candle, idx) => {
+                  const chartWidth = 800 - CHART_PADDING.left - CHART_PADDING.right;
+                  const slotWidth = chartWidth / candles.length;
+                  const bodyWidth = Math.max(slotWidth * 0.6, 2);
+                  const centerX = CHART_PADDING.left + idx * slotWidth + slotWidth / 2;
+                  const isGreen = candle.close >= candle.open;
+                  const color = isGreen ? "#00c087" : "#f6465d";
+                  const openY = scaleY(candle.open);
+                  const closeY = scaleY(candle.close);
+                  const highY = scaleY(candle.high);
+                  const lowY = scaleY(candle.low);
+                  const bodyTop = Math.min(openY, closeY);
+                  const bodyHeight = Math.max(Math.abs(closeY - openY), 1);
 
-                {chartData.map((d, idx) => {
-                  const step = 90 / chartData.length;
-                  const xPct = `${idx * step + 2}%`;
-                  const y = scaleY(d.price);
                   return (
-                    <circle
-                      key={`point-${idx}`}
-                      cx={xPct}
-                      cy={y}
-                      r={chartData.length === 1 ? 4 : 2}
-                      fill="#00c087"
-                    />
+                    <g key={`candle-${candle.openTime}-${idx}`}>
+                      <line
+                        x1={centerX}
+                        y1={highY}
+                        x2={centerX}
+                        y2={lowY}
+                        stroke={color}
+                        strokeWidth={1}
+                      />
+                      <rect
+                        x={centerX - bodyWidth / 2}
+                        y={bodyTop}
+                        width={bodyWidth}
+                        height={bodyHeight}
+                        fill={color}
+                      />
+                    </g>
                   );
                 })}
 
                 {activePrice > 0 && (
                   <g>
                     <line
-                      x1="0"
+                      x1={CHART_PADDING.left}
                       y1={scaleY(activePrice)}
-                      x2="100%"
+                      x2={800 - CHART_PADDING.right}
                       y2={scaleY(activePrice)}
                       stroke="#00c087"
                       strokeWidth={1}
                       strokeDasharray="2,3"
                       opacity={0.7}
                     />
-                    <rect
-                      x="100%"
-                      transform="translate(-52, -7)"
-                      y={scaleY(activePrice)}
-                      width="50"
-                      height="14"
-                      rx={2}
-                      fill="#00c087"
-                    />
-                    <text
-                      x="100%"
-                      dx={-27}
-                      y={scaleY(activePrice) + 3}
-                      textAnchor="middle"
-                      fill="#08090b"
-                      className="font-mono text-[9px] font-bold"
-                    >
-                      {activePrice.toFixed(marketDetails.precision)}
-                    </text>
                   </g>
                 )}
 
-                {mouseCoords && chartData.length > 1 && (
+                {mouseCoords && candles.length > 0 && (
                   <g>
                     <line
                       x1={mouseCoords.x}
-                      y1={0}
+                      y1={CHART_PADDING.top}
                       x2={mouseCoords.x}
-                      y2="85%"
+                      y2={CHART_HEIGHT - CHART_PADDING.bottom}
                       stroke="#5d6b7e"
                       strokeWidth={1}
                       strokeDasharray="3,3"
                       opacity={0.6}
                     />
                     <line
-                      x1={0}
+                      x1={CHART_PADDING.left}
                       y1={mouseCoords.y}
-                      x2="100%"
+                      x2={800 - CHART_PADDING.right}
                       y2={mouseCoords.y}
                       stroke="#5d6b7e"
                       strokeWidth={1}
                       strokeDasharray="3,3"
                       opacity={0.6}
                     />
-                    <rect
-                      x="100%"
-                      transform="translate(-52, -7)"
-                      y={mouseCoords.y}
-                      width="50"
-                      height="14"
-                      rx={2}
-                      fill="#1f2937"
-                    />
                     <text
-                      x="100%"
-                      dx={-27}
+                      x={800 - CHART_PADDING.right + 4}
                       y={mouseCoords.y + 3}
-                      textAnchor="middle"
                       fill="#f3f4f6"
                       className="font-mono text-[9px] font-bold"
                     >

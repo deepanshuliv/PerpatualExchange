@@ -45,8 +45,16 @@ export const apiService = {
     return res.json();
   },
 
-  getAvailableEquity: async (token: string, market: string) => {
-    const res = await fetch(`${API_BASE}/equity/available?market=${market}`, {
+
+  getCandles: async (market: string, interval: '1h' | '1d', limit = 200) => {
+    const res = await fetch(`${API_BASE}/candles/${market}/${interval}?limit=${limit}`, {
+      headers: getHeaders(),
+    });
+    return res.json();
+  },
+
+  getAvailableEquity: async (token: string) => {
+    const res = await fetch(`${API_BASE}/equity/available`, {
       headers: getHeaders(token),
     });
     return res.json();

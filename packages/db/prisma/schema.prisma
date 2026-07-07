@@ -60,7 +60,7 @@ model order {
 }
 
 model fill {
-  id              String   @id @default(uuid())
+  id              String   @id 
   orderId         String
   order           order    @relation(fields: [orderId], references: [id])
   buyerId         String
@@ -72,12 +72,55 @@ model fill {
   type            Type
   kind            Kind
   status          Status
-  transactionTime DateTime @default(now())
+  transactionTime DateTime 
   createdAt       DateTime @default(now())
 }
+
 
 model market {
   id       String @id @default(uuid())
   slug     String
   imageUrl String
 }
+
+model tick {
+  id     Int      @default(autoincrement())
+  time   DateTime @default(now())
+  market Market
+  price  Float
+  volume Float
+
+  @@id([time, id])
+  @@index([market, time])
+  @@map("ticks")
+}
+
+model candle1h {
+  openTime DateTime
+  market   Market
+  open     Float
+  high     Float
+  low      Float
+  close    Float
+  volume   Float
+
+  @@id([openTime, market])
+  @@index([market, openTime])
+  @@map("candles_1h")
+}
+
+model candle1d {
+  openTime DateTime
+  market   Market
+  open     Float
+  high     Float
+  low      Float
+  close    Float
+  volume   Float
+
+  @@id([openTime, market])
+  @@index([market, openTime])
+  @@map("candles_1d")
+}
+
+

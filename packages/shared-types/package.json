@@ -3,7 +3,8 @@
   "private": true,
   "exports": {
     ".": "./index.ts",
-    "./internal-types": "./internal-types.ts"
+    "./internal-types": "./internal-types.ts",
+    "./market-data": "./market-data.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

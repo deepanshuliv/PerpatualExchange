@@ -11,6 +11,7 @@ import {
   getDepth,
   getTickerPrice,
   getLiquidations,
+  getCandles,
 } from '../controller/exchange';
 
 const exchangeRoutes = Router();
@@ -25,5 +26,6 @@ exchangeRoutes.get('/fills', isAuth, getFills);
 exchangeRoutes.get('/depth/:marketId', getDepth);
 exchangeRoutes.get('/ticker/price/:marketId', getTickerPrice);
 exchangeRoutes.get('/liquidations/:marketId', getLiquidations);
+exchangeRoutes.get('/candles/:marketId/:interval', getCandles);
 
 export default exchangeRoutes;
