@@ -12,7 +12,7 @@ import MatchingEngine from './matchingEngine';
 import PostionManager from './PositionManager';
 
 const FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
-const SNAPSHOT_INTERVAL_MS = 8 * 60 * 60 * 1000;
+const SNAPSHOT_INTERVAL_MS = 3 * 1000;
 const RPC_REPLAY_WINDOW_MS = 60_000;
 const ENGINE_STREAM = process.env.ENGINE_STREAM || 'to-engine';
 const BACKEND_STREAM = process.env.BACKEND_STREAM || 'to-backend';

@@ -249,7 +249,7 @@ export default function OrderBook() {
 
           <div
             ref={bookRef}
-            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden font-mono text-xs"
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar font-mono text-xs"
           >
             {loadingDepth ? (
               <div className="flex items-center justify-center h-full text-zinc-600 text-[10px]">
