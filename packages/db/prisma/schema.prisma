@@ -15,6 +15,7 @@ enum Kind {
 enum Type {
   LIMIT
   MARKET
+  LIQUIDATION
 }
 
 enum Status {

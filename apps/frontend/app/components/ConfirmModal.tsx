@@ -7,7 +7,13 @@ export type ConfirmVariant = "danger" | "default" | "success";
 
 export interface ConfirmDetail {
   label: string;
-  value: string;
+  value?: string;
+  input?: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    prefix?: string;
+  };
 }
 
 interface ConfirmModalProps {
@@ -20,6 +26,7 @@ interface ConfirmModalProps {
   cancelLabel?: string;
   variant?: ConfirmVariant;
   loading?: boolean;
+  confirmDisabled?: boolean;
   icon: React.ReactNode;
   details?: ConfirmDetail[];
 }
@@ -58,6 +65,7 @@ export default function ConfirmModal({
   cancelLabel = "Cancel",
   variant = "default",
   loading = false,
+  confirmDisabled = false,
   icon,
   details,
 }: ConfirmModalProps) {
@@ -102,7 +110,24 @@ export default function ConfirmModal({
                 className="flex items-center justify-between text-xs"
               >
                 <span className="text-[#8491a5] font-semibold">{detail.label}</span>
-                <span className="text-white font-bold font-mono">{detail.value}</span>
+                {detail.input ? (
+                  <div className="flex items-center gap-1">
+                    {detail.input.prefix && (
+                      <span className="text-[#8491a5] font-mono">{detail.input.prefix}</span>
+                    )}
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={detail.input.value}
+                      onChange={(e) => detail.input!.onChange(e.target.value)}
+                      placeholder={detail.input.placeholder}
+                      disabled={loading}
+                      className="w-28 text-right text-white font-bold font-mono bg-[#171a1f] border border-[#242b35] rounded-lg px-2 py-1 focus:outline-none focus:border-[#00c087] disabled:opacity-50"
+                    />
+                  </div>
+                ) : (
+                  <span className="text-white font-bold font-mono">{detail.value}</span>
+                )}
               </div>
             ))}
           </div>
@@ -118,7 +143,7 @@ export default function ConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            disabled={loading}
+            disabled={loading || confirmDisabled}
             className={`flex-1 py-3 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 cursor-pointer ${styles.confirmBtn}`}
           >
             {loading ? "Processing..." : confirmLabel}

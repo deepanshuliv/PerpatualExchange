@@ -28,7 +28,8 @@ export default class Balance {
   createUserBalanceAccount(userId: string) {
     if (!this.user[userId]) {
       this.user[userId] = {
-        balance: 10000,
+        // New accounts should start at 0; funding happens via explicit onramp/add_balance.
+        balance: 0,
         lockedBalance: 0,
       };
     }
@@ -58,7 +59,11 @@ export default class Balance {
       this.createUserBalanceAccount(userId);
     }
     const account = this.user[userId]!;
-    account.balance += amount;
+    const delta = Number(amount);
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return account.balance;
+    }
+    account.balance += delta;
     if (account.balance < 0) {
       account.balance = 0;
     }

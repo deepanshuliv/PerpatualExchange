@@ -67,7 +67,7 @@ type GET_BALANCE_RESPONSE = z.infer<typeof GET_BALANCE_RESPONSE_SCHEMA>;
 
 const ADD_BALANCE_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("add_balance"),
-  payload: z.null(),
+  payload: z.number(),
 });
 type ADD_BALANCE_RESPONSE = z.infer<typeof ADD_BALANCE_RESPONSE_SCHEMA>;
 
@@ -109,6 +109,27 @@ const GET_POSITION_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   payload: z.union([POSITION_DETAILS_SCHEMA, z.array(POSITION_DETAILS_SCHEMA)]).nullable(),
 });
 type GET_POSITION_RESPONSE = z.infer<typeof GET_POSITION_RESPONSE_SCHEMA>;
+
+const OPEN_ORDER_DETAILS_SCHEMA = z.object({
+  orderId: z.string(),
+  userId: z.string(),
+  kind: KIND_SCHEMA,
+  market: MARKET_AVAILABEL_SCHEMA,
+  price: z.number(),
+  totalQty: z.number(),
+  filledQty: z.number(),
+  margin: z.number(),
+  type: TYPE_SCHEMA,
+  status: z.string(),
+  createdAt: z.date().or(z.string()),
+  transactionTime: z.number(),
+});
+
+const GET_OPEN_ORDERS_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
+  type: z.literal('get_open_orders'),
+  payload: z.array(OPEN_ORDER_DETAILS_SCHEMA),
+});
+type GET_OPEN_ORDERS_RESPONSE = z.infer<typeof GET_OPEN_ORDERS_RESPONSE_SCHEMA>;
 
 const GET_FILLS_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("get_fills"),
@@ -186,6 +207,7 @@ const BACKEND_RESPONSE_SCHEMA = z.discriminatedUnion('type', [
   ADD_BALANCE_RESPONSE_SCHEMA,
   ERROR_RESPONSE_SCHEMA,
   GET_POSITION_RESPONSE_SCHEMA,
+  GET_OPEN_ORDERS_RESPONSE_SCHEMA,
   GET_FILLS_RESPONSE_SCHEMA,
   GET_DEPTH_RESPONSE_SCHEMA,
 ]);

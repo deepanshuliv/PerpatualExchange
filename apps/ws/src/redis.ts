@@ -1,6 +1,7 @@
 import { connectRedisClient, redisClient } from '@repo/redis';
-import { WebsocketTypes, type RedisStreamResponse } from '@repo/shared-types';
+import { EngineResponse, WebsocketTypes, type RedisStreamResponse } from '@repo/shared-types';
 import { checkMarketUpdateAndSendToSubsribedUser } from './broadcast';
+import { seedMarketCacheFromStream } from './candleState';
 
 export async function startConsumerGroup() {
   const consumerGroups = redisClient.duplicate();
@@ -23,6 +24,8 @@ export async function startConsumerGroup() {
     console.log(`[WebSocket Consumer] Using existing group '${groupName}'`);
   }
 
+  await seedMarketCacheFromStream(consumerGroups);
+
   (async () => {
     while (1) {
       const response = (await consumerGroups.xReadGroup(
@@ -44,11 +47,17 @@ export async function startConsumerGroup() {
             if (parseResult.success) {
               checkMarketUpdateAndSendToSubsribedUser(parseResult.data);
             } else {
-              console.log(
-                '[WebSocket Consumer] Skipping unhandled engine message:',
-                parsedData?.type ?? 'unknown',
-                parseResult.error.issues[0]?.message,
-              );
+              // The backend stream contains both WS broadcast events and backend API responses.
+              // WS only cares about the broadcast events; silently ignore the backend responses
+              // to avoid flooding logs (especially during simulations / polling).
+              const isBackendResponse = EngineResponse.BACKEND_RESPONSE_SCHEMA.safeParse(parsedData).success;
+              if (!isBackendResponse) {
+                console.log(
+                  '[WebSocket Consumer] Skipping unhandled engine message:',
+                  parsedData?.type ?? 'unknown',
+                  parseResult.error.issues[0]?.message,
+                );
+              }
             }
 
             await consumerGroups.xAck(streamKey, groupName, message.id);

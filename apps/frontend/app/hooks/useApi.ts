@@ -1,5 +1,7 @@
 'use client';
 
+import { createCorrelationId } from '../utils/correlationId';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
@@ -38,6 +40,13 @@ export const apiService = {
     return res.json();
   },
 
+  getMarkPrice: async (market: string) => {
+    const res = await fetch(`${API_BASE}/ticker/mark/${market}`, {
+      headers: getHeaders(),
+    });
+    return res.json();
+  },
+
   getLiquidations: async (market: string) => {
     const res = await fetch(`${API_BASE}/liquidations/${market}`, {
       headers: getHeaders(),
@@ -45,6 +54,12 @@ export const apiService = {
     return res.json();
   },
 
+  getTrades: async (market: string) => {
+    const res = await fetch(`${API_BASE}/trades/${market}`, {
+      headers: getHeaders(),
+    });
+    return res.json();
+  },
 
   getCandles: async (market: string, interval: '1h' | '1d', limit = 200) => {
     const res = await fetch(`${API_BASE}/candles/${market}/${interval}?limit=${limit}`, {
@@ -81,6 +96,26 @@ export const apiService = {
     return res.json();
   },
 
+  provisionSimUser: async (label: string, amount: number) => {
+    const res = await fetch(`${API_BASE}/sim/provision`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ label, amount }),
+    });
+    const json = await res.json();
+    return { status: res.status, ...json };
+  },
+
+  injectMarkPrice: async (market: string, price: number) => {
+    const res = await fetch(`${API_BASE}/sim/inject-mark-price`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ market, price }),
+    });
+    const json = await res.json();
+    return { status: res.status, ...json };
+  },
+
   signup: async (username: string, password?: string) => {
     const res = await fetch(`${API_BASE}/signup`, {
       method: 'POST',
@@ -106,7 +141,7 @@ export const apiService = {
       method: 'POST',
       headers: getHeaders(token),
       body: JSON.stringify({
-        correlationId: crypto.randomUUID(),
+        correlationId: createCorrelationId(),
         type: 'add_balance',
         data: { amount },
       }),
@@ -120,10 +155,14 @@ export const apiService = {
       method: 'POST',
       headers: getHeaders(token),
       body: JSON.stringify({
-        correlationId: crypto.randomUUID(),
+        correlationId: createCorrelationId(),
         type: 'create_order',
         data: {
-          ...orderData,
+          qty: String(orderData.qty),
+          price: String(orderData.price),
+          market: orderData.market,
+          type: orderData.type,
+          kind: orderData.kind,
           margin: String(orderData.margin),
         },
       }),
@@ -137,7 +176,7 @@ export const apiService = {
       method: 'POST',
       headers: getHeaders(token),
       body: JSON.stringify({
-        correlationId: crypto.randomUUID(),
+        correlationId: createCorrelationId(),
         type: 'cancel_order',
         data: { orderId },
       }),

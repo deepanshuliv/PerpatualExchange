@@ -1,5 +1,7 @@
 import z from 'zod';
-import { KIND_SCHEMA, MARKET_AVAILABEL_SCHEMA, TYPE_SCHEMA } from '../shared';
+import { KIND_SCHEMA, MARKET_AVAILABEL_SCHEMA, ORDER_TYPE_SCHEMA } from '../shared';
+
+const decimalString = z.union([z.string(), z.number()]).transform(String);
 
 const BASE_ENGINE_SCHEMA = z.object({
   correlationId: z.string(),
@@ -10,12 +12,12 @@ const ENGINE_PAYLOAD_SCHEMA = z.object({ userId: z.string() });
 const CREATE_ORDER_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   type: z.literal('create_order'),
   payload: ENGINE_PAYLOAD_SCHEMA.extend({
-    qty: z.number(),
-    price: z.number(),
+    qty: decimalString,
+    price: decimalString,
     market: MARKET_AVAILABEL_SCHEMA,
-    type: TYPE_SCHEMA,
+    type: ORDER_TYPE_SCHEMA,
     kind: KIND_SCHEMA,
-    margin: z.number(),
+    margin: decimalString,
   }),
 });
 type CREATE_ORDER = z.infer<typeof CREATE_ORDER_SCHEMA>;
@@ -55,6 +57,14 @@ const GET_POSITION_SCHEMA = BASE_ENGINE_SCHEMA.extend({
 });
 type GET_POSITION = z.infer<typeof GET_POSITION_SCHEMA>;
 
+const GET_OPEN_ORDERS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
+  type: z.literal('get_open_orders'),
+  payload: ENGINE_PAYLOAD_SCHEMA.extend({
+    market: MARKET_AVAILABEL_SCHEMA.optional(),
+  }),
+});
+type GET_OPEN_ORDERS = z.infer<typeof GET_OPEN_ORDERS_SCHEMA>;
+
 const GET_FILLS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   type: z.literal('get_fills'),
   payload: ENGINE_PAYLOAD_SCHEMA,
@@ -88,6 +98,7 @@ const BACKEND_ENGINE_REQUEST_SCHEMA = z.union([
   ADD_BALANCE_SCHEMA,
   CANCEL_ORDER_SCHEMA,
   GET_POSITION_SCHEMA,
+  GET_OPEN_ORDERS_SCHEMA,
   GET_FILLS_SCHEMA,
   GET_DEPTH_SCHEMA,
 ]);
@@ -99,6 +110,7 @@ const ENGINE_REQUEST_SCHEMA = z.union([
   ADD_BALANCE_SCHEMA,
   CANCEL_ORDER_SCHEMA,
   GET_POSITION_SCHEMA,
+  GET_OPEN_ORDERS_SCHEMA,
   GET_FILLS_SCHEMA,
   RUN_FUNDING_RATE_SCHEMA,
   GET_DEPTH_SCHEMA,
@@ -117,6 +129,7 @@ export {
   type GET_BALANCE,
   type GET_DEPTH,
   type GET_FILLS,
+  type GET_OPEN_ORDERS,
   type GET_MARKET_PRICE,
   type GET_POSITION,
 };

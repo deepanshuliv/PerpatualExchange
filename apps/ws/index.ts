@@ -1,11 +1,19 @@
 import { WS_SUBSCRIBE_SCHEMA } from '@repo/shared-types';
 import { WebSocketServer } from 'ws';
-import { registerClient, unregisterClient } from './src/broadcast';
+import {
+  registerClient,
+  sendCandleSnapshot,
+  sendDepthSnapshot,
+  sendMarkPriceSnapshot,
+  startOrderbookCandleSampler,
+  unregisterClient,
+} from './src/broadcast';
 import { startConsumerGroup } from './src/redis';
 
 async function bootstrap() {
   try {
     await startConsumerGroup();
+    startOrderbookCandleSampler();
 
     const wss = new WebSocketServer({ port: 8080 });
 
@@ -46,6 +54,15 @@ async function bootstrap() {
         if (method === 'SUBSCRIBE') {
           for (const param of params) {
             client.subscriptions.add(param);
+            if (param.startsWith('candle.')) {
+              sendCandleSnapshot(client, param);
+            }
+            if (param.startsWith('depth.')) {
+              sendDepthSnapshot(client, param);
+            }
+            if (param.startsWith('markPrice.')) {
+              sendMarkPriceSnapshot(client, param);
+            }
           }
         } else if (method === 'UNSUBSCRIBE') {
           for (const param of params) {

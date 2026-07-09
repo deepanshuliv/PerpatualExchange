@@ -11,13 +11,13 @@ const MARKETS: { value: SimMarket; label: string; symbol: string }[] = [
 ];
 
 const DEFAULT_CONFIG: LoadTestConfig = {
-  users: 4,
-  ordersPerUser: 10,
+  users: 6,
+  ordersPerUser: 12,
   market: 'BTCUSD',
-  qtyMin: 0.001,
-  qtyMax: 0.01,
-  delayMinSec: 0,
-  delayMaxSec: 10,
+  qtyMin: 0.002,
+  qtyMax: 0.015,
+  delayMinSec: 0.3,
+  delayMaxSec: 2,
 };
 
 export default function SimulationPage() {
@@ -93,8 +93,8 @@ export default function SimulationPage() {
       <div className="max-w-3xl mx-auto px-6 py-10">
         <h1 className="text-2xl font-semibold tracking-tight mb-2">Order Load Test</h1>
         <p className="text-sm text-[#9ca3af] mb-1">
-          Each user picks a random side, price around the index, and quantity within your min/max
-          range, then waits a random interval before the next order.
+          Runs in phases: seeds the book, crosses the spread to generate trades, opens leveraged
+          positions, then injects an adverse mark price so liquidations show up in the trading UI.
         </p>
         <Link
           href="/"
@@ -146,7 +146,7 @@ export default function SimulationPage() {
                 </option>
               ))}
             </select>
-            <p className="text-[11px] text-[#6b7280] mt-1">Index fetched from feed when run starts</p>
+            <p className="text-[11px] text-[#6b7280] mt-1">Mark price fetched from feed when run starts</p>
           </div>
 
           <div>

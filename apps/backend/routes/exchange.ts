@@ -10,7 +10,9 @@ import {
   getFills,
   getDepth,
   getTickerPrice,
+  getMarkPrice,
   getLiquidations,
+  getTrades,
   getCandles,
 } from '../controller/exchange';
 
@@ -25,7 +27,9 @@ exchangeRoutes.get('/orders/open/:marketId', isAuth, getOpenOrders);
 exchangeRoutes.get('/fills', isAuth, getFills);
 exchangeRoutes.get('/depth/:marketId', getDepth);
 exchangeRoutes.get('/ticker/price/:marketId', getTickerPrice);
+exchangeRoutes.get('/ticker/mark/:marketId', getMarkPrice);
 exchangeRoutes.get('/liquidations/:marketId', getLiquidations);
+exchangeRoutes.get('/trades/:marketId', getTrades);
 exchangeRoutes.get('/candles/:marketId/:interval', getCandles);
 
 export default exchangeRoutes;

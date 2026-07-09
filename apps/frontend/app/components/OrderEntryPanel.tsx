@@ -1,15 +1,25 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useTrading } from '../context/TradingContext';
 
+const BP = {
+  bg: '#0B0E11',
+  border: '#2B2F36',
+  inputBg: '#161A1E',
+  muted: '#848E9C',
+  green: '#14F195',
+  red: '#F23645',
+  errorBg: 'rgba(255, 77, 79, 0.1)',
+  errorBorder: '#3A1C1C',
+} as const;
+
 export default function OrderEntryPanel() {
-  const { market, balance, lastPrice, user, setAuthModalMode, placeOrder, refreshUserData } =
+  const { market, balance, lastPrice, user, token, setAuthModalMode, placeOrder, refreshUserData } =
     useTrading();
 
   const [side, setSide] = useState<'LONG' | 'SHORT'>('LONG');
-  const [orderType, setOrderType] = useState<'LIMIT' | 'MARKET' | 'CONDITIONAL'>('LIMIT');
+  const [orderType, setOrderType] = useState<'LIMIT' | 'MARKET'>('LIMIT');
 
   const [priceInput, setPriceInput] = useState('');
   const [qtyInput, setQtyInput] = useState('');
@@ -21,15 +31,16 @@ export default function OrderEntryPanel() {
 
   const getMarketInfo = () => {
     if (market === 'ETHUSD') {
-      return { symbol: 'ETH', leverage: 50, color: 'bg-[#627eea]' };
+      return { symbol: 'ETH', leverage: 50, badgeBg: 'bg-[#627eea]' };
     }
     if (market === 'SOLUSD') {
-      return { symbol: 'SOL', leverage: 20, color: 'bg-[#14f195]' };
+      return { symbol: 'SOL', leverage: 20, badgeBg: 'bg-[#14F195]' };
     }
-    return { symbol: 'BTC', leverage: 75, color: 'bg-[#f7931a]' };
+    return { symbol: 'BTC', leverage: 75, badgeBg: 'bg-[#f7931a]' };
   };
 
-  const { symbol, leverage, color } = getMarketInfo();
+  const { symbol, leverage, badgeBg } = getMarketInfo();
+  const accentColor = side === 'LONG' ? BP.green : BP.red;
 
   useEffect(() => {
     if (lastPrice > 0 && !priceInput) {
@@ -50,13 +61,14 @@ export default function OrderEntryPanel() {
 
   const priceVal = parseFloat(priceInput) || 0;
   const qtyVal = parseFloat(qtyInput) || 0;
-  const orderValue = priceVal * qtyVal;
+  const effectivePrice = orderType === 'MARKET' ? lastPrice || priceVal : priceVal;
+  const orderValue = effectivePrice * qtyVal;
   const marginRequired = orderValue > 0 ? orderValue / leverage : 0;
 
   const handleSliderClick = (percent: number) => {
     setSliderVal(percent);
-    if (balance > 0 && priceVal > 0) {
-      const calculatedQty = (balance * (percent / 100) * leverage) / priceVal;
+    if (balance > 0 && effectivePrice > 0) {
+      const calculatedQty = (balance * (percent / 100) * leverage) / effectivePrice;
       setQtyInput(calculatedQty.toFixed(4));
     }
   };
@@ -64,8 +76,8 @@ export default function OrderEntryPanel() {
   const handleQtyChange = (val: string) => {
     setQtyInput(val);
     const parsed = parseFloat(val) || 0;
-    if (balance > 0 && priceVal > 0) {
-      const margin = (parsed * priceVal) / leverage;
+    if (balance > 0 && effectivePrice > 0) {
+      const margin = (parsed * effectivePrice) / leverage;
       const pct = (margin / balance) * 100;
       setSliderVal(Math.min(Math.round(pct), 100));
     }
@@ -76,7 +88,7 @@ export default function OrderEntryPanel() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!user) {
+    if (!user || !token) {
       setAuthModalMode('login');
       return;
     }
@@ -88,6 +100,11 @@ export default function OrderEntryPanel() {
 
     if (orderType === 'LIMIT' && priceVal <= 0) {
       setErrorMsg('Price must be greater than 0');
+      return;
+    }
+
+    if (marginRequired > balance) {
+      setErrorMsg('Insufficient margin for this order');
       return;
     }
 
@@ -113,60 +130,74 @@ export default function OrderEntryPanel() {
   };
 
   const getEstLiquidationPrice = () => {
-    if (qtyVal <= 0 || priceVal <= 0) return '--';
-    const direction = side === 'LONG' ? -1 : 1;
-    const maintenanceMargin = 0.005;
-    const liqPrice = priceVal * (1 + direction * (1 / leverage - maintenanceMargin));
+    if (qtyVal <= 0 || effectivePrice <= 0) return '--';
+    const liqPrice =
+      side === 'LONG'
+        ? effectivePrice * (1 - 0.95 / leverage)
+        : effectivePrice * (1 + 0.95 / leverage);
     return `$${liqPrice.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0c0d10] border border-[#171a1f] rounded-lg p-4 text-[#f2f4f7] select-none font-sans justify-between min-h-[500px]">
-      <form onSubmit={handleSubmitOrder} className="flex flex-col space-y-4">
-        <div className="grid grid-cols-2 bg-[#12161c] rounded-xl p-1 h-12 shrink-0">
+    <div
+      className="flex flex-col h-full rounded-xl p-4 text-white select-none font-sans justify-between min-h-[500px]"
+      style={{ backgroundColor: BP.bg, border: `1px solid ${BP.border}` }}
+    >
+      <form onSubmit={handleSubmitOrder} className="flex flex-col gap-4">
+        {/* Buy / Sell toggle */}
+        <div
+          className="grid grid-cols-2 rounded-lg p-1 h-11 shrink-0"
+          style={{ backgroundColor: BP.inputBg }}
+        >
           <button
             type="button"
             onClick={() => setSide('LONG')}
-            className={`rounded-lg font-bold text-xs transition-all ${
+            className="rounded-md font-semibold text-xs transition-all"
+            style={
               side === 'LONG'
-                ? 'bg-[#0f241d] text-[#00c087] border border-[#00c087]/20'
-                : 'text-[#8491a5] hover:text-white'
-            }`}
+                ? { color: BP.green, border: `1px solid ${BP.green}`, background: 'transparent' }
+                : { color: BP.muted, border: '1px solid transparent', background: 'transparent' }
+            }
           >
             Buy / Long
           </button>
           <button
             type="button"
             onClick={() => setSide('SHORT')}
-            className={`rounded-lg font-bold text-xs transition-all ${
+            className="rounded-md font-semibold text-xs transition-all"
+            style={
               side === 'SHORT'
-                ? 'bg-[#291717] text-[#ff3b30] border border-[#ff3b30]/20'
-                : 'text-[#8491a5] hover:text-white'
-            }`}
+                ? { color: BP.red, border: `1px solid ${BP.red}`, background: 'transparent' }
+                : { color: BP.muted, border: '1px solid transparent', background: 'transparent' }
+            }
           >
             Sell / Short
           </button>
         </div>
 
-        <div className="flex items-center space-x-4 border-b border-[#171a1f] pb-2 text-xs">
-          {['LIMIT', 'MARKET'].map((type) => (
+        {/* Order type tabs */}
+        <div className="flex items-center gap-5 text-sm">
+          {(['LIMIT', 'MARKET'] as const).map((type) => (
             <button
               key={type}
               type="button"
-              onClick={() => setOrderType(type as any)}
-              className={`font-semibold transition-colors flex items-center ${
-                orderType === type ? 'text-white' : 'text-[#8491a5] hover:text-white'
-              }`}
+              onClick={() => setOrderType(type)}
+              className="font-semibold transition-colors pb-1"
+              style={
+                orderType === type
+                  ? { color: '#FFFFFF', borderBottom: '2px solid #FFFFFF' }
+                  : { color: BP.muted, borderBottom: '2px solid transparent' }
+              }
             >
-              {type === 'LIMIT' ? 'Limit' : type === 'MARKET' ? 'Market' : 'Conditional'}
-              {type === 'CONDITIONAL' && <ChevronDown className="w-3 h-3 ml-1" />}
+              {type === 'LIMIT' ? 'Limit' : 'Market'}
             </button>
           ))}
         </div>
 
+        {/* Available equity */}
         <div className="flex items-center justify-between text-xs">
-          <span className="text-[#8491a5]">Available Equity</span>
-          <span className="font-mono font-bold text-white">
+          <span style={{ color: BP.muted }}>Available Equity</span>
+          <span className="font-mono font-semibold text-white">
             $
             {balance.toLocaleString(undefined, {
               minimumFractionDigits: 2,
@@ -175,84 +206,103 @@ export default function OrderEntryPanel() {
           </span>
         </div>
 
-        {orderType !== 'MARKET' && (
-          <div className="bg-[#12161c] border border-[#171a1f] rounded-xl p-3 flex flex-col justify-between h-18">
+        {/* Price input (limit only) */}
+        {orderType === 'LIMIT' && (
+          <div
+            className="rounded-lg p-4 flex flex-col gap-2"
+            style={{ backgroundColor: BP.inputBg }}
+          >
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-[#8491a5]">Price</span>
-              <div className="flex space-x-2 text-[10px]">
+              <span className="text-xs" style={{ color: BP.muted }}>
+                Price
+              </span>
+              <div className="flex gap-2 text-[10px]">
                 <button
                   type="button"
                   onClick={() => handleMidBBO('MID')}
-                  className="text-blue-400 hover:underline font-semibold"
+                  className="font-semibold hover:underline"
+                  style={{ color: BP.green }}
                 >
                   Mid
                 </button>
-                <span className="text-zinc-600">|</span>
+                <span style={{ color: BP.border }}>|</span>
                 <button
                   type="button"
                   onClick={() => handleMidBBO('BBO')}
-                  className="text-blue-400 hover:underline font-semibold"
+                  className="font-semibold hover:underline"
+                  style={{ color: BP.green }}
                 >
                   BBO
                 </button>
               </div>
             </div>
-            <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center justify-between gap-3">
               <input
                 type="text"
                 value={priceInput}
                 onChange={(e) => setPriceInput(e.target.value)}
-                placeholder="0.0"
-                className="w-full bg-transparent text-sm text-white font-bold outline-none font-mono"
+                placeholder="0"
+                className="w-full bg-transparent text-xl font-bold text-white outline-none font-mono"
               />
-              <div className="bg-[#171a1f] px-2 py-0.5 rounded text-[10px] text-white flex items-center justify-center font-bold">
+              <div
+                className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold text-white shrink-0"
+                style={{ backgroundColor: BP.border }}
+              >
                 $
               </div>
             </div>
           </div>
         )}
 
-        <div className="bg-[#12161c] border border-[#171a1f] rounded-xl p-3 flex flex-col justify-between h-18">
-          <span className="text-[10px] font-bold text-[#8491a5]">Quantity</span>
-          <div className="flex items-center justify-between mt-1">
+        {/* Quantity input */}
+        <div
+          className="rounded-lg p-4 flex flex-col gap-2"
+          style={{ backgroundColor: BP.inputBg }}
+        >
+          <span className="text-xs" style={{ color: BP.muted }}>
+            Quantity
+          </span>
+          <div className="flex items-center justify-between gap-3">
             <input
               type="text"
               value={qtyInput}
               onChange={(e) => handleQtyChange(e.target.value)}
               placeholder="0"
-              className="w-full bg-transparent text-sm text-white font-bold outline-none font-mono"
+              className="w-full bg-transparent text-xl font-bold text-white outline-none font-mono"
             />
             <div
-              className={`px-2 py-0.5 rounded text-[10px] text-black flex items-center justify-center font-bold ${color}`}
+              className={`px-2 py-1 rounded text-[11px] text-black font-bold shrink-0 ${badgeBg}`}
             >
               {symbol}
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col space-y-1 py-1">
-          <div className="relative w-full h-1 bg-[#171a1f] rounded">
+        {/* Percentage slider */}
+        <div className="flex flex-col gap-2 py-1">
+          <div className="relative w-full h-1 rounded" style={{ backgroundColor: BP.border }}>
             <div
-              className={`absolute top-0 left-0 h-full rounded ${side === 'LONG' ? 'bg-[#00c087]' : 'bg-[#ff3b30]'}`}
-              style={{ width: `${sliderVal}%` }}
+              className="absolute top-0 left-0 h-full rounded transition-all duration-150"
+              style={{ width: `${sliderVal}%`, backgroundColor: accentColor }}
             />
             {[0, 25, 50, 75, 100].map((mark) => (
               <button
                 key={mark}
                 type="button"
                 onClick={() => handleSliderClick(mark)}
-                className={`absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 transition-all flex items-center justify-center ${
-                  sliderVal >= mark
-                    ? side === 'LONG'
-                      ? 'bg-[#00c087] border-[#00c087]'
-                      : 'bg-[#ff3b30] border-[#ff3b30]'
-                    : 'bg-[#0c0d10] border-[#171a1f] hover:border-zinc-500'
-                }`}
-                style={{ left: `calc(${mark}% - 7px)` }}
+                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 transition-all"
+                style={{
+                  left: `calc(${mark}% - 6px)`,
+                  backgroundColor: sliderVal >= mark ? accentColor : BP.bg,
+                  borderColor: sliderVal >= mark ? accentColor : BP.border,
+                }}
               />
             ))}
           </div>
-          <div className="flex justify-between text-[9px] text-[#8491a5] font-semibold px-0.5 pt-1">
+          <div
+            className="flex justify-between text-[10px] font-medium"
+            style={{ color: BP.muted }}
+          >
             <span>0%</span>
             <span>25%</span>
             <span>50%</span>
@@ -261,108 +311,106 @@ export default function OrderEntryPanel() {
           </div>
         </div>
 
-        <div className="bg-[#12161c] border border-[#171a1f] rounded-xl p-3 flex flex-col justify-between h-18">
-          <span className="text-[10px] font-bold text-[#8491a5]">Order Value</span>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-sm font-bold text-white font-mono">
+        {/* Order value */}
+        <div
+          className="rounded-lg p-4 flex flex-col gap-2"
+          style={{ backgroundColor: BP.inputBg }}
+        >
+          <span className="text-xs" style={{ color: BP.muted }}>
+            Order Value
+          </span>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xl font-bold text-white font-mono">
               {orderValue.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
             </span>
-            <div className="bg-[#171a1f] px-2 py-0.5 rounded text-[10px] text-white flex items-center justify-center font-bold">
+            <div
+              className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold text-white shrink-0"
+              style={{ backgroundColor: BP.border }}
+            >
               $
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col space-y-2 border-t border-[#171a1f] pt-3 text-[11px] font-semibold">
+        {/* Margin details */}
+        <div className="flex flex-col gap-2 text-xs">
           <div className="flex justify-between">
-            <span className="text-[#8491a5]">Margin Required</span>
-            <span className="font-mono text-zinc-300">
+            <span style={{ color: BP.muted }}>Margin Required</span>
+            <span className="font-mono text-white">
               {marginRequired > 0
                 ? `$${marginRequired.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 : '--'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-[#8491a5]">Est. Liquidation Price</span>
-            <span className="font-mono text-zinc-300">{getEstLiquidationPrice()}</span>
+            <span style={{ color: BP.muted }}>Est. Liquidation Price</span>
+            <span className="font-mono text-white">{getEstLiquidationPrice()}</span>
           </div>
         </div>
 
+        {/* Error / success */}
         {errorMsg && (
-          <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 py-2 px-3 rounded-lg text-center">
+          <div
+            className="text-sm py-3 px-4 rounded-lg"
+            style={{
+              color: BP.red,
+              backgroundColor: BP.errorBg,
+              border: `1px solid ${BP.errorBorder}`,
+            }}
+          >
             {errorMsg}
           </div>
         )}
         {successMsg && (
-          <div className="text-xs text-[#00c087] bg-[#00c087]/10 border border-[#00c087]/20 py-2 px-3 rounded-lg text-center">
+          <div
+            className="text-sm py-3 px-4 rounded-lg"
+            style={{
+              color: BP.green,
+              backgroundColor: 'rgba(20, 241, 149, 0.1)',
+              border: `1px solid rgba(20, 241, 149, 0.2)`,
+            }}
+          >
             {successMsg}
           </div>
         )}
 
-        <div className="flex flex-col space-y-2 pt-2">
-          {user ? (
+        {/* Submit */}
+        <div className="pt-1">
+          {user && token ? (
             <button
               type="submit"
               disabled={loading}
-              className={`w-full py-3.5 rounded-xl font-bold text-xs shadow-sm transition-all cursor-pointer text-black ${
-                side === 'LONG'
-                  ? 'bg-[#00c087] hover:bg-[#00a875] text-white'
-                  : 'bg-[#ff3b30] hover:bg-[#e02e24] text-white'
-              } disabled:opacity-50`}
+              className="w-full py-3.5 rounded-lg font-bold text-sm transition-all cursor-pointer disabled:opacity-50 text-white"
+              style={{ backgroundColor: side === 'LONG' ? BP.green : BP.red }}
             >
               {loading
                 ? 'Placing Order...'
                 : `${side === 'LONG' ? 'Buy / Long' : 'Sell / Short'} ${symbol}-PERP`}
             </button>
           ) : (
-            <>
+            <div className="flex flex-col gap-2">
               <button
                 type="button"
                 onClick={() => setAuthModalMode('signup')}
-                className="w-full py-3.5 rounded-xl bg-white text-black hover:bg-zinc-200 font-bold text-xs shadow-sm transition-colors cursor-pointer text-center"
+                className="w-full py-3.5 rounded-lg bg-white text-black hover:bg-zinc-200 font-bold text-sm transition-colors cursor-pointer"
               >
                 Sign up to trade
               </button>
               <button
                 type="button"
                 onClick={() => setAuthModalMode('login')}
-                className="w-full py-3.5 rounded-xl bg-[#1d222b] text-white hover:bg-zinc-800 font-bold text-xs shadow-sm transition-colors cursor-pointer text-center"
+                className="w-full py-3.5 rounded-lg font-bold text-sm transition-colors cursor-pointer text-white"
+                style={{ backgroundColor: BP.inputBg, border: `1px solid ${BP.border}` }}
               >
                 Log in to trade
               </button>
-            </>
+            </div>
           )}
         </div>
       </form>
-
-      {/* <div className="flex flex-col space-y-4 border-t border-[#171a1f] pt-4 mt-4 text-[10px] font-semibold text-[#8491a5]">
-        <div className="grid grid-cols-2 gap-2">
-          <label className="flex items-center space-x-1.5 cursor-pointer">
-            <input type="checkbox" className="rounded border-zinc-700 bg-black text-blue-500 focus:ring-0" />
-            <span>Post Only</span>
-          </label>
-          <label className="flex items-center space-x-1.5 cursor-pointer">
-            <input type="checkbox" className="rounded border-zinc-700 bg-black text-blue-500 focus:ring-0" />
-            <span>IOC</span>
-          </label>
-          <label className="flex items-center space-x-1.5 cursor-pointer">
-            <input type="checkbox" className="rounded border-zinc-700 bg-black text-blue-500 focus:ring-0" />
-            <span>Reduce Only</span>
-          </label>
-          <label className="flex items-center space-x-1.5 cursor-pointer">
-            <input type="checkbox" className="rounded border-zinc-700 bg-black text-blue-500 focus:ring-0" />
-            <span>TP/SL</span>
-          </label>
-        </div>
-
-        <div className="flex justify-between border-t border-[#171a1f]/40 pt-2 items-center">
-          <span>Hourly Yield</span>
-          <span className="font-mono text-zinc-300 font-bold">$0.00</span>
-        </div>
-      </div> */}
     </div>
   );
 }

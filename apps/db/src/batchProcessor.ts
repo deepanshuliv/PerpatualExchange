@@ -274,7 +274,7 @@ function processLiquidation(
       kind,
       market,
       price: avgPrice,
-      type: 'MARKET',
+      type: 'LIQUIDATION',
       margin: 0,
       status,
       totalQty,

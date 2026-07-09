@@ -1,7 +1,9 @@
+import type { OrderType } from './order';
+
 export interface Order {
   id: string;
   userId: string;
-  type: string;
+  type: OrderType;
   totalQty: number;
   filledQty: number;
   price: number;

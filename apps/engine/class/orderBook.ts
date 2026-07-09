@@ -29,10 +29,32 @@ export default class OrderBookManager {
   }
 
   createSnapShot() {
+    const serializableBook: Record<string, any> = {};
+    for (const [market, book] of Object.entries(this.orderBook)) {
+      if (!book) continue;
+      serializableBook[market] = {
+        asks: Array.from(book.asks ?? []),
+        bids: Array.from(book.bids ?? []),
+        lastTradedPrice: book.lastTradedPrice ?? 0,
+      };
+    }
     return {
-      orderbook: JSON.stringify(this.orderBook),
-      fills: JSON.stringify(this.fills),
-      orders: JSON.stringify(Array.from(this.orders.entries())),
+      orderbook: JSON.stringify(serializableBook),
+      fills: JSON.stringify(
+        this.fills.map((f) => ({
+          ...f,
+          createdAt: f.createdAt instanceof Date ? f.createdAt.toISOString() : f.createdAt,
+        })),
+      ),
+      orders: JSON.stringify(
+        Array.from(this.orders.entries()).map(([id, ord]) => [
+          id,
+          {
+            ...ord,
+            createdAt: ord.createdAt instanceof Date ? ord.createdAt.toISOString() : ord.createdAt,
+          },
+        ]),
+      ),
       fundingInsurance: this.fundingInsurance,
       exchangeProfit: this.exchangeProfit,
       lastOrderId: this.lastOrderId,
@@ -55,12 +77,76 @@ export default class OrderBookManager {
       };
     }
 
-    this.fills = JSON.parse(orderManagerSnapShotInstance.fills || '[]');
-    this.orders = new Map(JSON.parse(orderManagerSnapShotInstance.orders || '[]'));
+    this.fills = (JSON.parse(orderManagerSnapShotInstance.fills || '[]') as any[]).map((f) => ({
+      ...f,
+      createdAt: f?.createdAt ? new Date(f.createdAt) : new Date(),
+    }));
+    this.orders = new Map(
+      (JSON.parse(orderManagerSnapShotInstance.orders || '[]') as any[]).map(([id, ord]) => [
+        id,
+        {
+          ...ord,
+          createdAt: ord?.createdAt ? new Date(ord.createdAt) : new Date(),
+        },
+      ]),
+    );
 
     this.fundingInsurance = orderManagerSnapShotInstance.fundingInsurance ?? 0;
     this.exchangeProfit = orderManagerSnapShotInstance.exchangeProfit ?? 0;
     this.lastOrderId = orderManagerSnapShotInstance.lastOrderId ?? 0;
+  }
+
+  getOpenOrdersForUser(userId: string, market?: Shared.MARKET_AVAILABEL) {
+    const out: Array<{
+      orderId: string;
+      userId: string;
+      kind: Shared.KIND;
+      market: Shared.MARKET_AVAILABEL;
+      price: number;
+      totalQty: number;
+      filledQty: number;
+      margin: number;
+      type: Shared.TYPE;
+      status: Shared.STATUS;
+      createdAt: Date;
+    }> = [];
+
+    const collect = (mkt: Shared.MARKET_AVAILABEL, side: 'bids' | 'asks') => {
+      const book = this.orderBook[mkt];
+      if (!book) return;
+      const levels = book[side];
+      if (!levels) return;
+
+      for (const [price, level] of levels) {
+        for (const ord of level.openOrder) {
+          if (ord.userId !== userId) continue;
+          const details = this.orders.get(ord.orderId);
+          if (!details) continue;
+          if (details.status !== 'OPEN' && details.status !== 'PARTIALLY_FILLED') continue;
+          out.push({
+            orderId: ord.orderId,
+            userId,
+            kind: details.kind,
+            market: mkt,
+            price,
+            totalQty: ord.totalQty,
+            filledQty: ord.filledQty,
+            margin: details.margin,
+            type: details.type,
+            status: details.status,
+            createdAt: details.createdAt,
+          });
+        }
+      }
+    };
+
+    const markets = market ? [market] : (Object.keys(this.orderBook) as Shared.MARKET_AVAILABEL[]);
+    for (const mkt of markets) {
+      collect(mkt, 'bids');
+      collect(mkt, 'asks');
+    }
+
+    return out;
   }
 
   getLastTradedPriceOFMarket(market: Shared.MARKET_AVAILABEL) {
@@ -115,6 +201,10 @@ export default class OrderBookManager {
         while (PriceLevel.openOrder.length > 0 && remianingQty > 0) {
           let topOrder = PriceLevel.openOrder[0]!;
           const priceLevelRemianingQty = topOrder.totalQty - topOrder.filledQty;
+          if (priceLevelRemianingQty <= 0) {
+            PriceLevel.openOrder.shift();
+            continue;
+          }
           const priceLevelMaxFill = Math.min(priceLevelRemianingQty, remianingQty);
           remianingQty -= priceLevelMaxFill;
           topOrder.filledQty += priceLevelMaxFill;
@@ -263,6 +353,10 @@ export default class OrderBookManager {
         while (PriceLevel.openOrder.length > 0 && remianingQty > 0) {
           const topOrder = PriceLevel.openOrder[0]!;
           const remainingPriceLevelQty = topOrder.totalQty - topOrder.filledQty;
+          if (remainingPriceLevelQty <= 0) {
+            PriceLevel.openOrder.shift();
+            continue;
+          }
           const maxQtyFillPriceLevel = Math.min(remainingPriceLevelQty, remianingQty);
           remianingQty -= maxQtyFillPriceLevel;
           topOrder.filledQty += maxQtyFillPriceLevel;
@@ -573,6 +667,9 @@ export default class OrderBookManager {
     for (const [price, ask] of marketBook.asks) {
       asks.push([price, ask.totalqty]);
     }
+
+    bids.sort((a, b) => b[0] - a[0]);
+    asks.sort((a, b) => a[0] - b[0]);
 
     return {
       bids,

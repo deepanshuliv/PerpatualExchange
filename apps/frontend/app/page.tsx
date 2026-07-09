@@ -284,7 +284,7 @@ export default function Home() {
             <div className="flex-1 min-h-0">
               <TradingChart />
             </div>
-            <div className="w-[30%] shrink-0">
+            <div className="w-[30%] shrink-0 h-full min-h-0">
               <OrderBook />
             </div>
           </div>

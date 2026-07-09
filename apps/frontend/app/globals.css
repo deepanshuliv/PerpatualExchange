@@ -33,3 +33,52 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@keyframes ob-flash-up {
+  0% {
+    background-color: rgba(0, 192, 135, 0.22);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes ob-flash-down {
+  0% {
+    background-color: rgba(255, 59, 48, 0.22);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.ob-depth-bar {
+  transition: background 0.35s ease-out;
+}
+
+.ob-size-cell {
+  transition: color 0.2s ease-out;
+}
+
+.ob-flash-up {
+  animation: ob-flash-up 0.45s ease-out;
+}
+
+.ob-flash-down {
+  animation: ob-flash-down 0.45s ease-out;
+}
+
+.ob-row-enter {
+  animation: ob-row-enter 0.2s ease-out;
+}
+
+@keyframes ob-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

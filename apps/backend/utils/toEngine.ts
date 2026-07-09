@@ -11,6 +11,82 @@ type PendingRequest = {
 
 const correlationIdToResolveMap = new Map<string, PendingRequest>();
 
+const depthCache: Partial<Record<string, { bids: unknown; asks: unknown }>> = {};
+const markPriceCache: Partial<Record<string, number>> = {};
+
+export function getCachedDepth(market: string) {
+  return depthCache[market] ?? null;
+}
+
+export function getCachedMarkPrice(market: string) {
+  return markPriceCache[market] ?? null;
+}
+
+function cacheBroadcastMessage(rawMessage: unknown) {
+  if (typeof rawMessage !== 'object' || rawMessage === null || !('type' in rawMessage)) {
+    return;
+  }
+
+  const type = (rawMessage as { type: string }).type;
+
+  if (type === 'depth_updated') {
+    const payload = (
+      rawMessage as { payload?: { market?: string; bids?: unknown; asks?: unknown } }
+    ).payload;
+    if (!payload?.market) return;
+
+    depthCache[payload.market] = {
+      bids: payload.bids ?? [],
+      asks: payload.asks ?? [],
+    };
+    return;
+  }
+
+  if (type === 'markprice_updated') {
+    const payload = (
+      rawMessage as { payload?: { market?: string; price?: number | string } }
+    ).payload;
+    const price = Number(payload?.price);
+    if (!payload?.market || !Number.isFinite(price) || price <= 0) return;
+
+    markPriceCache[payload.market] = price;
+  }
+}
+
+async function seedMarketCacheFromStream() {
+  const streamKey = process.env.BACKEND_STREAM || 'to-backend';
+
+  try {
+    const messages = await subscriber.xRevRange(streamKey, '+', '-', { COUNT: 300 });
+    const seededDepth = new Set<string>();
+    const seededMark = new Set<string>();
+
+    for (const msg of messages) {
+      try {
+        const parsed = JSON.parse(msg.message.data ?? '{}');
+        const market = parsed.payload?.market;
+        if (!market) continue;
+
+        if (parsed.type === 'depth_updated' && !seededDepth.has(market)) {
+          cacheBroadcastMessage(parsed);
+          seededDepth.add(market);
+        }
+
+        if (parsed.type === 'markprice_updated' && !seededMark.has(market)) {
+          cacheBroadcastMessage(parsed);
+          seededMark.add(market);
+        }
+      } catch {
+        // skip malformed entries
+      }
+    }
+  } catch (err) {
+    console.log('[Backend] Failed to seed market cache from stream:', err);
+  }
+}
+
+const ENGINE_RPC_TIMEOUT_MS = 10_000;
+
 export async function sendToEngine(
   engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST,
 ): Promise<EngineResponse.BACKEND_RESPONSE> {
@@ -22,7 +98,7 @@ export async function sendToEngine(
     const timer = setTimeout(() => {
       correlationIdToResolveMap.delete(engineRequest.correlationId);
       reject(new Error('Timeout waiting for engine response'));
-    }, 10000);
+    }, ENGINE_RPC_TIMEOUT_MS);
 
     correlationIdToResolveMap.set(engineRequest.correlationId, { resolve, timer });
 
@@ -46,6 +122,8 @@ export async function sendToEngine(
 }
 
 function handleEngineResponse(rawMessage: unknown) {
+  cacheBroadcastMessage(rawMessage);
+
   if (typeof rawMessage === 'object' && rawMessage !== null && 'type' in rawMessage) {
     const type = (rawMessage as { type: string }).type;
     if (
@@ -72,7 +150,6 @@ function handleEngineResponse(rawMessage: unknown) {
 
   const pending = correlationIdToResolveMap.get(data.correlationId);
   if (!pending) {
-    console.log(`[Backend] No pending resolve found for correlationId=${data.correlationId}`);
     return;
   }
   clearTimeout(pending.timer);
@@ -115,6 +192,8 @@ export async function initializeRedis() {
     connectRedisClient(subscriber, 'Backend-Subscriber'),
     connectRedisClient(publisher, 'Backend-Publisher'),
   ]);
+
+  await seedMarketCacheFromStream();
 
   engineToBackendLoop().catch((err) => {
     console.log('[Backend] Engine loop fatal error:', err);

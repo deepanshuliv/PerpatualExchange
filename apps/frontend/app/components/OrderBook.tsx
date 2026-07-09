@@ -1,15 +1,91 @@
 "use client";
 
-import React, { useState } from "react";
-import { useTrading } from "../context/TradingContext";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Lock, Unlock, Minus, Plus } from "lucide-react";
+import type { OrderBookRow } from "types";
+import { useTrading } from "../context/TradingContext";
+import { groupOrderBookRows } from "../utils/orderbook";
+
+type SizeFlash = "up" | "down";
+
+function useSizeFlashes(rows: OrderBookRow[]) {
+  const prevRef = useRef<Map<number, number>>(new Map());
+  const [flashes, setFlashes] = useState<Map<number, SizeFlash>>(new Map());
+
+  useEffect(() => {
+    const next = new Map<number, SizeFlash>();
+    const activePrices = new Set<number>();
+
+    for (const row of rows) {
+      activePrices.add(row.price);
+      const prev = prevRef.current.get(row.price);
+      if (prev !== undefined && prev !== row.size) {
+        next.set(row.price, row.size > prev ? "up" : "down");
+      }
+      prevRef.current.set(row.price, row.size);
+    }
+
+    for (const price of prevRef.current.keys()) {
+      if (!activePrices.has(price)) {
+        prevRef.current.delete(price);
+      }
+    }
+
+    if (next.size === 0) return;
+
+    setFlashes(next);
+    const timer = setTimeout(() => setFlashes(new Map()), 450);
+    return () => clearTimeout(timer);
+  }, [rows]);
+
+  return flashes;
+}
+
+interface DepthRowProps {
+  row: OrderBookRow;
+  side: "bid" | "ask";
+  depthPercent: number;
+  flash?: SizeFlash;
+  formatPrice: (price: number) => string;
+}
+
+function DepthRow({ row, side, depthPercent, flash, formatPrice }: DepthRowProps) {
+  const isBid = side === "bid";
+  const color = isBid ? "rgba(0, 192, 135, 0.1)" : "rgba(239, 68, 68, 0.1)";
+  const priceColor = isBid ? "text-[#00c087]" : "text-[#ff3b30]";
+  const flashClass =
+    flash === "up" ? "ob-flash-up" : flash === "down" ? "ob-flash-down" : "";
+
+  return (
+    <div
+      className={`relative grid grid-cols-3 px-3 py-0.5 hover:bg-white/[0.02] cursor-pointer items-center ob-row-enter ${flashClass}`}
+    >
+      <div
+        className="absolute inset-0 ob-depth-bar pointer-events-none"
+        style={{
+          background: `linear-gradient(to left, ${color} ${depthPercent}%, transparent ${depthPercent}%)`,
+        }}
+      />
+      <div className={`relative z-10 ${priceColor} font-bold`}>{formatPrice(row.price)}</div>
+      <div className="relative z-10 text-right text-[#b0bbcb] ob-size-cell tabular-nums">
+        {row.size.toFixed(5)}
+      </div>
+      <div className="relative z-10 text-right text-[#5d6b7e] tabular-nums">
+        {row.total.toFixed(5)}
+      </div>
+    </div>
+  );
+}
 
 export default function OrderBook() {
-  const { bids, asks, lastPrice, markPrice, marketTrades, marketLiquidations, market, loadingDepth } = useTrading();
+  const { bids, asks, lastPrice, markPrice, marketTrades, marketLiquidations, market, loadingDepth } =
+    useTrading();
   const [activeTab, setActiveTab] = useState<"book" | "trades" | "liquidations">("book");
   const [layout, setLayout] = useState<"both" | "asks" | "bids">("both");
   const [isLocked, setIsLocked] = useState(true);
   const [precision, setPrecision] = useState(0.1);
+  const spreadRef = useRef<HTMLDivElement>(null);
+  const bookRef = useRef<HTMLDivElement>(null);
 
   const getAssetSymbol = () => {
     if (market === "ETHUSD") return "ETH";
@@ -39,38 +115,32 @@ export default function OrderBook() {
     return price.toLocaleString(undefined, { minimumFractionDigits: 1 });
   };
 
-  const groupOrders = (orders: typeof bids, isBid: boolean) => {
-    const grouped: { [key: string]: { price: number; size: number } } = {};
-    orders.forEach((o) => {
-      const roundedPrice = Math.round(o.price / precision) * precision;
-      const key = roundedPrice.toFixed(precision === 0.1 ? 1 : 0);
-      if (!grouped[key]) {
-        grouped[key] = { price: roundedPrice, size: 0 };
-      }
-      grouped[key].size += o.size;
-    });
+  const groupedBids = useMemo(
+    () => groupOrderBookRows(bids, precision, true),
+    [bids, precision],
+  );
+  const groupedAsks = useMemo(
+    () => groupOrderBookRows(asks, precision, false),
+    [asks, precision],
+  );
 
-    const list = Object.values(grouped).sort((a, b) =>
-      isBid ? b.price - a.price : a.price - b.price
-    );
+  const bidFlashes = useSizeFlashes(groupedBids);
+  const askFlashes = useSizeFlashes(groupedAsks);
 
-    let accum = 0;
-    return list.map((item) => {
-      accum += item.size;
-      return { ...item, total: accum };
-    });
-  };
-
-  const groupedBids = groupOrders(bids, true);
-  const groupedAsks = groupOrders(asks, false);
-
-  const maxRows = layout === "both" ? 12 : 24;
-  const displayedAsks = layout === "bids" ? [] : groupedAsks.slice(0, maxRows);
-  const displayedBids = layout === "asks" ? [] : groupedBids.slice(0, maxRows);
+  const displayedAsks = layout === "bids" ? [] : groupedAsks;
+  const displayedBids = layout === "asks" ? [] : groupedBids;
   const asksToRender = layout === "both" ? [...displayedAsks].reverse() : displayedAsks;
 
   const maxTotalAsks = displayedAsks.length > 0 ? Math.max(...displayedAsks.map((a) => a.total)) : 1;
   const maxTotalBids = displayedBids.length > 0 ? Math.max(...displayedBids.map((b) => b.total)) : 1;
+
+  const wasLockedRef = useRef(isLocked);
+  useEffect(() => {
+    if (isLocked && !wasLockedRef.current && spreadRef.current) {
+      spreadRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+    wasLockedRef.current = isLocked;
+  }, [isLocked]);
 
   return (
     <div className="flex flex-col h-full bg-[#0c0d10] border border-[#171a1f] rounded-lg overflow-hidden select-none font-sans">
@@ -146,6 +216,7 @@ export default function OrderBook() {
               <button
                 onClick={() => setIsLocked(!isLocked)}
                 className="text-[#8491a5] hover:text-white p-1 rounded transition-colors"
+                title={isLocked ? "Unlock scroll (spread won't auto-center)" : "Lock scroll to spread"}
               >
                 {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
               </button>
@@ -176,42 +247,45 @@ export default function OrderBook() {
             <div className="text-right">Total ({asset})</div>
           </div>
 
-          <div className="flex-1 flex flex-col justify-between overflow-y-auto no-scrollbar font-mono text-xs">
+          <div
+            ref={bookRef}
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden font-mono text-xs"
+          >
             {loadingDepth ? (
-              <div className="flex-1 flex items-center justify-center text-zinc-600 text-[10px]">
+              <div className="flex items-center justify-center h-full text-zinc-600 text-[10px]">
                 Loading order book...
               </div>
             ) : (
               <>
                 {layout !== "bids" && (
-                  <div className="flex-1 flex flex-col justify-end min-h-[100px] overflow-hidden">
+                  <div className="flex flex-col">
                     {asksToRender.length === 0 ? (
                       <div className="text-center text-zinc-600 text-[10px] py-4">No Asks</div>
                     ) : (
-                      asksToRender.map((ask, idx) => {
+                      asksToRender.map((ask) => {
                         const depthPercent = Math.min((ask.total / maxTotalAsks) * 100, 100);
                         return (
-                          <div
-                            key={`ask-${idx}`}
-                            className="relative grid grid-cols-3 px-3 py-0.5 hover:bg-white/[0.02] cursor-pointer items-center"
-                            style={{
-                              background: `linear-gradient(to left, rgba(239, 68, 68, 0.08) ${depthPercent}%, transparent ${depthPercent}%)`,
-                            }}
-                          >
-                            <div className="text-[#ff3b30] font-bold">{formatPrice(ask.price)}</div>
-                            <div className="text-right text-[#b0bbcb]">{ask.size.toFixed(5)}</div>
-                            <div className="text-right text-[#5d6b7e]">{ask.total.toFixed(5)}</div>
-                          </div>
+                          <DepthRow
+                            key={`ask-${ask.price}`}
+                            row={ask}
+                            side="ask"
+                            depthPercent={depthPercent}
+                            flash={askFlashes.get(ask.price)}
+                            formatPrice={formatPrice}
+                          />
                         );
                       })
                     )}
                   </div>
                 )}
 
-                <div className="flex items-center justify-between px-3 py-2 bg-[#12161c]/40 border-y border-[#171a1f] shrink-0">
+                <div
+                  ref={spreadRef}
+                  className="sticky top-0 z-20 flex items-center justify-between px-3 py-2 bg-[#12161c] border-y border-[#171a1f] shrink-0"
+                >
                   <div className="flex items-center space-x-2">
                     <span
-                      className={`text-sm font-bold ${
+                      className={`text-sm font-bold transition-colors duration-200 ${
                         lastPrice > 0 && markPrice > 0
                           ? lastPrice >= markPrice
                             ? "text-[#00c087]"
@@ -228,24 +302,21 @@ export default function OrderBook() {
                 </div>
 
                 {layout !== "asks" && (
-                  <div className="flex-1 flex flex-col justify-start min-h-[100px] overflow-hidden">
+                  <div className="flex flex-col">
                     {displayedBids.length === 0 ? (
                       <div className="text-center text-zinc-600 text-[10px] py-4">No Bids</div>
                     ) : (
-                      displayedBids.map((bid, idx) => {
+                      displayedBids.map((bid) => {
                         const depthPercent = Math.min((bid.total / maxTotalBids) * 100, 100);
                         return (
-                          <div
-                            key={`bid-${idx}`}
-                            className="relative grid grid-cols-3 px-3 py-0.5 hover:bg-white/[0.02] cursor-pointer items-center"
-                            style={{
-                              background: `linear-gradient(to left, rgba(0, 192, 135, 0.08) ${depthPercent}%, transparent ${depthPercent}%)`,
-                            }}
-                          >
-                            <div className="text-[#00c087] font-bold">{formatPrice(bid.price)}</div>
-                            <div className="text-right text-[#b0bbcb]">{bid.size.toFixed(5)}</div>
-                            <div className="text-right text-[#5d6b7e]">{bid.total.toFixed(5)}</div>
-                          </div>
+                          <DepthRow
+                            key={`bid-${bid.price}`}
+                            row={bid}
+                            side="bid"
+                            depthPercent={depthPercent}
+                            flash={bidFlashes.get(bid.price)}
+                            formatPrice={formatPrice}
+                          />
                         );
                       })
                     )}
@@ -270,16 +341,16 @@ export default function OrderBook() {
             ) : (
               marketTrades.map((trade, idx) => (
                 <div
-                  key={`trade-${trade.time}-${idx}`}
-                  className="grid grid-cols-3 px-3 py-1.5 hover:bg-white/[0.02] items-center"
+                  key={`trade-${trade.time}-${trade.price}-${idx}`}
+                  className="grid grid-cols-3 px-3 py-1.5 hover:bg-white/[0.02] items-center ob-row-enter"
                 >
                   <div className="text-[#8491a5] text-[10px]">
                     {new Date(trade.time).toLocaleTimeString()}
                   </div>
-                  <div className="text-right text-white font-bold">
+                  <div className="text-right text-white font-bold tabular-nums">
                     {trade.price.toLocaleString(undefined, { minimumFractionDigits: 1 })}
                   </div>
-                  <div className="text-right text-[#b0bbcb]">{trade.qty.toFixed(5)}</div>
+                  <div className="text-right text-[#b0bbcb] tabular-nums">{trade.qty.toFixed(5)}</div>
                 </div>
               ))
             )}

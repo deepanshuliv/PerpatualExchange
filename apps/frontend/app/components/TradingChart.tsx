@@ -1,15 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useTrading, type ChartInterval } from "../context/TradingContext";
+import React, { useState, useEffect, useMemo } from "react";
+import { useTrading, type ChartCandle, type ChartInterval } from "../context/TradingContext";
 import {
   formatFundingRate,
   fundingRateColorClass,
   FUNDING_INTERVAL_MS,
 } from "../utils/funding";
-
-const CHART_HEIGHT = 320;
-const CHART_PADDING = { top: 16, right: 56, bottom: 24, left: 8 };
+import CandlestickChart from "./CandlestickChart";
 
 function formatCandleTime(openTime: number, interval: ChartInterval): string {
   const date = new Date(openTime);
@@ -36,10 +34,7 @@ export default function TradingChart() {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<"chart" | "depth" | "margin" | "funding" | "market_info">("chart");
   const [priceType, setPriceType] = useState<"last" | "mark" | "index">("last");
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [mouseCoords, setMouseCoords] = useState<{ x: number; y: number } | null>(null);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [hoveredCandle, setHoveredCandle] = useState<ChartCandle | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -62,62 +57,8 @@ export default function TradingChart() {
         ? lastPrice
         : markPrice;
 
-  const { minPrice, maxPrice, priceRange, scaleY } = useMemo(() => {
-    if (candles.length === 0) {
-      const fallback = activePrice > 0 ? activePrice : 0;
-      return {
-        minPrice: fallback * 0.998,
-        maxPrice: fallback * 1.002,
-        priceRange: fallback * 0.004 || 1,
-        scaleY: () => CHART_HEIGHT / 2,
-      };
-    }
-
-    const lows = candles.map((c) => c.low);
-    const highs = candles.map((c) => c.high);
-    const minVal = Math.min(...lows) * 0.998;
-    const maxVal = Math.max(...highs) * 1.002;
-    const range = maxVal - minVal || 1;
-    const innerHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom;
-
-    return {
-      minPrice: minVal,
-      maxPrice: maxVal,
-      priceRange: range,
-      scaleY: (price: number) =>
-        CHART_PADDING.top + innerHeight - ((price - minVal) / range) * innerHeight,
-    };
-  }, [candles, activePrice]);
-
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
-    if (candles.length === 0) return;
-    const svgRect = e.currentTarget.getBoundingClientRect();
-    const chartWidth = svgRect.width - CHART_PADDING.left - CHART_PADDING.right;
-    const x = e.clientX - svgRect.left - CHART_PADDING.left;
-    setMouseCoords({ x: e.clientX - svgRect.left, y: e.clientY - svgRect.top });
-
-    const candleWidth = chartWidth / candles.length;
-    const index = Math.min(
-      Math.max(Math.floor(x / candleWidth), 0),
-      candles.length - 1,
-    );
-    setHoveredIndex(index);
-  };
-
-  const handleMouseLeave = () => {
-    setHoveredIndex(null);
-    setMouseCoords(null);
-  };
-
-  const getHoverPrice = () => {
-    if (!mouseCoords) return 0;
-    const innerHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom;
-    const relativeY = mouseCoords.y - CHART_PADDING.top;
-    return minPrice + ((innerHeight - relativeY) / innerHeight) * priceRange;
-  };
-
-  const hoveredCandle =
-    hoveredIndex !== null ? candles[hoveredIndex] : candles[candles.length - 1];
+  const displayCandle =
+    hoveredCandle ?? (candles.length > 0 ? candles[candles.length - 1]! : null);
 
   const displayFundingRate = previewFundingRate;
 
@@ -137,10 +78,7 @@ export default function TradingChart() {
   }
 
   return (
-    <div
-      className="flex flex-col h-full bg-[#0c0d10] border border-[#171a1f] rounded-lg overflow-hidden select-none font-sans"
-      ref={containerRef}
-    >
+    <div className="flex flex-col h-full bg-[#0c0d10] border border-[#171a1f] rounded-lg overflow-hidden select-none font-sans">
       <div className="flex items-center justify-between border-b border-[#171a1f] bg-[#0c0d10] px-3 h-10 shrink-0">
         <div className="flex space-x-1">
           {[
@@ -215,142 +153,34 @@ export default function TradingChart() {
                 {activePrice.toFixed(marketDetails.precision)}
               </span>
             )}
-            {hoveredCandle && (
+            {displayCandle && (
               <span className="text-zinc-500 font-mono ml-2">
-                O {hoveredCandle.open.toFixed(marketDetails.precision)} · H{" "}
-                {hoveredCandle.high.toFixed(marketDetails.precision)} · L{" "}
-                {hoveredCandle.low.toFixed(marketDetails.precision)} · C{" "}
-                {hoveredCandle.close.toFixed(marketDetails.precision)} ·{" "}
-                {formatCandleTime(hoveredCandle.openTime, chartInterval)}
+                O {displayCandle.open.toFixed(marketDetails.precision)} · H{" "}
+                {displayCandle.high.toFixed(marketDetails.precision)} · L{" "}
+                {displayCandle.low.toFixed(marketDetails.precision)} · C{" "}
+                {displayCandle.close.toFixed(marketDetails.precision)} ·{" "}
+                {formatCandleTime(displayCandle.openTime, chartInterval)}
               </span>
             )}
           </div>
 
-          <div className="flex-1 w-full bg-[#08090b] relative overflow-hidden min-h-[360px]">
+          <div className="flex-1 w-full bg-[#08090b] relative min-h-[360px]">
             {loadingCandles && candles.length === 0 ? (
               <div className="flex items-center justify-center h-full text-[#8491a5] text-xs">
                 {wsReady ? "Loading candle history..." : "Connecting WebSocket..."}
               </div>
             ) : candles.length === 0 ? (
               <div className="flex items-center justify-center h-full text-[#8491a5] text-xs">
-                Waiting for trade data to build candles...
+                Waiting for orderbook or trade data to build candles...
               </div>
             ) : (
-              <svg
-                className="w-full h-full cursor-crosshair overflow-hidden"
-                viewBox={`0 0 800 ${CHART_HEIGHT}`}
-                preserveAspectRatio="none"
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleMouseLeave}
-              >
-                {Array.from({ length: 6 }).map((_, idx) => {
-                  const price = minPrice + (priceRange / 5) * idx;
-                  const y = scaleY(price);
-                  return (
-                    <g key={`grid-line-${idx}`}>
-                      <line
-                        x1={CHART_PADDING.left}
-                        y1={y}
-                        x2={800 - CHART_PADDING.right}
-                        y2={y}
-                        stroke="#12161c"
-                        strokeWidth={1}
-                      />
-                      <text
-                        x={800 - CHART_PADDING.right + 4}
-                        y={y + 4}
-                        fill="#4b5563"
-                        className="font-mono text-[9px] font-bold"
-                      >
-                        {price.toFixed(marketDetails.precision)}
-                      </text>
-                    </g>
-                  );
-                })}
-
-                {candles.map((candle, idx) => {
-                  const chartWidth = 800 - CHART_PADDING.left - CHART_PADDING.right;
-                  const slotWidth = chartWidth / candles.length;
-                  const bodyWidth = Math.max(slotWidth * 0.6, 2);
-                  const centerX = CHART_PADDING.left + idx * slotWidth + slotWidth / 2;
-                  const isGreen = candle.close >= candle.open;
-                  const color = isGreen ? "#00c087" : "#f6465d";
-                  const openY = scaleY(candle.open);
-                  const closeY = scaleY(candle.close);
-                  const highY = scaleY(candle.high);
-                  const lowY = scaleY(candle.low);
-                  const bodyTop = Math.min(openY, closeY);
-                  const bodyHeight = Math.max(Math.abs(closeY - openY), 1);
-
-                  return (
-                    <g key={`candle-${candle.openTime}-${idx}`}>
-                      <line
-                        x1={centerX}
-                        y1={highY}
-                        x2={centerX}
-                        y2={lowY}
-                        stroke={color}
-                        strokeWidth={1}
-                      />
-                      <rect
-                        x={centerX - bodyWidth / 2}
-                        y={bodyTop}
-                        width={bodyWidth}
-                        height={bodyHeight}
-                        fill={color}
-                      />
-                    </g>
-                  );
-                })}
-
-                {activePrice > 0 && (
-                  <g>
-                    <line
-                      x1={CHART_PADDING.left}
-                      y1={scaleY(activePrice)}
-                      x2={800 - CHART_PADDING.right}
-                      y2={scaleY(activePrice)}
-                      stroke="#00c087"
-                      strokeWidth={1}
-                      strokeDasharray="2,3"
-                      opacity={0.7}
-                    />
-                  </g>
-                )}
-
-                {mouseCoords && candles.length > 0 && (
-                  <g>
-                    <line
-                      x1={mouseCoords.x}
-                      y1={CHART_PADDING.top}
-                      x2={mouseCoords.x}
-                      y2={CHART_HEIGHT - CHART_PADDING.bottom}
-                      stroke="#5d6b7e"
-                      strokeWidth={1}
-                      strokeDasharray="3,3"
-                      opacity={0.6}
-                    />
-                    <line
-                      x1={CHART_PADDING.left}
-                      y1={mouseCoords.y}
-                      x2={800 - CHART_PADDING.right}
-                      y2={mouseCoords.y}
-                      stroke="#5d6b7e"
-                      strokeWidth={1}
-                      strokeDasharray="3,3"
-                      opacity={0.6}
-                    />
-                    <text
-                      x={800 - CHART_PADDING.right + 4}
-                      y={mouseCoords.y + 3}
-                      fill="#f3f4f6"
-                      className="font-mono text-[9px] font-bold"
-                    >
-                      {getHoverPrice().toFixed(marketDetails.precision)}
-                    </text>
-                  </g>
-                )}
-              </svg>
+              <CandlestickChart
+                candles={candles}
+                chartInterval={chartInterval}
+                marketLabel={marketDetails.label}
+                activePrice={activePrice}
+                onHoverCandle={setHoveredCandle}
+              />
             )}
           </div>
         </div>

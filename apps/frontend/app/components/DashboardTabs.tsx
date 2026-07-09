@@ -8,21 +8,37 @@ import ConfirmModal from './ConfirmModal';
 
 type PendingAction = { type: 'deposit' } | { type: 'logout' } | { type: 'cancel'; orderId: string };
 
-const DEPOSIT_AMOUNT = 1000;
+const DEFAULT_DEPOSIT_AMOUNT = '1000';
+
+function parseDepositAmount(input: string): number {
+  const parsed = parseFloat(input.replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 export default function DashboardTabs() {
-  const { openPositions, openOrders, fills, deposit, balance, logout, user, cancelOrder } =
+  const { openPositions, openOrders, fills, deposit, balance, logout, user, cancelOrder, token, setAuthModalMode } =
     useTrading();
 
   const [activeTab, setActiveTab] = useState<'positions' | 'orders' | 'fills'>('positions');
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
+  const [depositInput, setDepositInput] = useState(DEFAULT_DEPOSIT_AMOUNT);
+  const [depositError, setDepositError] = useState('');
+
+  const depositAmount = parseDepositAmount(depositInput);
+  const isDepositModalOpen = pendingAction?.type === 'deposit';
 
   const pendingOrder =
     pendingAction?.type === 'cancel'
       ? openOrders.find((ord) => ord.id === pendingAction.orderId)
       : undefined;
+
+  const closeDepositModal = () => {
+    setPendingAction((current) => (current?.type === 'deposit' ? null : current));
+    setDepositInput(DEFAULT_DEPOSIT_AMOUNT);
+    setDepositError('');
+  };
 
   const handleConfirmAction = async () => {
     if (!pendingAction) return;
@@ -31,11 +47,21 @@ export default function DashboardTabs() {
     const action = pendingAction;
     try {
       if (action.type === 'deposit') {
-        const ok = await deposit(DEPOSIT_AMOUNT);
-        if (!ok) {
-          console.log('Deposit failed');
+        if (!token) {
+          setDepositError('Please log in to deposit funds.');
           return;
         }
+        if (depositAmount <= 0) {
+          setDepositError('Enter a valid deposit amount.');
+          return;
+        }
+        const result = await deposit(depositAmount);
+        if (!result.ok) {
+          setDepositError(result.msg || 'Deposit failed. Check that the backend is running and try again.');
+          return;
+        }
+        closeDepositModal();
+        return;
       } else if (action.type === 'logout') {
         logout();
       } else if (action.type === 'cancel') {
@@ -113,12 +139,20 @@ export default function DashboardTabs() {
               {formatUsd(balance)}
             </span>
             <button
-              onClick={() => setPendingAction({ type: 'deposit' })}
+              onClick={() => {
+                if (!token) {
+                  setAuthModalMode('login');
+                  return;
+                }
+                setDepositInput(DEFAULT_DEPOSIT_AMOUNT);
+                setDepositError('');
+                setPendingAction({ type: 'deposit' });
+              }}
               disabled={actionLoading && pendingAction?.type === 'deposit'}
               className="flex items-center space-x-1 px-2.5 py-1 bg-white hover:bg-zinc-200 text-black font-bold text-[10px] rounded transition-colors disabled:opacity-50"
             >
               <Plus className="h-3 w-3" />
-              <span>Deposit $1k</span>
+              <span>Deposit</span>
             </button>
           </div>
         </div>
@@ -286,19 +320,32 @@ export default function DashboardTabs() {
       </div>
 
       <ConfirmModal
-        open={pendingAction?.type === 'deposit'}
-        onClose={() => setPendingAction(null)}
+        open={isDepositModalOpen}
+        onClose={closeDepositModal}
         onConfirm={handleConfirmAction}
         title="Deposit funds"
         description="You are about to add funds to your trading account. This will increase your available equity."
-        confirmLabel="Deposit $1,000"
+        confirmLabel={`Deposit ${formatUsd(depositAmount, depositAmount % 1 === 0 ? 0 : 2)}`}
         variant="success"
         loading={actionLoading}
+        confirmDisabled={depositAmount <= 0}
         icon={<Wallet className="h-6 w-6 text-white" />}
         details={[
-          { label: 'Amount', value: formatUsd(DEPOSIT_AMOUNT, 0) },
+          {
+            label: 'Amount',
+            input: {
+              value: depositInput,
+              onChange: (value) => {
+                setDepositInput(value.replace(/[^\d.]/g, ''));
+                setDepositError('');
+              },
+              placeholder: '0.00',
+              prefix: '$',
+            },
+          },
           { label: 'Current balance', value: formatUsd(balance) },
-          { label: 'New balance', value: formatUsd(balance + DEPOSIT_AMOUNT) },
+          { label: 'New balance', value: formatUsd(balance + depositAmount) },
+          ...(depositError ? [{ label: 'Error', value: depositError }] : []),
         ]}
       />
 

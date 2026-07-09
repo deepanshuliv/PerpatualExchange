@@ -1,3 +1,5 @@
+import type { OrderType } from './order';
+
 export interface Fill {
   id: string;
   orderId: string;
@@ -5,8 +7,8 @@ export interface Fill {
   sellerId: string;
   price: number;
   qty: number;
-  type: string;
-  kind: string;
+  type: OrderType;
+  kind: 'LONG' | 'SHORT';
   status: string;
   transactionTime: string;
 }

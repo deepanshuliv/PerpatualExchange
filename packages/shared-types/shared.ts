@@ -8,7 +8,12 @@ const MARKET_AVAILABEL_SCHEMA = z.union([
 ])
 
 const KIND_SCHEMA = z.union([z.literal("LONG"), z.literal("SHORT")]);
-const TYPE_SCHEMA = z.union([z.literal("LIMIT"), z.literal("MARKET")]);
+const ORDER_TYPE_SCHEMA = z.union([z.literal("LIMIT"), z.literal("MARKET")]);
+const TYPE_SCHEMA = z.union([
+    z.literal("LIMIT"),
+    z.literal("MARKET"),
+    z.literal("LIQUIDATION"),
+]);
 const STATUS_SCHEMA = z.union([z.literal("PARTIALLY_FILLED"), z.literal("FILLED"), z.literal("OPEN"), z.literal("CANCELLED")])
 
 type KIND = z.infer<typeof KIND_SCHEMA>
@@ -21,6 +26,7 @@ export {
     MARKET_AVAILABEL_SCHEMA,
     type MARKET_AVAILABEL,
     KIND_SCHEMA,
+    ORDER_TYPE_SCHEMA,
     TYPE_SCHEMA,
     type KIND,
     type TYPE,

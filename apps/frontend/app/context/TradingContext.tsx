@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Fill, Order, OrderBookRow, Position } from 'types';
 import { useApi, WS_BASE } from '../hooks/useApi';
@@ -11,6 +11,7 @@ import {
   startFundingTimer,
 } from '../utils/funding';
 import { parseDepthSnapshot } from '../utils/orderbook';
+import { calculateUnrealizedPnl } from '../utils/position';
 
 export interface MarketTrade {
   price: number;
@@ -66,7 +67,7 @@ interface TradingContextType {
   login: (username: string, password?: string) => Promise<boolean>;
   signup: (username: string, password?: string) => Promise<boolean>;
   logout: () => void;
-  deposit: (amount: number) => Promise<boolean>;
+  deposit: (amount: number) => Promise<{ ok: boolean; msg?: string }>;
   placeOrder: (
     qty: string,
     price: number,
@@ -91,6 +92,119 @@ export const useTrading = () => {
 const MAX_MARKET_TRADES = 100;
 const MAX_MARKET_LIQUIDATIONS = 100;
 
+function tradeKey(trade: MarketTrade) {
+  return `${trade.time}-${trade.price}-${trade.qty}`;
+}
+
+function liquidationKey(liq: MarketLiquidation) {
+  return `${liq.time}-${liq.userId}-${liq.price}-${liq.qty}`;
+}
+
+function mergeMarketTrades(prev: MarketTrade[], incoming: MarketTrade[]) {
+  const seen = new Set(prev.map(tradeKey));
+  const merged = [...prev];
+  for (const trade of incoming) {
+    const key = tradeKey(trade);
+    if (seen.has(key)) continue;
+    merged.push(trade);
+    seen.add(key);
+  }
+  return merged.sort((a, b) => b.time - a.time).slice(0, MAX_MARKET_TRADES);
+}
+
+function mergeMarketLiquidations(prev: MarketLiquidation[], incoming: MarketLiquidation[]) {
+  const seen = new Set(prev.map(liquidationKey));
+  const merged = [...prev];
+  for (const liq of incoming) {
+    const key = liquidationKey(liq);
+    if (seen.has(key)) continue;
+    merged.push(liq);
+    seen.add(key);
+  }
+  return merged.sort((a, b) => b.time - a.time).slice(0, MAX_MARKET_LIQUIDATIONS);
+}
+
+const INTERVAL_MS: Record<ChartInterval, number> = {
+  '1h': 60 * 60 * 1000,
+  '1d': 24 * 60 * 60 * 1000,
+};
+
+function midPriceFromOrderbook(bids: OrderBookRow[], asks: OrderBookRow[]): number | null {
+  const bestBid = bids.length > 0 ? Math.max(...bids.map((b) => b.price)) : null;
+  const bestAsk = asks.length > 0 ? Math.min(...asks.map((a) => a.price)) : null;
+  if (bestBid && bestAsk && bestBid > 0 && bestAsk > 0) return (bestBid + bestAsk) / 2;
+  if (bestBid && bestBid > 0) return bestBid;
+  if (bestAsk && bestAsk > 0) return bestAsk;
+  return null;
+}
+
+function formatWsCandle(item: {
+  openTime: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}): ChartCandle {
+  return {
+    openTime: Number(item.openTime),
+    open: Number(item.open),
+    high: Number(item.high),
+    low: Number(item.low),
+    close: Number(item.close),
+    volume: Number(item.volume),
+  };
+}
+
+function mergeCandleUpdate(prev: ChartCandle[], candle: ChartCandle): ChartCandle[] {
+  if (prev.length === 0) return [candle];
+  const last = prev[prev.length - 1]!;
+  if (last.openTime === candle.openTime) {
+    return [...prev.slice(0, -1), candle];
+  }
+  if (last.openTime < candle.openTime) {
+    return [...prev, candle];
+  }
+  return prev;
+}
+
+function mergePriceIntoCandles(
+  prev: ChartCandle[],
+  price: number,
+  interval: ChartInterval,
+  volume = 0,
+): ChartCandle[] {
+  const intervalMs = INTERVAL_MS[interval];
+  const openTime = Math.floor(Date.now() / intervalMs) * intervalMs;
+  const nextCandle: ChartCandle = {
+    openTime,
+    open: price,
+    high: price,
+    low: price,
+    close: price,
+    volume,
+  };
+
+  if (prev.length === 0) return [nextCandle];
+
+  const last = prev[prev.length - 1]!;
+  if (last.openTime === openTime) {
+    return [
+      ...prev.slice(0, -1),
+      {
+        openTime,
+        open: last.open,
+        high: Math.max(last.high, price),
+        low: Math.min(last.low, price),
+        close: price,
+        volume: last.volume + volume,
+      },
+    ];
+  }
+  if (last.openTime < openTime) return [...prev, nextCandle];
+  return prev;
+}
+
 export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const api = useApi();
   const [market, setMarket] = useState<'BTCUSD' | 'ETHUSD' | 'SOLUSD'>('BTCUSD');
@@ -113,10 +227,24 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const previewFundingRate = computeFundingRatePreview(markPrice, lastPrice);
 
-  const [openPositions, setOpenPositions] = useState<Position[]>([]);
+  const [basePositions, setBasePositions] = useState<Position[]>([]);
+  const [markPricesByMarket, setMarkPricesByMarket] = useState<Record<string, number>>({});
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
   const [fills, setFills] = useState<Fill[]>([]);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | null>(null);
+
+  const openPositionsWithPnl = useMemo(
+    () =>
+      basePositions.map((pos) => ({
+        ...pos,
+        pnl: calculateUnrealizedPnl(
+          pos.qty,
+          pos.entryPrice,
+          markPricesByMarket[pos.market] ?? 0,
+        ),
+      })),
+    [basePositions, markPricesByMarket],
+  );
 
   const wsRef = useRef<WebSocket | null>(null);
   const tokenRef = useRef<string | null>(token);
@@ -150,6 +278,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (savedToken && savedUser) {
       setToken(savedToken);
       setUser(JSON.parse(savedUser));
+      void refreshUserData(savedToken);
     }
   }, []);
 
@@ -222,13 +351,18 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         if (stream.startsWith('lastTradedPrice')) {
           const price = Number(data.price);
-          if (price > 0) setLastPrice(price);
+          if (price > 0) {
+            setLastPrice(price);
+          }
           return;
         }
 
         if (stream.startsWith('markPrice')) {
           const price = Number(data.price);
-          if (price > 0) setMarkPrice(price);
+          if (price > 0) {
+            setMarkPrice(price);
+            setMarkPricesByMarket((prev) => ({ ...prev, [streamMarket]: price }));
+          }
           return;
         }
 
@@ -259,29 +393,23 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const interval = stream.split('.')[2];
           if (interval !== chartIntervalRef.current) return;
 
-          const candle: ChartCandle = {
-            openTime: Number(data.openTime),
-            open: Number(data.open),
-            high: Number(data.high),
-            low: Number(data.low),
-            close: Number(data.close),
-            volume: Number(data.volume),
-          };
+          if (data.type === 'candle_snapshot' && Array.isArray(data.candles)) {
+            const formatted: ChartCandle[] = data.candles
+              .map((item: ChartCandle) => formatWsCandle(item))
+              .filter((c: ChartCandle) => Number.isFinite(c.openTime) && c.open > 0);
+            if (formatted.length > 0) {
+              setCandles(formatted);
+              setLoadingCandles(false);
+            }
+            return;
+          }
 
+          const candle = formatWsCandle(data as ChartCandle);
           if (!Number.isFinite(candle.openTime) || candle.open <= 0) return;
 
-          setCandles((prev) => {
-            if (prev.length === 0) return [candle];
-            const last = prev[prev.length - 1]!;
-            if (last.openTime === candle.openTime) {
-              return [...prev.slice(0, -1), candle];
-            }
-            if (last.openTime < candle.openTime) {
-              return [...prev, candle];
-            }
-            return prev;
-          });
+          setCandles((prev) => mergeCandleUpdate(prev, candle));
           setLoadingCandles(false);
+          return;
         }
       } catch (err) {
         console.log('WebSocket message parse error:', err);
@@ -320,12 +448,6 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     subscribeToMarket(ws, market);
     subscribeToCandleInterval(ws, market, chartInterval);
-
-    // HTTP endpoints load after WS is connected and subscribed.
-    fetchDepth();
-    fetchLastPrice();
-    fetchLiquidations();
-    fetchCandles();
 
     return () => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -392,6 +514,15 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setBids(bidsList);
     setAsks(asksList);
     setLoadingDepth(false);
+
+    const midPrice = midPriceFromOrderbook(bidsList, asksList);
+    if (midPrice) {
+      setCandles((prev) => {
+        if (prev.length > 0) return prev;
+        return mergePriceIntoCandles(prev, midPrice, chartIntervalRef.current);
+      });
+      setLoadingCandles(false);
+    }
   };
 
   const fetchDepth = async () => {
@@ -400,14 +531,40 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (json.ok && json.data) {
         applyDepthFromApi(json.data.bids, json.data.asks);
       }
-    } catch {}
+    } catch {
+    } finally {
+      setLoadingDepth(false);
+    }
   };
 
   const fetchLastPrice = async () => {
     try {
       const json = await api.getTickerPrice(market);
       if (json.ok && json.price && Number(json.price) > 0) {
-        setLastPrice(Number(json.price));
+        const price = Number(json.price);
+        setLastPrice(price);
+        setCandles((prev) => {
+          if (prev.length > 0) return prev;
+          return mergePriceIntoCandles(prev, price, chartIntervalRef.current);
+        });
+        setLoadingCandles(false);
+      }
+    } catch {
+    }
+  };
+
+  const fetchTrades = async () => {
+    try {
+      const json = await api.getTrades(market);
+      if (json.ok && Array.isArray(json.data)) {
+        const formatted: MarketTrade[] = json.data.map(
+          (item: { price: number; qty: number; time: number }) => ({
+            price: Number(item.price),
+            qty: Number(item.qty),
+            time: Number(item.time),
+          }),
+        );
+        setMarketTrades((prev) => mergeMarketTrades(prev, formatted));
       }
     } catch {
     }
@@ -434,7 +591,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             time: Number(item.time),
           }),
         );
-        setMarketLiquidations(formatted);
+        setMarketLiquidations((prev) => mergeMarketLiquidations(prev, formatted));
       }
     } catch {
     }
@@ -463,10 +620,12 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         );
 
         setCandles((prev) => {
+          // Keep live WS candles when the DB has no history yet.
+          if (formatted.length === 0) return prev;
           if (prev.length === 0) return formatted;
-          const lastHttp = formatted[formatted.length - 1];
-          const lastLive = prev[prev.length - 1];
-          if (!lastHttp || !lastLive) return formatted;
+
+          const lastHttp = formatted[formatted.length - 1]!;
+          const lastLive = prev[prev.length - 1]!;
           if (lastLive.openTime >= lastHttp.openTime) {
             const older = formatted.filter((c) => c.openTime < lastLive.openTime);
             return [...older, lastLive];
@@ -479,6 +638,49 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLoadingCandles(false);
     }
   };
+
+  const fetchMarkPrice = async () => {
+    try {
+      const json = await api.getMarkPrice(market);
+      const price = Number(json?.price);
+      if (price > 0) {
+        setMarkPrice(price);
+        setMarkPricesByMarket((prev) => ({ ...prev, [market]: price }));
+      }
+    } catch {
+    }
+  };
+
+  const fetchMarkPricesForMarkets = async (markets: string[]) => {
+    const unique = [...new Set(markets)].filter(Boolean);
+    if (unique.length === 0) return;
+
+    const updates: Record<string, number> = {};
+    await Promise.all(
+      unique.map(async (m) => {
+        try {
+          const json = await api.getMarkPrice(m);
+          const price = Number(json?.price ?? json?.data?.price);
+          if (price > 0) updates[m] = price;
+        } catch {
+          // ignore per-market fetch failures
+        }
+      }),
+    );
+
+    if (Object.keys(updates).length > 0) {
+      setMarkPricesByMarket((prev) => ({ ...prev, ...updates }));
+    }
+  };
+  // Load initial market data over HTTP immediately — do not wait for WebSocket.
+  useEffect(() => {
+    fetchDepth();
+    fetchLastPrice();
+    fetchMarkPrice();
+    fetchTrades();
+    fetchLiquidations();
+    fetchCandles();
+  }, [market, chartInterval]);
 
   const refreshUserData = async (authToken?: string) => {
     const activeToken = authToken ?? token;
@@ -514,13 +716,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }),
           );
 
-        const withPnl = formatted.map((pos) => {
-          const sign = pos.qty > 0 ? 1 : -1;
-          const currentP = pos.market === market && markPrice > 0 ? markPrice : pos.entryPrice;
-          const pnl = sign * Math.abs(pos.qty) * (currentP - pos.entryPrice);
-          return { ...pos, pnl };
-        });
-        setOpenPositions(withPnl);
+        setBasePositions(formatted);
+        void fetchMarkPricesForMarkets(formatted.map((pos) => pos.market));
       }
 
       const ordersJson = await api.getOpenOrders(activeToken);
@@ -602,29 +799,34 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setToken(null);
     setUser(null);
     setBalance(0);
-    setOpenPositions([]);
+    setBasePositions([]);
+    setMarkPricesByMarket({});
     setOpenOrders([]);
     setFills([]);
     localStorage.removeItem('perp_token');
     localStorage.removeItem('perp_user');
   };
 
-  const performOnramp = async (authToken: string, amount: number): Promise<boolean> => {
+  const performOnramp = async (authToken: string, amount: number): Promise<{ ok: boolean; msg?: string }> => {
     try {
       const json = await api.onramp(authToken, amount);
-      if (json.status === 201 && json.ok) {
+      if (json.ok) {
+        const nextBalance = Number(json.data);
+        if (Number.isFinite(nextBalance)) {
+          setBalance(nextBalance);
+        }
         await refreshUserData(authToken);
-        return true;
+        return { ok: true };
       }
-      return false;
+      return { ok: false, msg: json.msg || 'Deposit failed' };
     } catch (err) {
       console.log('Deposit onramp failed:', err);
-      return false;
+      return { ok: false, msg: 'Could not reach the backend' };
     }
   };
 
-  const deposit = async (amount: number): Promise<boolean> => {
-    if (!token) return false;
+  const deposit = async (amount: number): Promise<{ ok: boolean; msg?: string }> => {
+    if (!token) return { ok: false, msg: 'Please log in to deposit funds' };
     return performOnramp(token, amount);
   };
 
@@ -699,7 +901,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         fundingCountdown,
         marketTrades,
         marketLiquidations,
-        openPositions,
+        openPositions: openPositionsWithPnl,
         openOrders,
         fills,
         loadingDepth,

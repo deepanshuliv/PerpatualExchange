@@ -75,7 +75,10 @@ export default class MatchingEngine {
     equity: number,
   ) {
     const userAmount = this.balance.getBalance(userId);
-    if (userAmount === null || userAmount < equity) {
+    if (userAmount === null) {
+      return null;
+    }
+    if (userAmount < equity) {
       return null;
     }
 
@@ -170,7 +173,15 @@ export default class MatchingEngine {
         );
       }
 
-      if (!orderDetails || orderDetails.filledQty === 0) {
+      if (!orderDetails) {
+        return null;
+      }
+
+      // Reduce-only LIMIT orders may rest on the book when they do not cross immediately.
+      if (orderDetails.filledQty === 0) {
+        if (type === 'LIMIT') {
+          return orderDetails;
+        }
         return null;
       }
 
@@ -307,6 +318,10 @@ export default class MatchingEngine {
     return this.orderBook.getFills(userId);
   }
 
+  getOpenOrders(userId: string, market?: Shared.MARKET_AVAILABEL) {
+    return this.orderBook.getOpenOrdersForUser(userId, market);
+  }
+
   getDepth(market: Shared.MARKET_AVAILABEL) {
     return this.orderBook.getDepth(market);
   }
@@ -331,13 +346,13 @@ export default class MatchingEngine {
         ? this.orderBook.createLongOrder(
             userId,
             'LONG',
-            'MARKET',
+            'LIQUIDATION',
             qty,
             Number.MAX_SAFE_INTEGER,
             margin,
             market,
           )
-        : this.orderBook.createShortOrder(userId, 'SHORT', 'MARKET', qty, 0, margin, market);
+        : this.orderBook.createShortOrder(userId, 'SHORT', 'LIQUIDATION', qty, 0, margin, market);
 
     if (!bookOrder) {
       return null;
@@ -378,7 +393,7 @@ export default class MatchingEngine {
         market,
         markPrice,
       );
-      if (!adlResult) break;
+      if (!adlResult || adlResult.adlQty <= 0) break;
 
       closedQty += adlResult.adlQty;
       remainingQty -= adlResult.adlQty;
@@ -410,7 +425,7 @@ export default class MatchingEngine {
       totalSpent: bookOrder.totalSpent + adlAndForcedSpent,
       fills: allFills,
       price: markPrice,
-      type: 'MARKET' as const,
+      type: 'LIQUIDATION' as const,
       margin,
       status: closedQty >= qty ? ('FILLED' as const) : ('PARTIALLY_FILLED' as const),
       userId,
@@ -520,7 +535,7 @@ export default class MatchingEngine {
       const takerOrder = this.orderBook.createLongOrder(
         liquidatedUserId,
         'LONG',
-        'LIMIT',
+        'LIQUIDATION',
         adlQty,
         markPrice,
         adlMargin,
@@ -543,7 +558,7 @@ export default class MatchingEngine {
       const takerOrder = this.orderBook.createShortOrder(
         liquidatedUserId,
         'SHORT',
-        'LIMIT',
+        'LIQUIDATION',
         adlQty,
         markPrice,
         adlMargin,
