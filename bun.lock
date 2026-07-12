@@ -71,7 +71,6 @@
       "name": "frontend",
       "version": "0.1.0",
       "dependencies": {
-        "@repo/shared-types": "workspace:*",
         "lightweight-charts": "^5.2.0",
         "lucide-react": "^0.475.0",
         "next": "16.2.9",
@@ -93,6 +92,8 @@
     "apps/ws": {
       "name": "ws",
       "dependencies": {
+        "@repo/redis": "workspace:*",
+        "@repo/shared-types": "workspace:*",
         "@types/ws": "^8.18.1",
         "ws": "^8.21.0",
       },
@@ -100,8 +101,6 @@
         "@types/bun": "latest",
       },
       "peerDependencies": {
-        "@repo/redis": "workspace:*",
-        "@repo/shared-types": "workspace:*",
         "typescript": "^5",
       },
     },

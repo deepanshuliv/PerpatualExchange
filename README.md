@@ -1,3 +1,5 @@
+![Architecture](./apps/docs/architecture.png)
+
 ## API Speed Test Results
 
 We hit our API hard to see how fast it responds. Test date: **2026-07-09**, with `bun run dev` running locally.
