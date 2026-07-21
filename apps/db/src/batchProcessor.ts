@@ -17,12 +17,18 @@ interface StreamMessage {
   message: Record<string, string>;
 }
 
-interface MessageBuckets {
-  createOrders: Array<{ msgId: string; event: CreateOrderEvent }>;
-  liquidations: Array<{ msgId: string; event: LiquidationEvent }>;
-  cancelOrders: Array<{ msgId: string; event: CancelOrderEvent }>;
-  invalidMsgIds: string[];
+interface ParsedEvent {
+  msgId: string;
+  event: DbEvent;
 }
+
+// Events must be applied in this order within a batch: an order has to be
+// created before it can be liquidated or cancelled.
+const TYPE_ORDER: Record<DbEvent['type'], number> = {
+  create_order: 0,
+  liquidation: 1,
+  cancel_order: 2,
+};
 
 interface UserRecord {
   id: string;
@@ -78,65 +84,46 @@ function ensureUser(users: Map<string, UserRecord>, userId: string) {
   users.set(userId, { id: userId, username: `user_${userId}`, password: '' });
 }
 
-function parseStreamMessages(messages: StreamMessage[]): MessageBuckets {
-  const buckets: MessageBuckets = {
-    createOrders: [],
-    liquidations: [],
-    cancelOrders: [],
-    invalidMsgIds: [],
-  };
+function parseMessages(messages: StreamMessage[]): {
+  events: ParsedEvent[];
+  invalidMsgIds: string[];
+} {
+  const events: ParsedEvent[] = [];
+  const invalidMsgIds: string[] = [];
 
   for (const msg of messages) {
     try {
       const parsed = JSON.parse(msg.message.data!);
       const result = DB_PERSISTENCE_EVENT_SCHEMA.safeParse(parsed);
 
-      if (!result.success) {
-        buckets.invalidMsgIds.push(msg.id);
-        continue;
-      }
-
-      switch (result.data.type) {
-        case 'create_order':
-          buckets.createOrders.push({ msgId: msg.id, event: result.data });
-          break;
-        case 'liquidation':
-          buckets.liquidations.push({ msgId: msg.id, event: result.data });
-          break;
-        case 'cancel_order':
-          buckets.cancelOrders.push({ msgId: msg.id, event: result.data });
-          break;
+      if (result.success) {
+        events.push({ msgId: msg.id, event: result.data });
+      } else {
+        invalidMsgIds.push(msg.id);
       }
     } catch (err) {
-      console.log('[parseStreamMessages] error', err);
-      buckets.invalidMsgIds.push(msg.id);
+      console.log('[parseMessages] error', err);
+      invalidMsgIds.push(msg.id);
     }
   }
 
-  return buckets;
+  // Stable sort keeps message order within each type.
+  events.sort((a, b) => TYPE_ORDER[a.event.type] - TYPE_ORDER[b.event.type]);
+
+  return { events, invalidMsgIds };
 }
 
-function collectOrderIds(buckets: MessageBuckets): string[] {
+function collectOrderIds(events: ParsedEvent[]): string[] {
   const orderIds = new Set<string>();
 
-  const addFillOrderIds = (fills: CreateOrderEvent['payload']['fills'] | undefined) => {
-    for (const fill of fills ?? []) {
-      orderIds.add(fill.orderId);
+  for (const { event } of events) {
+    orderIds.add(event.payload.orderId);
+
+    if (event.type !== 'cancel_order') {
+      for (const fill of event.payload.fills ?? []) {
+        orderIds.add(fill.orderId);
+      }
     }
-  };
-
-  for (const { event } of buckets.createOrders) {
-    orderIds.add(event.payload.orderId);
-    addFillOrderIds(event.payload.fills);
-  }
-
-  for (const { event } of buckets.liquidations) {
-    orderIds.add(event.payload.orderId);
-    addFillOrderIds(event.payload.fills);
-  }
-
-  for (const { event } of buckets.cancelOrders) {
-    orderIds.add(event.payload.orderId);
   }
 
   return [...orderIds];
@@ -158,6 +145,10 @@ function processFillEvent(
       state.makerFillAcc.set(fill.orderId, (state.makerFillAcc.get(fill.orderId) ?? 0) + fill.qty);
     }
 
+    // A fill can reference a maker order we haven't seen a create event for yet
+    // (its create event may be later in the stream or already processed). Insert
+    // a "skeleton" row from the fill data so the foreign key on Fill resolves;
+    // the real create event, if it arrives, overwrites these placeholder fields.
     const pending = state.ordersToCreate.get(fill.orderId);
     const isSkeleton = pending?.isSkeleton === true;
 
@@ -351,12 +342,6 @@ function deriveStatus(filledQty: number, totalQty: number): string {
   return 'OPEN';
 }
 
-function orderedProcessingQueue(
-  buckets: MessageBuckets,
-): Array<{ msgId: string; event: DbEvent }> {
-  return [...buckets.createOrders, ...buckets.liquidations, ...buckets.cancelOrders];
-}
-
 function createEmptyState(): BatchWriteState {
   return {
     users: new Map(),
@@ -431,14 +416,15 @@ export async function processMessageBatch(messages: StreamMessage[]): Promise<{
     return { ackIds: [], invalidIds: [] };
   }
 
-  const buckets = parseStreamMessages(messages);
-  const queue = orderedProcessingQueue(buckets);
+  const { events, invalidMsgIds } = parseMessages(messages);
 
-  if (queue.length === 0) {
-    return { ackIds: [], invalidIds: buckets.invalidMsgIds };
+  if (events.length === 0) {
+    return { ackIds: [], invalidIds: invalidMsgIds };
   }
 
-  const orderIds = collectOrderIds(buckets);
+  // Look up which of the referenced orders already exist so each handler can
+  // decide between "create" and "update".
+  const orderIds = collectOrderIds(events);
   const existingOrders = await prisma.order.findMany({
     where: { id: { in: orderIds } },
     select: { id: true, filledQty: true, totalQty: true },
@@ -449,7 +435,7 @@ export async function processMessageBatch(messages: StreamMessage[]): Promise<{
 
   const state = createEmptyState();
 
-  for (const { event } of queue) {
+  for (const { event } of events) {
     switch (event.type) {
       case 'create_order':
         processCreateOrder(state, existingOrderIds, event);
@@ -467,7 +453,7 @@ export async function processMessageBatch(messages: StreamMessage[]): Promise<{
   await persistBatch(state);
 
   return {
-    ackIds: queue.map((m) => m.msgId),
-    invalidIds: buckets.invalidMsgIds,
+    ackIds: events.map((e) => e.msgId),
+    invalidIds: invalidMsgIds,
   };
 }

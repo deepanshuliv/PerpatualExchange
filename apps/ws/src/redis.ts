@@ -1,7 +1,6 @@
 import { connectRedisClient, redisClient } from '@repo/redis';
 import { EngineResponse, WebsocketTypes, type RedisStreamResponse } from '@repo/shared-types';
 import { checkMarketUpdateAndSendToSubsribedUser } from './broadcast';
-import { seedMarketCacheFromStream } from './candleState';
 
 export async function startConsumerGroup() {
   const consumerGroups = redisClient.duplicate();
@@ -23,8 +22,6 @@ export async function startConsumerGroup() {
     }
     console.log(`[WebSocket Consumer] Using existing group '${groupName}'`);
   }
-
-  await seedMarketCacheFromStream(consumerGroups);
 
   (async () => {
     while (1) {

@@ -46,17 +46,16 @@ async function upsertCandle(
     openTime: Date;
   } | null;
 
-  let current: OhlcCandle | null = null;
-  if (existing) {
-    current = {
-      openTime: existing.openTime.getTime(),
-      open: existing.open,
-      high: existing.high,
-      low: existing.low,
-      close: existing.close,
-      volume: existing.volume,
-    };
-  }
+  const current: OhlcCandle | null = existing
+    ? {
+        openTime: existing.openTime.getTime(),
+        open: existing.open,
+        high: existing.high,
+        low: existing.low,
+        close: existing.close,
+        volume: existing.volume,
+      }
+    : null;
 
   const merged = mergeTradeIntoOhlc(current, price, volume, openTimeMs);
 

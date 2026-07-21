@@ -1,4 +1,3 @@
-import type { RedisClientType } from '@repo/redis';
 import {
   INTERVAL_1D_MS,
   INTERVAL_1H_MS,
@@ -6,7 +5,6 @@ import {
   type OhlcCandle,
 } from '@repo/shared-types/market-data';
 
-type DepthLevel = [number, number];
 type CandleInterval = '1h' | '1d';
 
 const MAX_CANDLE_HISTORY = 200;
@@ -19,8 +17,6 @@ type MarketCandleState = {
 };
 
 const liveCandles: Record<string, MarketCandleState> = {};
-const lastDepthByMarket: Record<string, { bids: unknown; asks: unknown }> = {};
-const lastMarkPriceByMarket: Record<string, number> = {};
 
 function ensureMarket(market: string): MarketCandleState {
   if (!liveCandles[market]) {
@@ -45,89 +41,8 @@ function archiveIfRolled(
   return history;
 }
 
-export function midPriceFromDepth(bids: unknown, asks: unknown): number | null {
-  const sortedBids = Array.isArray(bids)
-    ? [...(bids as DepthLevel[])].sort((a, b) => Number(b[0]) - Number(a[0]))
-    : [];
-  const sortedAsks = Array.isArray(asks)
-    ? [...(asks as DepthLevel[])].sort((a, b) => Number(a[0]) - Number(b[0]))
-    : [];
-
-  const bestBid = sortedBids.length > 0 ? Number(sortedBids[sortedBids.length - 1]![0]) : null;
-  const bestAsk = sortedAsks.length > 0 ? Number(sortedAsks[0]![0]) : null;
-
-  if (bestBid && bestAsk && bestBid > 0 && bestAsk > 0) {
-    return (bestBid + bestAsk) / 2;
-  }
-  if (bestBid && bestBid > 0) return bestBid;
-  if (bestAsk && bestAsk > 0) return bestAsk;
-  return null;
-}
-
-export function rememberDepth(market: string, bids: unknown, asks: unknown) {
-  lastDepthByMarket[market] = { bids, asks };
-}
-
-export function getLastDepth(market: string) {
-  return lastDepthByMarket[market] ?? null;
-}
-
-export function rememberMarkPrice(market: string, price: number) {
-  if (Number.isFinite(price) && price > 0) {
-    lastMarkPriceByMarket[market] = price;
-  }
-}
-
-export function getLastMarkPrice(market: string) {
-  return lastMarkPriceByMarket[market] ?? null;
-}
-
-export async function seedMarketCacheFromStream(redis: RedisClientType) {
-  const streamKey = process.env.BACKEND_STREAM || 'to-backend';
-
-  try {
-    const messages = await redis.xRevRange(streamKey, '+', '-', { COUNT: 300 });
-    const seededDepth = new Set<string>();
-    const seededMark = new Set<string>();
-
-    for (const msg of messages) {
-      try {
-        const parsed = JSON.parse(msg.message.data ?? '{}');
-        const market = parsed.payload?.market;
-        if (!market) continue;
-
-        if (parsed.type === 'depth_updated' && !seededDepth.has(market)) {
-          rememberDepth(market, parsed.payload.bids, parsed.payload.asks);
-          seededDepth.add(market);
-        }
-
-        if (parsed.type === 'markprice_updated' && !seededMark.has(market)) {
-          rememberMarkPrice(market, Number(parsed.payload.price));
-          seededMark.add(market);
-        }
-      } catch (err) {
-        console.log('[seedMarketCacheFromStream] error', err);
-      }
-    }
-  } catch (err) {
-    console.log('[seedMarketCacheFromStream] error', err);
-  }
-}
-
-export function sampleOrderbookMids() {
-  const updates: Array<{ market: string; price: number; transactionTime: number }> = [];
-  const transactionTime = Date.now();
-
-  for (const [market, depth] of Object.entries(lastDepthByMarket)) {
-    const midPrice = midPriceFromDepth(depth.bids, depth.asks);
-    if (midPrice) {
-      updates.push({ market, price: midPrice, transactionTime });
-    }
-  }
-
-  return updates;
-}
-
+// Candles are built exclusively from real executed trades, so the OHLC always
+// reflects actual traded prices and volume.
 export function applyTradeToLiveCandles(
   market: string,
   price: number,
