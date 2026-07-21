@@ -1,4 +1,3 @@
-/** Unrealized PnL using mark price — matches engine PositionManager logic. */
 export function calculateUnrealizedPnl(
   qty: number,
   entryPrice: number,

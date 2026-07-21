@@ -177,7 +177,6 @@ export default class MatchingEngine {
         return null;
       }
 
-      // Reduce-only LIMIT orders may rest on the book when they do not cross immediately.
       if (orderDetails.filledQty === 0) {
         if (type === 'LIMIT') {
           return orderDetails;
@@ -594,23 +593,12 @@ export default class MatchingEngine {
     const processed = new Set<string>();
 
     for (const fill of fills) {
-      const buyerOrder = this.orderBook.getOrder(fill.buyerId, fill.orderId);
-      const sellerOrder = this.orderBook.getOrder(fill.sellerId, fill.orderId);
+      const makerOrder = this.orderBook.getOrder('', fill.orderId);
+      if (!makerOrder || makerOrder.userId === takerUserId) continue;
 
-      let makerUserId: string | null = null;
-      let makerOrder: Orderdetails | null = null;
+      const makerUserId = makerOrder.userId;
 
-      if (buyerOrder && fill.buyerId !== takerUserId) {
-        makerUserId = fill.buyerId;
-        makerOrder = buyerOrder;
-      } else if (sellerOrder && fill.sellerId !== takerUserId) {
-        makerUserId = fill.sellerId;
-        makerOrder = sellerOrder;
-      }
-
-      if (!makerUserId || !makerOrder) continue;
-
-      const dedupeKey = `${makerUserId}-${fill.orderId}-${fill.qty}-${fill.price}`;
+      const dedupeKey = `${fill.orderId}-${fill.qty}-${fill.price}`;
       if (processed.has(dedupeKey)) continue;
       processed.add(dedupeKey);
 

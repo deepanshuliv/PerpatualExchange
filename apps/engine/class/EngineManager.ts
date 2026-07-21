@@ -3,28 +3,15 @@ import { EngineRequest, EngineResponse, type RedisStreamResponse } from '@repo/s
 import type { EngineSnapShotInstanceType } from '@repo/shared-types/internal-types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {
-  allMarketsList,
-  type MARKET_AVAILABEL,
-} from '../../../packages/shared-types/shared';
+import { allMarketsList, type MARKET_AVAILABEL } from '../../../packages/shared-types/shared';
 import BinanceClassListner from './binanceListner';
 import MatchingEngine from './matchingEngine';
 import PostionManager from './PositionManager';
 
 const FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
 const SNAPSHOT_INTERVAL_MS = 3 * 1000;
-const RPC_REPLAY_WINDOW_MS = 60_000;
 const ENGINE_STREAM = process.env.ENGINE_STREAM || 'to-engine';
 const BACKEND_STREAM = process.env.BACKEND_STREAM || 'to-backend';
-
-/** Redis stream IDs are `{ms}-{seq}`; compare by timestamp then sequence. */
-function compareStreamIds(a: string, b: string) {
-  const [aMs = '0', aSeq = '0'] = a.split('-');
-  const [bMs = '0', bSeq = '0'] = b.split('-');
-  const msDiff = Number(aMs) - Number(bMs);
-  if (msDiff !== 0) return msDiff;
-  return Number(aSeq) - Number(bSeq);
-}
 
 const SILENT_BROADCAST_TYPES = new Set([
   'markprice_updated',
@@ -35,17 +22,6 @@ const SILENT_BROADCAST_TYPES = new Set([
 ]);
 
 const toNum = (value: string | number) => Number(value);
-
-const RPC_REQUEST_TYPES = new Set([
-  'add_balance',
-  'create_order',
-  'cancel_order',
-  'get_balance',
-  'get_position',
-  'get_open_orders',
-  'get_fills',
-  'get_depth',
-]);
 
 export default class EngineManager {
   private binanceListner: BinanceClassListner;
@@ -74,7 +50,7 @@ export default class EngineManager {
         );
       }
     } catch (err) {
-      console.log('[Engine] Failed to publish to backend stream:', err);
+      console.log('[sendTobackend] error', err);
     }
   }
 
@@ -106,7 +82,15 @@ export default class EngineManager {
     }
   }
 
-  async handleBackendRequest(request: EngineRequest.ENGINE_REQUEST | EngineRequest.GET_MARKET_PRICE) {
+  async handleBackendRequest(
+    request: EngineRequest.ENGINE_REQUEST | EngineRequest.GET_MARKET_PRICE,
+  ) {
+    if ('correlationId' in request) {
+      console.log(
+        `[Engine] Handling RPC: type=${request.type} | correlationId=${request.correlationId}`,
+      );
+    }
+
     if (request.type === 'get_balance') {
       const { correlationId } = request;
       const { userId } = request.payload;
@@ -335,7 +319,7 @@ export default class EngineManager {
         this.redisReadPointer = parsedSnapShot.redisReadPointer || '';
       }
     } catch (err) {
-      console.log('[EngineManager] Error loading snapshot file:', err);
+      console.log('[loadLatestSnapShotfromFile] error', err);
     }
   }
 
@@ -353,54 +337,6 @@ export default class EngineManager {
     return destinationFolder;
   }
 
-  /**
-   * On startup, replay only recent RPC messages (last ~60s) that arrived while
-   * the engine was down. Replaying the full gap since the last 8h snapshot
-   * blocks the consumer for minutes and causes live requests to 504.
-   */
-  async prepareStreamConsumer() {
-    const latest = await this.subsciberRedisClient.xRevRange(ENGINE_STREAM, '+', '-', {
-      COUNT: 1,
-    });
-    if (!latest[0]) {
-      this.redisReadPointer = '';
-      return;
-    }
-
-    const latestId = latest[0].id;
-    const recentCutoff = `${Date.now() - RPC_REPLAY_WINDOW_MS}-0`;
-    let fromId = recentCutoff;
-
-    if (this.redisReadPointer && compareStreamIds(this.redisReadPointer, recentCutoff) > 0) {
-      fromId = this.redisReadPointer;
-    }
-
-    const messages = await this.subsciberRedisClient.xRange(ENGINE_STREAM, fromId, latestId);
-    let replayed = 0;
-
-    for (const msg of messages) {
-      if (this.redisReadPointer && msg.id === this.redisReadPointer) continue;
-
-      try {
-        const parsed = JSON.parse(msg.message.data ?? '{}');
-        if (!RPC_REQUEST_TYPES.has(parsed.type)) continue;
-
-        const { success, data } = EngineRequest.ENGINE_REQUEST_SCHEMA.safeParse(parsed);
-        if (!success) continue;
-
-        await this.handleBackendRequest(data);
-        replayed++;
-      } catch (err) {
-        console.log('[Engine] Failed to replay RPC since snapshot:', err);
-      }
-    }
-
-    this.redisReadPointer = latestId;
-    console.log(
-      `[Engine] Stream consumer ready after ${this.redisReadPointer} (replayed ${replayed} RPC)`,
-    );
-  }
-
   async start() {
     console.log('Connecting to Redis...');
     await connectRedisClient(this.subsciberRedisClient, 'MatchingEngine-subscriber');
@@ -415,8 +351,6 @@ export default class EngineManager {
     await this.loadLatestSnapShotfromFile();
     console.log('snapshot loaded');
 
-    await this.prepareStreamConsumer();
-
     const now = Date.now();
     for (const market of allMarketsList) {
       await this.publishMarketUpdates(market, [], now);
@@ -430,13 +364,13 @@ export default class EngineManager {
           redisReadPointer: this.redisReadPointer,
         });
       } catch (err) {
-        console.log('[Engine] Failed to write snapshot:', err);
+        console.log('[addSnapShotInFile] error', err);
       }
     }, SNAPSHOT_INTERVAL_MS);
 
     while (1) {
       try {
-        const readFrom = this.redisReadPointer === '' ? '$' : this.redisReadPointer;
+        const readFrom = this.redisReadPointer || '0-0';
 
         const response = (await this.subsciberRedisClient.xRead(
           [{ key: ENGINE_STREAM, id: readFrom }],
@@ -447,6 +381,7 @@ export default class EngineManager {
         )) as RedisStreamResponse;
 
         if (!response || !Array.isArray(response)) {
+          await new Promise((res) => setTimeout(res, 50));
           continue;
         }
 
@@ -454,8 +389,8 @@ export default class EngineManager {
           for (const msg of stream.messages) {
             this.redisReadPointer = msg.id;
             const parsedMessage = JSON.parse(msg.message.data!) || {};
-            const type = parsedMessage.type;
-            const correlationId = parsedMessage.correlationId;
+            const type = parsedMessage.type ?? 'unknown';
+            const correlationId = parsedMessage.correlationId ?? 'N/A';
             if (type !== 'markprice_updated') {
               console.log(
                 `[Engine] Stream message received: type=${type} | correlationId=${correlationId}`,
@@ -466,29 +401,22 @@ export default class EngineManager {
               const { success, data, error } =
                 EngineRequest.GET_MARKET_PRICE_SCHEMA.safeParse(parsedMessage);
               if (!success) {
-                console.log(`[Engine] Schema validation failed for markprice_updated:`, error);
+                console.log('[start] error', error);
                 continue;
               }
-              void this.handleBackendRequest(data).catch((err) =>
-                console.log('[Engine] Error handling markprice_updated:', err),
-              );
+              const { price, market } = data.payload;
+              this.positionManager.updateMarkpriceMap(market, price);
             } else {
               const { success, data, error } =
                 EngineRequest.ENGINE_REQUEST_SCHEMA.safeParse(parsedMessage);
               if (!success) {
-                console.log(
-                  `[Engine] Schema validation failed for message type=${type} | correlationId=${correlationId}:`,
-                  error,
-                );
+                console.log('[start] error', error);
                 continue;
               }
               try {
                 await this.handleBackendRequest(data);
               } catch (err) {
-                console.log(
-                  `[Engine] Error handling message type=${type} | correlationId=${correlationId}:`,
-                  err,
-                );
+                console.log('[handleBackendRequest] error', err);
                 if (correlationId && type !== 'markprice_updated' && type !== 'run_funding_rate') {
                   await this.sendTobackend({
                     correlationId,
@@ -501,7 +429,7 @@ export default class EngineManager {
           }
         }
       } catch (err) {
-        console.log('[Engine] Error in stream consumer loop:', err);
+        console.log('[start] error', err);
         await new Promise((res) => setTimeout(res, 1000));
       }
     }

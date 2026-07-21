@@ -6,7 +6,6 @@ import jwt from 'jsonwebtoken';
 
 const ENGINE_STREAM = process.env.ENGINE_STREAM || 'to-engine';
 
-/** Engine-only sim user for load tests — no Prisma/DB required. */
 export async function provisionSimUser(req: Request, res: Response) {
   const amount = Number(req.body?.amount);
   const onrampAmount = Number.isFinite(amount) && amount > 0 ? amount : 10_000;
@@ -36,12 +35,12 @@ export async function provisionSimUser(req: Request, res: Response) {
       user: { id: userId, username: label },
     });
   } catch (err: unknown) {
+    console.log('[provisionSimUser] error', err);
     const message = err instanceof Error ? err.message : 'Failed to provision sim user';
     return res.status(503).json({ msg: message });
   }
 }
 
-/** Push a mark price into the engine to trigger liquidations during sim runs. */
 export async function injectMarkPrice(req: Request, res: Response) {
   const parsedMarket = Shared.MARKET_AVAILABEL_SCHEMA.safeParse(req.body?.market);
   const price = Number(req.body?.price);
@@ -65,7 +64,7 @@ export async function injectMarkPrice(req: Request, res: Response) {
       price,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to inject mark price';
+    console.log('[injectMarkPrice] error', err);
     return res.status(503).json({ msg: message });
   }
 }

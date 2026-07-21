@@ -2,7 +2,6 @@ import type { EngineRequest } from '@repo/shared-types';
 import type { Response } from 'express';
 import { sendToEngine } from './toEngine';
 
-// sends request to engine and writes the HTTP response
 export async function callEngine(
   res: Response,
   engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST,
@@ -21,6 +20,7 @@ export async function callEngine(
 
     return res.status(statusCode).json({ ok: true, data: reply.payload });
   } catch (err: any) {
+    console.log('[callEngine] error', err);
     return res.status(504).json({ msg: err?.message || 'Engine timeout' });
   }
 }

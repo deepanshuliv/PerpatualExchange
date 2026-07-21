@@ -71,6 +71,7 @@ export default function SimulationPage() {
       if (err instanceof DOMException && err.name === 'AbortError') {
         appendLog('Load test stopped.');
       } else {
+        console.log('[handleRun] error', err);
         appendLog(`Error: ${err instanceof Error ? err.message : 'unknown error'}`);
       }
     } finally {

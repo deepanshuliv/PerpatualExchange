@@ -78,7 +78,7 @@ export default function AuthModal() {
         setError(isLogin ? 'Invalid credentials.' : 'Username already exists.');
       }
     } catch (err) {
-      console.log(err);
+      console.log('[handleAuth] error', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);

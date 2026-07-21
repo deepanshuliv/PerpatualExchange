@@ -140,6 +140,7 @@ export async function getDepth(req: Request, res: Response) {
 
     return res.status(200).json({ ok: true, data: reply.payload });
   } catch (err: any) {
+    console.log('[getDepth] error', err);
     if (err?.message?.includes('Timeout')) {
       return res.status(200).json({ ok: true, data: { bids: [], asks: [] } });
     }
@@ -178,7 +179,7 @@ export async function getTrades(req: Request, res: Response) {
 
     return res.status(200).json({ ok: true, data });
   } catch (error) {
-    console.log('[trades] DB error:', error);
+    console.log('[getTrades] error', error);
     return res.status(200).json({ ok: true, data: [] });
   }
 }
@@ -225,7 +226,7 @@ export async function getLiquidations(req: Request, res: Response) {
 
     return res.status(200).json({ ok: true, data });
   } catch (error) {
-    console.log('[liquidations] DB error:', error);
+    console.log('[getLiquidations] error', error);
     return res.status(200).json({ ok: true, data: [] });
   }
 }
@@ -282,7 +283,7 @@ export async function getCandles(req: Request, res: Response) {
 
     return res.status(200).json({ ok: true, data });
   } catch (error) {
-    console.log('[candles] DB error:', error);
+    console.log('[getCandles] error', error);
     return res.status(200).json({ ok: true, data: [] });
   }
 }
@@ -303,7 +304,7 @@ export async function getTickerPrice(req: Request, res: Response) {
     const price = lastFill ? lastFill.price : 0;
     return res.status(200).json({ ok: true, price });
   } catch (error) {
-    console.log('[ticker/price] DB error:', error);
+    console.log('[getTickerPrice] error', error);
     return res.status(200).json({ ok: true, price: 0 });
   }
 }

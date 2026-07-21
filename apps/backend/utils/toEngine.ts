@@ -43,9 +43,8 @@ function cacheBroadcastMessage(rawMessage: unknown) {
   }
 
   if (type === 'markprice_updated') {
-    const payload = (
-      rawMessage as { payload?: { market?: string; price?: number | string } }
-    ).payload;
+    const payload = (rawMessage as { payload?: { market?: string; price?: number | string } })
+      .payload;
     const price = Number(payload?.price);
     if (!payload?.market || !Number.isFinite(price) || price <= 0) return;
 
@@ -76,16 +75,16 @@ async function seedMarketCacheFromStream() {
           cacheBroadcastMessage(parsed);
           seededMark.add(market);
         }
-      } catch {
-        // skip malformed entries
+      } catch (err) {
+        console.log('[seedMarketCacheFromStream] error', err);
       }
     }
   } catch (err) {
-    console.log('[Backend] Failed to seed market cache from stream:', err);
+    console.log('[seedMarketCacheFromStream] error', err);
   }
 }
 
-const ENGINE_RPC_TIMEOUT_MS = 10_000;
+const ENGINE_RPC_TIMEOUT_MS = 1_000;
 
 export async function sendToEngine(
   engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST,
@@ -115,7 +114,7 @@ export async function sendToEngine(
           clearTimeout(pending.timer);
           correlationIdToResolveMap.delete(engineRequest.correlationId);
         }
-        console.log(`[Backend] Failed to push to Redis stream '${streamKey}':`, err);
+        console.log('[sendToEngine] error', err);
         reject(err);
       });
   });
@@ -140,7 +139,7 @@ function handleEngineResponse(rawMessage: unknown) {
 
   const { success, data, error } = EngineResponse.BACKEND_RESPONSE_SCHEMA.safeParse(rawMessage);
   if (!success) {
-    console.log('[Backend] Could not parse engine response:', rawMessage, error?.format());
+    console.log('[handleEngineResponse] error', rawMessage, error?.format());
     return;
   }
 
@@ -160,7 +159,8 @@ function handleEngineResponse(rawMessage: unknown) {
 async function engineToBackendLoop() {
   await connectRedisClient(subscriber, 'Backend-Subscriber');
   const streamKey = process.env.BACKEND_STREAM || 'to-backend';
-  let lastId = '$';
+  const latest = await subscriber.xRevRange(streamKey, '+', '-', { COUNT: 1 });
+  let lastId = latest[0]?.id ?? '$';
 
   while (1) {
     try {
@@ -181,7 +181,7 @@ async function engineToBackendLoop() {
         }
       }
     } catch (err) {
-      console.log('[Backend] Error in engineToBackendLoop:', err);
+      console.log('[engineToBackendLoop] error', err);
       await new Promise((res) => setTimeout(res, 1000));
     }
   }
@@ -196,7 +196,7 @@ export async function initializeRedis() {
   await seedMarketCacheFromStream();
 
   engineToBackendLoop().catch((err) => {
-    console.log('[Backend] Engine loop fatal error:', err);
+    console.log('[initializeRedis] error', err);
     process.exit(1);
   });
 }

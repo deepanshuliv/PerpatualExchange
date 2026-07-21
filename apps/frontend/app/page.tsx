@@ -10,8 +10,6 @@ import AuthModal from "./components/AuthModal";
 import ConfirmModal from "./components/ConfirmModal";
 import { formatFundingRate } from "./utils/funding";
 import {
-  Search,
-  Sun,
   ChevronDown,
   ChevronRight,
   TrendingUp,
@@ -102,44 +100,16 @@ export default function Home() {
           </div>
 
           <nav className="hidden md:flex items-center space-x-6 text-xs font-semibold text-[#8491a5]">
-            {/* <a href="#" className="hover:text-white transition-colors">
-              Spot
-            </a> */}
             <a
               href="#"
               className="text-white border-b-2 border-white pb-4 pt-4 font-bold"
             >
               Futures
             </a>
-            {/* <a href="#" className="hover:text-white transition-colors">
-              Lend
-            </a>
-            <a href="#" className="hover:text-white transition-colors">
-              Vault
-            </a>
-            <a href="#" className="hover:text-white transition-colors">
-              Stocks
-            </a>
-            <a href="#" className="hover:text-white transition-colors">
-              BP
-            </a>
-            <a
-              href="#"
-              className="hover:text-white transition-colors flex items-center space-x-1"
-            >
-              <span>More</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </a> */}
           </nav>
         </div>
 
         <div className="flex items-center space-x-4">
-          {/* <button className="text-[#8491a5] hover:text-white p-1 transition-colors">
-            <Search className="w-4 h-4" />
-          </button>
-          <button className="text-[#8491a5] hover:text-white p-1 transition-colors">
-            <Sun className="w-4 h-4" />
-          </button> */}
 
           {user ? (
             <div className="flex items-center space-x-3 text-xs">

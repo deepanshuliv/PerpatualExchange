@@ -28,7 +28,6 @@ export default class Balance {
   createUserBalanceAccount(userId: string) {
     if (!this.user[userId]) {
       this.user[userId] = {
-        // New accounts should start at 0; funding happens via explicit onramp/add_balance.
         balance: 0,
         lockedBalance: 0,
       };

@@ -107,7 +107,8 @@ function parseStreamMessages(messages: StreamMessage[]): MessageBuckets {
           buckets.cancelOrders.push({ msgId: msg.id, event: result.data });
           break;
       }
-    } catch {
+    } catch (err) {
+      console.log('[parseStreamMessages] error', err);
       buckets.invalidMsgIds.push(msg.id);
     }
   }
@@ -345,7 +346,7 @@ function applyMakerFillUpdates(
 }
 
 function deriveStatus(filledQty: number, totalQty: number): string {
-  if (filledQty >= totalQty) return 'FILLED';
+  if (filledQty === totalQty) return 'FILLED';
   if (filledQty > 0) return 'PARTIALLY_FILLED';
   return 'OPEN';
 }

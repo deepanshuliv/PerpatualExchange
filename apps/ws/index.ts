@@ -22,7 +22,7 @@ async function bootstrap() {
     });
 
     wss.on('connection', function connection(ws) {
-      ws.on('error', console.log);
+      ws.on('error', (err) => console.log('[connection] error', err));
 
       const client = {
         ws,
@@ -78,7 +78,7 @@ async function bootstrap() {
       });
     });
   } catch (error) {
-    console.log('Failed to start WS server:', error);
+    console.log('[bootstrap] error', error);
     process.exit(1);
   }
 }

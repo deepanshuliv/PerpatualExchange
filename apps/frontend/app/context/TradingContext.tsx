@@ -412,13 +412,13 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return;
         }
       } catch (err) {
-        console.log('WebSocket message parse error:', err);
+        console.log('[wsOnMessage] error', err);
       }
     };
 
     ws.onerror = () => {
       if (!closedByCleanup) {
-        console.log(`WebSocket connection error (${WS_BASE})`);
+        console.log('[wsOnError] error', WS_BASE);
       }
     };
 
@@ -531,7 +531,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (json.ok && json.data) {
         applyDepthFromApi(json.data.bids, json.data.asks);
       }
-    } catch {
+    } catch (err) {
+      console.log('[fetchDepth] error', err);
     } finally {
       setLoadingDepth(false);
     }
@@ -549,7 +550,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         });
         setLoadingCandles(false);
       }
-    } catch {
+    } catch (err) {
+      console.log('[fetchLastPrice] error', err);
     }
   };
 
@@ -566,7 +568,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         );
         setMarketTrades((prev) => mergeMarketTrades(prev, formatted));
       }
-    } catch {
+    } catch (err) {
+      console.log('[fetchTrades] error', err);
     }
   };
 
@@ -593,7 +596,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         );
         setMarketLiquidations((prev) => mergeMarketLiquidations(prev, formatted));
       }
-    } catch {
+    } catch (err) {
+      console.log('[fetchLiquidations] error', err);
     }
   };
 
@@ -620,7 +624,6 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         );
 
         setCandles((prev) => {
-          // Keep live WS candles when the DB has no history yet.
           if (formatted.length === 0) return prev;
           if (prev.length === 0) return formatted;
 
@@ -633,7 +636,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return formatted;
         });
       }
-    } catch {
+    } catch (err) {
+      console.log('[fetchCandles] error', err);
     } finally {
       setLoadingCandles(false);
     }
@@ -647,7 +651,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setMarkPrice(price);
         setMarkPricesByMarket((prev) => ({ ...prev, [market]: price }));
       }
-    } catch {
+    } catch (err) {
+      console.log('[fetchMarkPrice] error', err);
     }
   };
 
@@ -662,8 +667,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const json = await api.getMarkPrice(m);
           const price = Number(json?.price ?? json?.data?.price);
           if (price > 0) updates[m] = price;
-        } catch {
-          // ignore per-market fetch failures
+        } catch (err) {
+          console.log('[fetchMarkPricesForMarkets] error', err);
         }
       }),
     );
@@ -672,7 +677,6 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setMarkPricesByMarket((prev) => ({ ...prev, ...updates }));
     }
   };
-  // Load initial market data over HTTP immediately — do not wait for WebSocket.
   useEffect(() => {
     fetchDepth();
     fetchLastPrice();
@@ -754,7 +758,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }));
         setFills(formattedFills);
       }
-    } catch {
+    } catch (err) {
+      console.log('[refreshUserData] error', err);
     }
   };
 
@@ -772,7 +777,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return false;
     } catch (err) {
-      console.log('Signup failed:', err);
+      console.log('[signup] error', err);
       return false;
     }
   };
@@ -790,7 +795,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return false;
     } catch (err) {
-      console.log('Login failed:', err);
+      console.log('[login] error', err);
       return false;
     }
   };
@@ -820,7 +825,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return { ok: false, msg: json.msg || 'Deposit failed' };
     } catch (err) {
-      console.log('Deposit onramp failed:', err);
+      console.log('[performOnramp] error', err);
       return { ok: false, msg: 'Could not reach the backend' };
     }
   };
@@ -858,7 +863,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error(json.msg || 'parse error ');
       }
     } catch (err: any) {
-      console.log('Order submission failed:', err);
+      console.log('[placeOrder] error', err);
       throw err;
     }
   };
@@ -875,7 +880,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       return false;
     } catch (err) {
-      console.log('Cancel order failed:', err);
+      console.log('[cancelOrder] error', err);
       return false;
     }
   };

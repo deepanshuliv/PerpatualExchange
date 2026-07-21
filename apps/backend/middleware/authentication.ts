@@ -26,6 +26,7 @@ export const isAuth = (req: Request, res: Response, next: NextFunction) => {
         req.userId = isValid.userId;
         next();
     } catch (err) {
+        console.log('[isAuth] error', err);
         return res.status(403).json({
             msg: "invalid token"
         });

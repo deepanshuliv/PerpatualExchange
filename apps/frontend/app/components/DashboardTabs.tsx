@@ -70,7 +70,7 @@ export default function DashboardTabs() {
       }
       setPendingAction(null);
     } catch (e) {
-      console.log('Action failed:', e);
+      console.log('[handleConfirmAction] error', e);
     } finally {
       setActionLoading(false);
       if (action.type === 'cancel') {
@@ -118,20 +118,6 @@ export default function DashboardTabs() {
         </div>
 
         <div className="flex items-center space-x-4 text-xs">
-          {/* {user && (
-            <div className="flex items-center space-x-2 border-r border-[#171a1f] pr-4 text-[#8491a5]">
-              <span>
-                Logged in as: <strong className="text-white">{user.username}</strong>
-              </span>
-              <button
-                onClick={() => setPendingAction({ type: 'logout' })}
-                className="hover:text-red-400 p-0.5 rounded hover:bg-[#171a1f] transition-colors"
-                title="Logout"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )} */}
 
           <div className="flex items-center space-x-2">
             <span className="text-[#8491a5]">Available Equity:</span>

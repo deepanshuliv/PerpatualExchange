@@ -32,7 +32,7 @@ export default class BinanceClassListner {
     });
 
     ws.on('error', (err) => {
-      console.log('binance ws error:', err.message);
+      console.log('[setupPriceSubscription] error', err);
       if (reject) {
         reject(err);
       }
@@ -63,7 +63,7 @@ export default class BinanceClassListner {
           }),
         });
       } catch (err) {
-        console.log('Failed to parse or process Binance message:', err);
+        console.log('[setupPriceSubscription] error', err);
       }
     });
   }

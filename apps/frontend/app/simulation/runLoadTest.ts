@@ -50,7 +50,6 @@ const fmtPrice = (value: number, market: SimMarket) =>
 const fmtQty = (value: number, market: SimMarket) =>
   value.toFixed(MARKET[market].qtyDec);
 
-/** Maker below/above mark, or taker through the spread when cross=true. */
 const orderPrice = (
   mark: number,
   side: 'LONG' | 'SHORT',
@@ -80,8 +79,8 @@ export async function fetchMarkPrice(market: SimMarket): Promise<number> {
   try {
     const res = await apiService.getMarkPrice(market);
     if (res?.ok && Number(res.price) > 0) return Number(res.price);
-  } catch {
-    /* try next source */
+  } catch (err) {
+    console.log('[fetchMarkPrice] error', err);
   }
 
   try {
@@ -90,8 +89,8 @@ export async function fetchMarkPrice(market: SimMarket): Promise<number> {
       const mid = midFromDepth(depth.data.bids, depth.data.asks);
       if (mid) return mid;
     }
-  } catch {
-    /* try next source */
+  } catch (err) {
+    console.log('[fetchMarkPrice] error', err);
   }
 
   return new Promise((resolve) => {
@@ -114,8 +113,8 @@ export async function fetchMarkPrice(market: SimMarket): Promise<number> {
         const msg = JSON.parse(e.data);
         const price = Number(msg?.data?.price);
         if (msg?.stream?.startsWith('markPrice') && price > 0) finish(price);
-      } catch {
-        /* ignore */
+      } catch (err) {
+        console.log('[fetchMarkPrice] error', err);
       }
     };
     ws.onerror = () => finish(fallback);
@@ -193,7 +192,6 @@ async function placeOrder(
   }
 }
 
-/** Place N orders per user — resting book or crossing trades. */
 async function runOrderBatch(
   users: SimUser[],
   config: LoadTestConfig,

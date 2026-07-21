@@ -123,6 +123,7 @@ export default function OrderEntryPanel() {
       setSliderVal(0);
       refreshUserData();
     } catch (err: any) {
+      console.log('[handleSubmitOrder] error', err);
       setErrorMsg(err.message || 'Failed to place order');
     } finally {
       setLoading(false);
@@ -144,7 +145,6 @@ export default function OrderEntryPanel() {
       style={{ backgroundColor: BP.bg, border: `1px solid ${BP.border}` }}
     >
       <form onSubmit={handleSubmitOrder} className="flex flex-col gap-4">
-        {/* Buy / Sell toggle */}
         <div
           className="grid grid-cols-2 rounded-lg p-1 h-11 shrink-0"
           style={{ backgroundColor: BP.inputBg }}
@@ -175,7 +175,6 @@ export default function OrderEntryPanel() {
           </button>
         </div>
 
-        {/* Order type tabs */}
         <div className="flex items-center gap-5 text-sm">
           {(['LIMIT', 'MARKET'] as const).map((type) => (
             <button
@@ -194,7 +193,6 @@ export default function OrderEntryPanel() {
           ))}
         </div>
 
-        {/* Available equity */}
         <div className="flex items-center justify-between text-xs">
           <span style={{ color: BP.muted }}>Available Equity</span>
           <span className="font-mono font-semibold text-white">
@@ -206,7 +204,6 @@ export default function OrderEntryPanel() {
           </span>
         </div>
 
-        {/* Price input (limit only) */}
         {orderType === 'LIMIT' && (
           <div
             className="rounded-lg p-4 flex flex-col gap-2"
@@ -254,7 +251,6 @@ export default function OrderEntryPanel() {
           </div>
         )}
 
-        {/* Quantity input */}
         <div
           className="rounded-lg p-4 flex flex-col gap-2"
           style={{ backgroundColor: BP.inputBg }}
@@ -278,7 +274,6 @@ export default function OrderEntryPanel() {
           </div>
         </div>
 
-        {/* Percentage slider */}
         <div className="flex flex-col gap-2 py-1">
           <div className="relative w-full h-1 rounded" style={{ backgroundColor: BP.border }}>
             <div
@@ -311,7 +306,6 @@ export default function OrderEntryPanel() {
           </div>
         </div>
 
-        {/* Order value */}
         <div
           className="rounded-lg p-4 flex flex-col gap-2"
           style={{ backgroundColor: BP.inputBg }}
@@ -335,7 +329,6 @@ export default function OrderEntryPanel() {
           </div>
         </div>
 
-        {/* Margin details */}
         <div className="flex flex-col gap-2 text-xs">
           <div className="flex justify-between">
             <span style={{ color: BP.muted }}>Margin Required</span>
@@ -351,7 +344,6 @@ export default function OrderEntryPanel() {
           </div>
         </div>
 
-        {/* Error / success */}
         {errorMsg && (
           <div
             className="text-sm py-3 px-4 rounded-lg"
@@ -377,7 +369,6 @@ export default function OrderEntryPanel() {
           </div>
         )}
 
-        {/* Submit */}
         <div className="pt-1">
           {user && token ? (
             <button

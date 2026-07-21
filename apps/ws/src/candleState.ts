@@ -105,12 +105,12 @@ export async function seedMarketCacheFromStream(redis: RedisClientType) {
           rememberMarkPrice(market, Number(parsed.payload.price));
           seededMark.add(market);
         }
-      } catch {
-        // skip malformed entries
+      } catch (err) {
+        console.log('[seedMarketCacheFromStream] error', err);
       }
     }
   } catch (err) {
-    console.log('[WS] Failed to seed market cache from stream:', err);
+    console.log('[seedMarketCacheFromStream] error', err);
   }
 }
 

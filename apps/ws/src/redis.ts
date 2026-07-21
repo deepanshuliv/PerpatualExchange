@@ -18,7 +18,7 @@ export async function startConsumerGroup() {
     console.log(`[WebSocket Consumer] Created group '${groupName}' at stream tail ($)`);
   } catch (err: any) {
     if (!err.message?.includes('BUSYGROUP')) {
-      console.log('[WebSocket Consumer] Failed to initialize consumer group:', err);
+      console.log('[startConsumerGroup] error', err);
       process.exit(1);
     }
     console.log(`[WebSocket Consumer] Using existing group '${groupName}'`);
@@ -47,9 +47,6 @@ export async function startConsumerGroup() {
             if (parseResult.success) {
               checkMarketUpdateAndSendToSubsribedUser(parseResult.data);
             } else {
-              // The backend stream contains both WS broadcast events and backend API responses.
-              // WS only cares about the broadcast events; silently ignore the backend responses
-              // to avoid flooding logs (especially during simulations / polling).
               const isBackendResponse = EngineResponse.BACKEND_RESPONSE_SCHEMA.safeParse(parsedData).success;
               if (!isBackendResponse) {
                 console.log(
@@ -62,21 +59,18 @@ export async function startConsumerGroup() {
 
             await consumerGroups.xAck(streamKey, groupName, message.id);
           } catch (e) {
-            console.log(
-              '[WebSocket Consumer] Error processing message, acknowledging to discard:',
-              e,
-            );
+            console.log('[consumerLoop] error', e);
             try {
               await consumerGroups.xAck(streamKey, groupName, message.id);
             } catch (ackErr) {
-              console.log('[WebSocket Consumer] Failed to ACK failed message:', ackErr);
+              console.log('[consumerLoop] error', ackErr);
             }
           }
         }
       }
     }
   })().catch((err) => {
-    console.log('WebSocket consumer loop error:', err);
+    console.log('[consumerLoop] error', err);
     process.exit(1);
   });
 }
