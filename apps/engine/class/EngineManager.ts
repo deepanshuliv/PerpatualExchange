@@ -272,6 +272,12 @@ export default class EngineManager {
           payload: { market, transactionTime: now },
         });
       }
+    } else if ('correlationId' in request) {
+      await this.sendTobackend({
+        correlationId: (request as { correlationId: string }).correlationId,
+        type: 'error',
+        payload: { error: `UNHANDLED_REQUEST_TYPE_${(request as { type: string }).type}` },
+      });
     }
   }
 
@@ -404,8 +410,11 @@ export default class EngineManager {
                 console.log('[start] error', error);
                 continue;
               }
-              const { price, market } = data.payload;
-              this.positionManager.updateMarkpriceMap(market, price);
+              try {
+                await this.handleBackendRequest(data);
+              } catch (err) {
+                console.log(`[handleBackendRequest] error | type=markprice_updated`, err);
+              }
             } else {
               const { success, data, error } =
                 EngineRequest.ENGINE_REQUEST_SCHEMA.safeParse(parsedMessage);
@@ -416,12 +425,19 @@ export default class EngineManager {
               try {
                 await this.handleBackendRequest(data);
               } catch (err) {
-                console.log('[handleBackendRequest] error', err);
-                if (correlationId && type !== 'markprice_updated' && type !== 'run_funding_rate') {
+                console.log(`[handleBackendRequest] error | type=${type} | correlationId=${correlationId}`, err);
+                if (
+                  correlationId &&
+                  correlationId !== 'N/A' &&
+                  type !== 'markprice_updated' &&
+                  type !== 'run_funding_rate'
+                ) {
                   await this.sendTobackend({
                     correlationId,
                     type: 'error',
-                    payload: { error: 'ENGINE_INTERNAL_ERROR' },
+                    payload: {
+                      error: err instanceof Error ? err.message : 'ENGINE_INTERNAL_ERROR',
+                    },
                   });
                 }
               }

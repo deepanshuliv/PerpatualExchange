@@ -271,9 +271,11 @@ export default class OrderBookManager {
           }
           PriceLevel.totalqty -= priceLevelMaxFill;
         }
-        if (PriceLevel.totalqty === 0) {
+        if (PriceLevel.totalqty <= 0 || PriceLevel.openOrder.length === 0) {
           oppSide.eraseElementByKey(bestPrice);
         }
+      } else {
+        break;
       }
     }
 
@@ -427,9 +429,11 @@ export default class OrderBookManager {
 
           PriceLevel.totalqty -= maxQtyFillPriceLevel;
         }
+      } else {
+        break;
       }
 
-      if (PriceLevel.totalqty === 0) {
+      if (PriceLevel.totalqty <= 0 || PriceLevel.openOrder.length === 0) {
         oppSide.eraseElementByKey(bestPrice);
       }
     }

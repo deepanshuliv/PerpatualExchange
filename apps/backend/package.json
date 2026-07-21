@@ -10,7 +10,7 @@
     "typescript": "^5"
   },
   "scripts": {
-    "dev": "bun --watch index.ts"
+    "dev": "bun index.ts"
   },
   "dependencies": {
     "@repo/db": "workspace:*",
