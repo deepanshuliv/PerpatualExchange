@@ -43,15 +43,6 @@ export async function startConsumerGroup() {
 
             if (parseResult.success) {
               checkMarketUpdateAndSendToSubsribedUser(parseResult.data);
-            } else {
-              const isBackendResponse = EngineResponse.BACKEND_RESPONSE_SCHEMA.safeParse(parsedData).success;
-              if (!isBackendResponse) {
-                console.log(
-                  '[WebSocket Consumer] Skipping unhandled engine message:',
-                  parsedData?.type ?? 'unknown',
-                  parseResult.error.issues[0]?.message,
-                );
-              }
             }
 
             await consumerGroups.xAck(streamKey, groupName, message.id);
@@ -66,8 +57,5 @@ export async function startConsumerGroup() {
         }
       }
     }
-  })().catch((err) => {
-    console.log('[consumerLoop] error', err);
-    process.exit(1);
-  });
+  })()
 }
