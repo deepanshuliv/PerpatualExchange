@@ -135,8 +135,8 @@ services:
       dockerfile: Dockerfile
       target: frontend-runner
       args:
-        NEXT_PUBLIC_API_URL=/api
-        NEXT_PUBLIC_WS_URL=wss://exchange.deepanshu.live/ws
+        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_WS_URL: wss://exchange.deepanshu.live/ws
     container_name: perp-frontend
     restart: unless-stopped
     depends_on:
