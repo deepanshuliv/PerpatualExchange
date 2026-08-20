@@ -7,5 +7,5 @@ build
 .cache
 apps/*/node_modules
 packages/*/node_modules
-apps/frontend/.next
+apps/frontend
 apps/engine/snapshots

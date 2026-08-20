@@ -29,6 +29,7 @@ services:
       retries: 5
 
   engine:
+    image: perp-v2-base:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -47,9 +48,7 @@ services:
       - engine_snapshots:/app/apps/engine/snapshots
 
   db-consumer:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: perp-v2-base:latest
     container_name: perp-db-consumer
     restart: unless-stopped
     command: ["bun", "apps/db/index.ts"]
@@ -66,9 +65,7 @@ services:
       - DB_CONSUMER_NAME=db-consumer
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: perp-v2-base:latest
     container_name: perp-backend
     restart: unless-stopped
     command: ["bun", "apps/backend/index.ts"]
@@ -85,9 +82,7 @@ services:
       - PORT=3001
 
   ws:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: perp-v2-base:latest
     container_name: perp-ws
     restart: unless-stopped
     command: ["bun", "apps/ws/index.ts"]
@@ -102,9 +97,7 @@ services:
       - PORT=8080
 
   market-maker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: perp-v2-base:latest
     container_name: perp-market-maker
     restart: unless-stopped
     command: ["bun", "apps/market-maker/index.ts"]
