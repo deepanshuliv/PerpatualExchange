@@ -39,4 +39,4 @@ yarn-error.log*
 *.pem
 .env*
 !.env.example
-!.env.production
+!**/.env.example
