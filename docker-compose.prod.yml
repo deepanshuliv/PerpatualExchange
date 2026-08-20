@@ -1,0 +1,168 @@
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: perp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mypassword}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: perp-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --save 60 1
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: service
+      args:
+        APP_NAME: engine
+    container_name: perp-engine
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - ENGINE_STREAM=to-engine
+      - BACKEND_STREAM=to-backend
+      - BINANCE_STREAM_URL=wss://stream.binancefuture.com/stream?streams=btcusdt@markPrice@1s/solusdt@markPrice@1s/ethusdt@markPrice@1s
+    volumes:
+      - engine_snapshots:/app/apps/engine/snapshots
+
+  db-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: service
+      args:
+        APP_NAME: db
+    container_name: perp-db-consumer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-mypassword}@postgres:5432/${POSTGRES_DB:-postgres}
+      - REDIS_URL=redis://redis:6379
+      - BACKEND_STREAM=to-backend
+      - DB_CONSUMER_GROUP=db-consumer-group
+      - DB_CONSUMER_NAME=db-consumer
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: service
+      args:
+        APP_NAME: backend
+    container_name: perp-backend
+    restart: unless-stopped
+    depends_on:
+      - engine
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-mypassword}@postgres:5432/${POSTGRES_DB:-postgres}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-super_secret_jwt_key_production_change_me}
+      - ENGINE_STREAM=to-engine
+      - BACKEND_STREAM=to-backend
+      - PORT=3001
+
+  ws:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: service
+      args:
+        APP_NAME: ws
+    container_name: perp-ws
+    restart: unless-stopped
+    depends_on:
+      - engine
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - BACKEND_STREAM=to-backend
+      - WS_CONSUMER_GROUP=ws-group
+      - WS_CONSUMER_NAME=ws
+      - PORT=8080
+
+  market-maker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: service
+      args:
+        APP_NAME: market-maker
+    container_name: perp-market-maker
+    restart: unless-stopped
+    depends_on:
+      - engine
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - ENGINE_STREAM=to-engine
+      - BACKEND_STREAM=to-backend
+      - MM_INITIAL_BALANCE=1000000
+      - MM_MIN_BALANCE=100000
+      - MM_REQUOTE_INTERVAL_MS=1000
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend-runner
+      args:
+        NEXT_PUBLIC_API_URL=/api
+        NEXT_PUBLIC_WS_URL=wss://exchange.deepanshu.live/ws
+    container_name: perp-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - ws
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+
+  nginx:
+    image: nginx:alpine
+    container_name: perp-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+      - ws
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  engine_snapshots:
+    driver: local

@@ -1,0 +1,23 @@
+# Heavy / irrelevant for frontend deploy
+apps/engine/snapshots
+apps/engine
+apps/backend
+apps/db
+apps/docs
+apps/ws
+packages/db
+packages/redis
+packages/shared-types
+packages/eslint-config
+
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+.git
+.cache
+*.tsbuildinfo
+.env
+.env.*
