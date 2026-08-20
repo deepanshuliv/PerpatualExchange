@@ -1,0 +1,11 @@
+node_modules
+.git
+.next
+dist
+build
+.turbo
+.cache
+apps/*/node_modules
+packages/*/node_modules
+apps/frontend/.next
+apps/engine/snapshots

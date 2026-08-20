@@ -2,7 +2,7 @@
 FROM oven/bun:1.3.13 AS base
 WORKDIR /app
 
-# Copy dependency manifests
+# Copy dependency manifests and code
 COPY package.json bun.lock turbo.json ./
 COPY packages ./packages
 COPY apps ./apps
@@ -14,14 +14,11 @@ RUN bun install --frozen-lockfile
 RUN cd packages/db && bun run prisma generate || true
 
 # -------------------------------------------------------------
-# Service runner stage for Bun apps (backend, engine, ws, db, market-maker)
+# Microservice runner stage
 # -------------------------------------------------------------
 FROM base AS service
-ARG APP_NAME=engine
-ENV APP_DIR=apps/${APP_NAME}
-
 WORKDIR /app
-CMD ["sh", "-c", "bun ${APP_DIR}/index.ts"]
+CMD ["bun", "apps/engine/index.ts"]
 
 # -------------------------------------------------------------
 # Frontend build and serve stage (Next.js)
