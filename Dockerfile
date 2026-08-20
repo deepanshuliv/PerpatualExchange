@@ -8,7 +8,7 @@ COPY packages ./packages
 COPY apps ./apps
 
 # Install all dependencies across monorepo
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Generate Prisma Client
 RUN cd packages/db && bun run prisma generate || true
