@@ -6,39 +6,55 @@ export class MarketMakerStrategy {
   private config: MarketConfig;
   private client: EngineClient;
   private userId: string;
+  private takerUserId: string;
   private isRunning = false;
-  private timer: ReturnType<typeof setInterval> | null = null;
-  private activeOrderIds = new Set<string>();
+  private requoteTimer: ReturnType<typeof setInterval> | null = null;
+  private tradeTimer: ReturnType<typeof setInterval> | null = null;
+  private tradeCounter = 0;
 
   constructor(config: MarketConfig, client: EngineClient) {
     this.config = config;
     this.client = client;
     this.userId = `mm-bot-${config.market}`;
+    this.takerUserId = `taker-bot-${config.market}`;
   }
 
   async start(initialBalance: number, minBalanceThreshold: number, requoteIntervalMs: number): Promise<void> {
     this.isRunning = true;
-    console.log(`[MM Strategy: ${this.config.market}] Initializing for bot user: ${this.userId}`);
+    console.log(`[MM Strategy: ${this.config.market}] Initializing for bot users: ${this.userId} & ${this.takerUserId}`);
 
-    // Ensure initial balance
+    // Ensure initial balances for both maker and taker
     await this.client.ensureBalance(this.userId, initialBalance, minBalanceThreshold);
+    await this.client.ensureBalance(this.takerUserId, initialBalance, minBalanceThreshold);
 
-    // Run requote loop
-    this.timer = setInterval(() => {
+    // Run 1-second limit order requote loop (provides depth)
+    this.requoteTimer = setInterval(() => {
       this.requote().catch((err) => {
         console.error(`[MM Strategy: ${this.config.market}] Requote error:`, err);
       });
     }, requoteIntervalMs);
 
-    // Initial immediate requote
-    setTimeout(() => this.requote(), 500);
+    // Run active organic trade loop (executes trades, builds candles, updates volume & last price)
+    this.tradeTimer = setInterval(() => {
+      this.executeOrganicTrade().catch((err) => {
+        console.error(`[MM Strategy: ${this.config.market}] Trade execution error:`, err);
+      });
+    }, 2500);
+
+    // Initial immediate requote and trade
+    setTimeout(() => this.requote(), 400);
+    setTimeout(() => this.executeOrganicTrade(), 1200);
   }
 
   stop(): void {
     this.isRunning = false;
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+    if (this.requoteTimer) {
+      clearInterval(this.requoteTimer);
+      this.requoteTimer = null;
+    }
+    if (this.tradeTimer) {
+      clearInterval(this.tradeTimer);
+      this.tradeTimer = null;
     }
   }
 
@@ -68,7 +84,7 @@ export class MarketMakerStrategy {
 
     for (let i = 1; i <= levels; i++) {
       // Calculate jittered quantity
-      const jitter = (Math.random() * 2 - 1) * qtyVariance; // e.g. -0.2 to +0.2
+      const jitter = (Math.random() * 2 - 1) * qtyVariance;
       const levelQty = Math.max(
         this.round(baseQty * (1 + jitter) * (1 + i * 0.1), qtyDecimals),
         Math.pow(10, -qtyDecimals),
@@ -104,7 +120,35 @@ export class MarketMakerStrategy {
     }
   }
 
+  private async executeOrganicTrade(): Promise<void> {
+    if (!this.isRunning) return;
+
+    const markPrice = this.client.getLatestMarkPrice(this.config.market);
+    if (!markPrice || markPrice <= 0) return;
+
+    this.tradeCounter++;
+    const { baseQty, marginRatio, qtyDecimals } = this.config;
+
+    // Alternate buy/sell with small random variations
+    const isBuy = Math.random() > 0.48;
+    const kind: Shared.KIND = isBuy ? 'LONG' : 'SHORT';
+    const tradeQty = Math.max(
+      this.round(baseQty * (0.2 + Math.random() * 0.6), qtyDecimals),
+      Math.pow(10, -qtyDecimals),
+    );
+    const estimatedMargin = this.round(tradeQty * markPrice * marginRatio, 2);
+
+    await this.client.placeMarketOrder(
+      this.takerUserId,
+      this.config.market,
+      kind,
+      tradeQty,
+      estimatedMargin,
+    );
+  }
+
   async checkAndReplenishBalance(targetBalance: number, minThreshold: number): Promise<void> {
     await this.client.ensureBalance(this.userId, targetBalance, minThreshold);
+    await this.client.ensureBalance(this.takerUserId, targetBalance, minThreshold);
   }
 }

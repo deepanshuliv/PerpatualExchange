@@ -231,4 +231,30 @@ export class EngineClient {
       false, // async order dispatch to minimize requote delay
     );
   }
+
+  async placeMarketOrder(
+    userId: string,
+    market: Shared.MARKET_AVAILABEL,
+    kind: Shared.KIND,
+    qty: number,
+    margin: number,
+  ): Promise<void> {
+    const correlationId = `trader-mkt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    await this.sendRequest(
+      {
+        type: 'create_order',
+        correlationId,
+        payload: {
+          userId,
+          market,
+          kind,
+          type: 'MARKET',
+          qty: String(qty),
+          price: '0',
+          margin: String(margin),
+        },
+      },
+      false,
+    );
+  }
 }

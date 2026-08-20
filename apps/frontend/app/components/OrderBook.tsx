@@ -34,7 +34,7 @@ function useSizeFlashes(rows: OrderBookRow[]) {
     if (next.size === 0) return;
 
     setFlashes(next);
-    const timer = setTimeout(() => setFlashes(new Map()), 450);
+    const timer = setTimeout(() => setFlashes(new Map()), 350);
     return () => clearTimeout(timer);
   }, [rows]);
 
@@ -51,27 +51,29 @@ interface DepthRowProps {
 
 function DepthRow({ row, side, depthPercent, flash, formatPrice }: DepthRowProps) {
   const isBid = side === "bid";
-  const color = isBid ? "rgba(0, 192, 135, 0.1)" : "rgba(239, 68, 68, 0.1)";
+  const color = isBid ? "rgba(0, 192, 135, 0.12)" : "rgba(239, 68, 68, 0.12)";
   const priceColor = isBid ? "text-[#00c087]" : "text-[#ff3b30]";
   const flashClass =
     flash === "up" ? "ob-flash-up" : flash === "down" ? "ob-flash-down" : "";
 
   return (
     <div
-      className={`relative grid grid-cols-3 px-3 py-0.5 hover:bg-white/[0.02] cursor-pointer items-center ob-row-enter ${flashClass}`}
+      className={`relative grid grid-cols-3 px-3 py-0.5 hover:bg-white/[0.03] cursor-pointer items-center transition-colors duration-150 ${flashClass}`}
     >
       <div
-        className="absolute inset-0 ob-depth-bar pointer-events-none"
+        className="absolute inset-0 pointer-events-none transition-all duration-300 ease-out"
         style={{
           background: `linear-gradient(to left, ${color} ${depthPercent}%, transparent ${depthPercent}%)`,
         }}
       />
-      <div className={`relative z-10 ${priceColor} font-bold`}>{formatPrice(row.price)}</div>
-      <div className="relative z-10 text-right text-[#b0bbcb] ob-size-cell tabular-nums">
-        {row.size.toFixed(5)}
+      <div className={`relative z-10 ${priceColor} font-bold text-xs tabular-nums`}>
+        {formatPrice(row.price)}
       </div>
-      <div className="relative z-10 text-right text-[#5d6b7e] tabular-nums">
-        {row.total.toFixed(5)}
+      <div className="relative z-10 text-right text-[#b0bbcb] tabular-nums text-xs">
+        {row.size.toFixed(4)}
+      </div>
+      <div className="relative z-10 text-right text-[#5d6b7e] tabular-nums text-xs">
+        {row.total.toFixed(4)}
       </div>
     </div>
   );
@@ -134,6 +136,8 @@ export default function OrderBook() {
   const maxTotalAsks = displayedAsks.length > 0 ? Math.max(...displayedAsks.map((a) => a.total)) : 1;
   const maxTotalBids = displayedBids.length > 0 ? Math.max(...displayedBids.map((b) => b.total)) : 1;
 
+  const displayLastPrice = lastPrice > 0 ? lastPrice : markPrice;
+
   const wasLockedRef = useRef(isLocked);
   useEffect(() => {
     if (isLocked && !wasLockedRef.current && spreadRef.current) {
@@ -156,11 +160,14 @@ export default function OrderBook() {
           </button>
           <button
             onClick={() => setActiveTab("trades")}
-            className={`px-3 py-1 text-xs font-bold transition-colors ${
+            className={`px-3 py-1 text-xs font-bold transition-colors flex items-center space-x-1.5 ${
               activeTab === "trades" ? "text-white border-b-2 border-white" : "text-[#8491a5] hover:text-white"
             }`}
           >
-            Trades
+            <span>Trades</span>
+            {marketTrades.length > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            )}
           </button>
           <button
             onClick={() => setActiveTab("liquidations")}
@@ -251,9 +258,9 @@ export default function OrderBook() {
             ref={bookRef}
             className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar font-mono text-xs"
           >
-            {loadingDepth ? (
+            {loadingDepth && bids.length === 0 && asks.length === 0 ? (
               <div className="flex items-center justify-center h-full text-zinc-600 text-[10px]">
-                Loading order book...
+                Connecting to order book...
               </div>
             ) : (
               <>
@@ -286,17 +293,13 @@ export default function OrderBook() {
                   <div className="flex items-center space-x-2">
                     <span
                       className={`text-sm font-bold transition-colors duration-200 ${
-                        lastPrice > 0 && markPrice > 0
-                          ? lastPrice >= markPrice
-                            ? "text-[#00c087]"
-                            : "text-[#ff3b30]"
-                          : "text-white"
+                        displayLastPrice >= markPrice ? "text-[#00c087]" : "text-[#ff3b30]"
                       }`}
                     >
-                      {formatDisplayPrice(lastPrice)}
+                      {formatDisplayPrice(displayLastPrice)}
                     </span>
-                    <span className="text-[10px] text-[#8491a5] font-semibold">
-                      {formatDisplayPrice(markPrice)}
+                    <span className="text-[10px] text-[#8491a5] font-semibold" title="Index / Mark Price">
+                      Index: {formatDisplayPrice(markPrice)}
                     </span>
                   </div>
                 </div>
@@ -335,22 +338,26 @@ export default function OrderBook() {
           </div>
           <div className="flex-1 overflow-y-auto no-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
             {marketTrades.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans">
-                <span>No market trades yet</span>
+              <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans text-xs">
+                <span>Waiting for trades...</span>
               </div>
             ) : (
               marketTrades.map((trade, idx) => (
                 <div
                   key={`trade-${trade.time}-${trade.price}-${idx}`}
-                  className="grid grid-cols-3 px-3 py-1.5 hover:bg-white/[0.02] items-center ob-row-enter"
+                  className="grid grid-cols-3 px-3 py-1.5 hover:bg-white/[0.02] items-center transition-colors"
                 >
                   <div className="text-[#8491a5] text-[10px]">
                     {new Date(trade.time).toLocaleTimeString()}
                   </div>
-                  <div className="text-right text-white font-bold tabular-nums">
+                  <div
+                    className={`text-right font-bold tabular-nums ${
+                      trade.price >= markPrice ? "text-[#00c087]" : "text-[#ff3b30]"
+                    }`}
+                  >
                     {trade.price.toLocaleString(undefined, { minimumFractionDigits: 1 })}
                   </div>
-                  <div className="text-right text-[#b0bbcb] tabular-nums">{trade.qty.toFixed(5)}</div>
+                  <div className="text-right text-[#b0bbcb] tabular-nums">{trade.qty.toFixed(4)}</div>
                 </div>
               ))
             )}
@@ -360,7 +367,7 @@ export default function OrderBook() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="px-3 py-2 border-b border-[#171a1f] bg-[#12161c]/40 shrink-0">
             <p className="text-[10px] text-[#8491a5] leading-relaxed">
-              Liquidations trigger when mark price moves against a position past its maintenance margin.
+              Real-time liquidations occurring on the order book.
             </p>
           </div>
           <div className="grid grid-cols-4 text-[10px] font-bold text-[#8491a5] px-3 py-1.5 border-b border-[#171a1f] bg-[#0c0d10] shrink-0">
@@ -371,7 +378,7 @@ export default function OrderBook() {
           </div>
           <div className="flex-1 overflow-y-auto no-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
             {marketLiquidations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans">
+              <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans text-xs">
                 <span>No liquidations yet</span>
               </div>
             ) : (
@@ -383,13 +390,13 @@ export default function OrderBook() {
                   <div className="text-[#8491a5] text-[10px]">
                     {new Date(liq.time).toLocaleTimeString()}
                   </div>
-                  <div className={liq.kind === "LONG" ? "text-[#ff3b30]" : "text-[#00c087]"}>
+                  <div className={liq.kind === "LONG" ? "text-[#ff3b30] font-bold" : "text-[#00c087] font-bold"}>
                     {liq.kind}
                   </div>
                   <div className="text-right text-white font-bold">
                     {liq.price.toLocaleString(undefined, { minimumFractionDigits: 1 })}
                   </div>
-                  <div className="text-right text-[#b0bbcb]">{liq.qty.toFixed(5)}</div>
+                  <div className="text-right text-[#b0bbcb]">{liq.qty.toFixed(4)}</div>
                 </div>
               ))
             )}
