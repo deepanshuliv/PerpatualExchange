@@ -166,7 +166,7 @@ async function engineToBackendLoop() {
     try {
       const response = (await subscriber.xRead([{ key: streamKey, id: lastId }], {
         COUNT: 100,
-        BLOCK: 0,
+        BLOCK: 1000,
       })) as RedisStreamResponse;
 
       if (!response || !Array.isArray(response)) {

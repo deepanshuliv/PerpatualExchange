@@ -21,13 +21,12 @@ function readStream(
 async function readBatch(
   subscriber: ReturnType<typeof redisClient.duplicate>,
 ): Promise<RedisStreamResponse> {
-  // First drain messages this consumer already received but never acked (e.g.
-  // after a crash). '0' reads that pending list. Once it's empty, '>' blocks
-  // briefly for brand-new messages.
-  const pending = await readStream(subscriber, '0', 0);
-  if (pending?.[0]?.messages.length) {
-    return pending;
-  }
+  try {
+    const pending = await readStream(subscriber, '0', 0);
+    if (pending?.[0]?.messages.length) {
+      return pending;
+    }
+  } catch (_) {}
 
   return readStream(subscriber, '>', 1000);
 }
@@ -43,8 +42,7 @@ async function startConsumer() {
     console.log(`[DB Consumer] Created group '${CONSUMER_GROUP}'`);
   } catch (err: any) {
     if (!err.message?.includes('BUSYGROUP')) {
-      console.log('[startConsumer] error', err);
-      process.exit(1);
+      console.log('[startConsumer] warning during xGroupCreate:', err.message);
     }
   }
 
@@ -64,13 +62,21 @@ async function startConsumer() {
         await subscriber.xAck(STREAM_KEY, CONSUMER_GROUP, allAckIds);
       }
     } catch (err) {
-      console.log('[startConsumer] error', err);
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      console.log('[startConsumer] error in batch processing loop:', err);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
 }
 
-startConsumer().catch((err) => {
-  console.log('[startConsumer] error', err);
-  process.exit(1);
-});
+async function bootstrap() {
+  while (true) {
+    try {
+      await startConsumer();
+    } catch (err) {
+      console.log('[DB Consumer] Restarting consumer after error:', err);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }
+}
+
+bootstrap();
