@@ -50,6 +50,16 @@ interface DepthRowProps {
 }
 
 function DepthRow({ row, side, depthPercent, flash, formatPrice }: DepthRowProps) {
+  if (row.price === 0) {
+    return (
+      <div className="relative grid grid-cols-3 px-3 py-0.5 pointer-events-none opacity-0 select-none">
+        <div className="text-xs tabular-nums">&nbsp;</div>
+        <div className="text-xs tabular-nums">&nbsp;</div>
+        <div className="text-xs tabular-nums">&nbsp;</div>
+      </div>
+    );
+  }
+
   const isBid = side === "bid";
   const color = isBid ? "rgba(0, 192, 135, 0.12)" : "rgba(239, 68, 68, 0.12)";
   const priceColor = isBid ? "text-[#00c087]" : "text-[#ff3b30]";
@@ -129,8 +139,22 @@ export default function OrderBook() {
   const bidFlashes = useSizeFlashes(groupedBids);
   const askFlashes = useSizeFlashes(groupedAsks);
 
-  const displayedAsks = layout === "bids" ? [] : groupedAsks;
-  const displayedBids = layout === "asks" ? [] : groupedBids;
+  const ROW_COUNT = layout === "both" ? 17 : 34;
+
+  const slicedAsks = useMemo(() => {
+    const arr = groupedAsks.slice(0, ROW_COUNT);
+    while (arr.length < ROW_COUNT) arr.push({ price: 0, size: 0, total: 0 });
+    return arr;
+  }, [groupedAsks, ROW_COUNT]);
+
+  const slicedBids = useMemo(() => {
+    const arr = groupedBids.slice(0, ROW_COUNT);
+    while (arr.length < ROW_COUNT) arr.push({ price: 0, size: 0, total: 0 });
+    return arr;
+  }, [groupedBids, ROW_COUNT]);
+
+  const displayedAsks = layout === "bids" ? [] : slicedAsks;
+  const displayedBids = layout === "asks" ? [] : slicedBids;
   const asksToRender = layout === "both" ? [...displayedAsks].reverse() : displayedAsks;
 
   const maxTotalAsks = displayedAsks.length > 0 ? Math.max(...displayedAsks.map((a) => a.total)) : 1;
@@ -269,11 +293,11 @@ export default function OrderBook() {
                     {asksToRender.length === 0 ? (
                       <div className="text-center text-zinc-600 text-[10px] py-4">No Asks</div>
                     ) : (
-                      asksToRender.map((ask) => {
-                        const depthPercent = Math.min((ask.total / maxTotalAsks) * 100, 100);
+                      asksToRender.map((ask, idx) => {
+                        const depthPercent = ask.price === 0 ? 0 : Math.min((ask.total / maxTotalAsks) * 100, 100);
                         return (
                           <DepthRow
-                            key={`ask-${ask.price}`}
+                            key={`ask-${idx}`}
                             row={ask}
                             side="ask"
                             depthPercent={depthPercent}
@@ -309,11 +333,11 @@ export default function OrderBook() {
                     {displayedBids.length === 0 ? (
                       <div className="text-center text-zinc-600 text-[10px] py-4">No Bids</div>
                     ) : (
-                      displayedBids.map((bid) => {
-                        const depthPercent = Math.min((bid.total / maxTotalBids) * 100, 100);
+                      displayedBids.map((bid, idx) => {
+                        const depthPercent = bid.price === 0 ? 0 : Math.min((bid.total / maxTotalBids) * 100, 100);
                         return (
                           <DepthRow
-                            key={`bid-${bid.price}`}
+                            key={`bid-${idx}`}
                             row={bid}
                             side="bid"
                             depthPercent={depthPercent}

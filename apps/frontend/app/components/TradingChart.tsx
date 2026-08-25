@@ -129,7 +129,7 @@ export default function TradingChart() {
         {activeTab === "chart" && (
           <div className="flex items-center gap-2">
             <div className="flex items-center bg-[#12161c] border border-[#171a1f] rounded p-0.5 space-x-0.5">
-              {(["1h", "1d"] as ChartInterval[]).map((interval) => (
+              {(["1m", "5m", "15m", "1h", "1d"] as ChartInterval[]).map((interval) => (
                 <button
                   key={interval}
                   onClick={() => setChartInterval(interval)}

@@ -28,7 +28,7 @@ function sendToSubscribers(stream: string, data: Record<string, unknown>) {
 
 function broadcastCandle(
   market: string,
-  interval: '1h' | '1d',
+  interval: '1m' | '5m' | '15m' | '1h' | '1d',
   candle: ReturnType<typeof applyTradeToLiveCandles>['candle1h'],
   transactionTime: number,
   executionTime: number,
@@ -49,11 +49,11 @@ function broadcastCandle(
 }
 
 export function sendCandleSnapshot(client: { ws: WebSocket }, stream: string) {
-  const match = stream.match(/^candle\.([^.]+)\.(1h|1d)$/);
+  const match = stream.match(/^candle\.([^.]+)\.(1m|5m|15m|1h|1d)$/);
   if (!match) return;
 
   const [, market, interval] = match;
-  const candles = getCandleSeries(market!, interval as '1h' | '1d');
+  const candles = getCandleSeries(market!, interval as '1m' | '5m' | '15m' | '1h' | '1d');
   if (candles.length === 0) return;
 
   client.ws.send(
@@ -103,7 +103,10 @@ export function checkMarketUpdateAndSendToSubsribedUser(update: EngineEvent) {
         executionTime,
       });
 
-      const { candle1h, candle1d } = applyTradeToLiveCandles(market, price, qty, transactionTime);
+      const { candle1m, candle5m, candle15m, candle1h, candle1d } = applyTradeToLiveCandles(market, price, qty, transactionTime);
+      broadcastCandle(market, '1m', candle1m, transactionTime, executionTime);
+      broadcastCandle(market, '5m', candle5m, transactionTime, executionTime);
+      broadcastCandle(market, '15m', candle15m, transactionTime, executionTime);
       broadcastCandle(market, '1h', candle1h, transactionTime, executionTime);
       broadcastCandle(market, '1d', candle1d, transactionTime, executionTime);
       return;

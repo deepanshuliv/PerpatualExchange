@@ -96,6 +96,48 @@ model tick {
   @@map("ticks")
 }
 
+model candle1m {
+  openTime DateTime
+  market   Market
+  open     Float
+  high     Float
+  low      Float
+  close    Float
+  volume   Float
+
+  @@id([openTime, market])
+  @@index([market, openTime])
+  @@map("candles_1m")
+}
+
+model candle5m {
+  openTime DateTime
+  market   Market
+  open     Float
+  high     Float
+  low      Float
+  close    Float
+  volume   Float
+
+  @@id([openTime, market])
+  @@index([market, openTime])
+  @@map("candles_5m")
+}
+
+model candle15m {
+  openTime DateTime
+  market   Market
+  open     Float
+  high     Float
+  low      Float
+  close    Float
+  volume   Float
+
+  @@id([openTime, market])
+  @@index([market, openTime])
+  @@map("candles_15m")
+}
+
 model candle1h {
   openTime DateTime
   market   Market

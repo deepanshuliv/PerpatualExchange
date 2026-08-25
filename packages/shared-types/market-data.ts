@@ -1,3 +1,6 @@
+export const INTERVAL_1M_MS = 60 * 1000;
+export const INTERVAL_5M_MS = 5 * 60 * 1000;
+export const INTERVAL_15M_MS = 15 * 60 * 1000;
 export const INTERVAL_1H_MS = 60 * 60 * 1000;
 export const INTERVAL_1D_MS = 24 * 60 * 60 * 1000;
 

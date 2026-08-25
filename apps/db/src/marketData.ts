@@ -1,4 +1,7 @@
 import {
+  INTERVAL_1M_MS,
+  INTERVAL_5M_MS,
+  INTERVAL_15M_MS,
   INTERVAL_1D_MS,
   INTERVAL_1H_MS,
   mergeTradeIntoOhlc,
@@ -22,6 +25,9 @@ type CandleModel = {
 
 type MarketDataTx = {
   tick: { createMany: (args: unknown) => Promise<unknown> };
+  candle1m: CandleModel;
+  candle5m: CandleModel;
+  candle15m: CandleModel;
   candle1h: CandleModel;
   candle1d: CandleModel;
 };
@@ -98,10 +104,15 @@ export async function persistTicksAndCandles(tx: MarketDataTx, trades: TradeTick
   });
 
   for (const trade of trades) {
-    const timestamp = trade.time.getTime();
-    const openTime1h = Math.floor(timestamp / INTERVAL_1H_MS) * INTERVAL_1H_MS;
-    const openTime1d = Math.floor(timestamp / INTERVAL_1D_MS) * INTERVAL_1D_MS;
+    const openTime1m = Math.floor(trade.time.getTime() / INTERVAL_1M_MS) * INTERVAL_1M_MS;
+    const openTime5m = Math.floor(trade.time.getTime() / INTERVAL_5M_MS) * INTERVAL_5M_MS;
+    const openTime15m = Math.floor(trade.time.getTime() / INTERVAL_15M_MS) * INTERVAL_15M_MS;
+    const openTime1h = Math.floor(trade.time.getTime() / INTERVAL_1H_MS) * INTERVAL_1H_MS;
+    const openTime1d = Math.floor(trade.time.getTime() / INTERVAL_1D_MS) * INTERVAL_1D_MS;
 
+    await upsertCandle(tx.candle1m, trade.market, trade.price, trade.volume, openTime1m);
+    await upsertCandle(tx.candle5m, trade.market, trade.price, trade.volume, openTime5m);
+    await upsertCandle(tx.candle15m, trade.market, trade.price, trade.volume, openTime15m);
     await upsertCandle(tx.candle1h, trade.market, trade.price, trade.volume, openTime1h);
     await upsertCandle(tx.candle1d, trade.market, trade.price, trade.volume, openTime1d);
   }

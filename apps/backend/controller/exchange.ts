@@ -238,8 +238,8 @@ export async function getCandles(req: Request, res: Response) {
   }
 
   const interval = req.params.interval;
-  if (interval !== '1h' && interval !== '1d') {
-    return res.status(400).json({ msg: 'invalid interval, use 1h or 1d' });
+  if (!['1m', '5m', '15m', '1h', '1d'].includes(interval)) {
+    return res.status(400).json({ msg: 'invalid interval, use 1m, 5m, 15m, 1h, or 1d' });
   }
 
   let limit = 200;
@@ -252,18 +252,22 @@ export async function getCandles(req: Request, res: Response) {
 
   try {
     let candles;
-    if (interval === '1h') {
-      candles = await prisma.candle1h.findMany({
-        where: { market: market as any },
-        orderBy: { openTime: 'desc' },
-        take: limit,
-      });
+    const query = {
+      where: { market: market as any },
+      orderBy: { openTime: 'desc' as const },
+      take: limit,
+    };
+
+    if (interval === '1m') {
+      candles = await prisma.candle1m.findMany(query);
+    } else if (interval === '5m') {
+      candles = await prisma.candle5m.findMany(query);
+    } else if (interval === '15m') {
+      candles = await prisma.candle15m.findMany(query);
+    } else if (interval === '1h') {
+      candles = await prisma.candle1h.findMany(query);
     } else {
-      candles = await prisma.candle1d.findMany({
-        where: { market: market as any },
-        orderBy: { openTime: 'desc' },
-        take: limit,
-      });
+      candles = await prisma.candle1d.findMany(query);
     }
 
     const data = [];

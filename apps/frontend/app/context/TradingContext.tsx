@@ -37,7 +37,7 @@ export interface ChartCandle {
   volume: number;
 }
 
-export type ChartInterval = '1h' | '1d';
+export type ChartInterval = '1m' | '5m' | '15m' | '1h' | '1d';
 
 interface TradingContextType {
   market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD';
@@ -125,6 +125,9 @@ function mergeMarketLiquidations(prev: MarketLiquidation[], incoming: MarketLiqu
 }
 
 const INTERVAL_MS: Record<ChartInterval, number> = {
+  '1m': 60 * 1000,
+  '5m': 5 * 60 * 1000,
+  '15m': 15 * 60 * 1000,
   '1h': 60 * 60 * 1000,
   '1d': 24 * 60 * 60 * 1000,
 };
@@ -221,7 +224,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [marketTrades, setMarketTrades] = useState<MarketTrade[]>([]);
   const [marketLiquidations, setMarketLiquidations] = useState<MarketLiquidation[]>([]);
   const [loadingDepth, setLoadingDepth] = useState<boolean>(true);
-  const [chartInterval, setChartInterval] = useState<ChartInterval>('1h');
+  const [chartInterval, setChartInterval] = useState<ChartInterval>('1m');
   const [candles, setCandles] = useState<ChartCandle[]>([]);
   const [loadingCandles, setLoadingCandles] = useState<boolean>(true);
 
