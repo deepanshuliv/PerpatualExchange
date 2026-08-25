@@ -56,12 +56,17 @@ export default class BinanceClassListner {
         else if (rawSymbol === 'SOLUSDT') market = 'SOLUSD';
         else market = rawSymbol;
 
-        await this.redisClient.xAdd(ENGINE_STREAM, '*', {
-          data: JSON.stringify({
-            type: 'markprice_updated',
-            payload: { price: Number(data.p), market },
-          }),
-        });
+        await this.redisClient.xAdd(
+          ENGINE_STREAM, 
+          '*', 
+          {
+            data: JSON.stringify({
+              type: 'markprice_updated',
+              payload: { price: Number(data.p), market },
+            }),
+          },
+          { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+        );
       } catch (err) {
         console.log('[setupPriceSubscription] error', err);
       }

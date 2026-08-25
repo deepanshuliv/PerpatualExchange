@@ -42,7 +42,12 @@ export default class EngineManager {
 
   async sendTobackend(response: EngineResponse.ENGINE_STREAM_MESSAGE) {
     try {
-      await this.publisherRedisClient.xAdd(BACKEND_STREAM, '*', { data: JSON.stringify(response) });
+      await this.publisherRedisClient.xAdd(
+        BACKEND_STREAM, 
+        '*', 
+        { data: JSON.stringify(response) },
+        { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+      );
       if (!SILENT_BROADCAST_TYPES.has(response.type)) {
         const correlationId = 'correlationId' in response ? response.correlationId : 'N/A';
         console.log(
@@ -257,9 +262,14 @@ export default class EngineManager {
       if (!this.fundingRateTimerStarted) {
         this.fundingRateTimerStarted = true;
         setInterval(async () => {
-          this.publisherRedisClient.xAdd(ENGINE_STREAM, '*', {
-            data: JSON.stringify({ type: 'run_funding_rate' }),
-          });
+          this.publisherRedisClient.xAdd(
+            ENGINE_STREAM,
+            '*',
+            {
+              data: JSON.stringify({ type: 'run_funding_rate' }),
+            },
+            { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+          );
         }, FUNDING_INTERVAL_MS);
       }
       const now = Date.now();

@@ -111,7 +111,12 @@ export class EngineClient {
     waitForResponse = true,
   ): Promise<T | null> {
     if (!waitForResponse) {
-      await this.publisher.xAdd(ENGINE_STREAM, '*', { data: JSON.stringify(request) });
+      await this.publisher.xAdd(
+        ENGINE_STREAM, 
+        '*', 
+        { data: JSON.stringify(request) },
+        { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+      );
       return null;
     }
 
@@ -119,7 +124,12 @@ export class EngineClient {
       const correlationId = 'correlationId' in request ? request.correlationId : '';
       if (!correlationId) {
         this.publisher
-          .xAdd(ENGINE_STREAM, '*', { data: JSON.stringify(request) })
+          .xAdd(
+            ENGINE_STREAM, 
+            '*', 
+            { data: JSON.stringify(request) },
+            { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+          )
           .then(() => resolve(null as unknown as T))
           .catch(reject);
         return;
@@ -136,7 +146,12 @@ export class EngineClient {
         timer,
       });
 
-      this.publisher.xAdd(ENGINE_STREAM, '*', { data: JSON.stringify(request) }).catch((err) => {
+      this.publisher.xAdd(
+        ENGINE_STREAM, 
+        '*', 
+        { data: JSON.stringify(request) },
+        { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+      ).catch((err) => {
         const pending = this.correlationMap.get(correlationId);
         if (pending) {
           clearTimeout(pending.timer);

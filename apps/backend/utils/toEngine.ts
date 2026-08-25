@@ -102,7 +102,12 @@ export async function sendToEngine(
     correlationIdToResolveMap.set(engineRequest.correlationId, { resolve, timer });
 
     publisher
-      .xAdd(streamKey, '*', { data: JSON.stringify(engineRequest) })
+      .xAdd(
+        streamKey, 
+        '*', 
+        { data: JSON.stringify(engineRequest) },
+        { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+      )
       .then((msgId) => {
         console.log(
           `[Backend] Pushed to '${streamKey}': type=${engineRequest.type} | correlationId=${engineRequest.correlationId} | msgId=${msgId}`,

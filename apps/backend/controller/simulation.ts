@@ -18,13 +18,18 @@ export async function provisionSimUser(req: Request, res: Response) {
 
   try {
     await connectRedisClient(redisClient, 'Sim-Provision');
-    await redisClient.xAdd(ENGINE_STREAM, '*', {
-      data: JSON.stringify({
-        correlationId: crypto.randomUUID(),
-        type: 'add_balance',
-        payload: { userId, amount: onrampAmount },
-      }),
-    });
+    await redisClient.xAdd(
+      ENGINE_STREAM, 
+      '*', 
+      {
+        data: JSON.stringify({
+          correlationId: crypto.randomUUID(),
+          type: 'add_balance',
+          payload: { userId, amount: onrampAmount },
+        }),
+      },
+      { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+    );
 
     const token = jwt.sign({ userId }, process.env.JWT_SECRET!);
 
@@ -51,12 +56,17 @@ export async function injectMarkPrice(req: Request, res: Response) {
 
   try {
     await connectRedisClient(redisClient, 'Sim-MarkPrice');
-    await redisClient.xAdd(ENGINE_STREAM, '*', {
-      data: JSON.stringify({
-        type: 'markprice_updated',
-        payload: { market: parsedMarket.data, price },
-      }),
-    });
+    await redisClient.xAdd(
+      ENGINE_STREAM, 
+      '*', 
+      {
+        data: JSON.stringify({
+          type: 'markprice_updated',
+          payload: { market: parsedMarket.data, price },
+        }),
+      },
+      { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+    );
 
     return res.status(200).json({
       ok: true,
