@@ -61,7 +61,7 @@ export const apiService = {
     return res.json();
   },
 
-  getCandles: async (market: string, interval: '1h' | '1d', limit = 200) => {
+  getCandles: async (market: string, interval: '1m' | '5m' | '15m' | '1h' | '1d', limit = 200) => {
     const res = await fetch(`${API_BASE}/candles/${market}/${interval}?limit=${limit}`, {
       headers: getHeaders(),
     });
