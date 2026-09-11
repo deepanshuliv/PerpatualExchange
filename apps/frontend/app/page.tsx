@@ -71,7 +71,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#08090b] text-[#f2f4f7] font-sans selection:bg-zinc-800 selection:text-white">
-      <header className="flex items-center justify-between bg-[#0c0d10] border-b border-[#171a1f] px-6 h-14 shrink-0 z-30 select-none">
+      <header className="sticky top-0 flex items-center justify-between bg-[#0c0d10] border-b border-[#171a1f] px-6 h-14 shrink-0 z-40 select-none">
         <div className="flex items-center space-x-8">
           <div className="flex items-center space-x-2 cursor-pointer">
             <div className="bg-[#ff3b30] p-1.5 rounded-lg flex items-center justify-center shadow-md">
@@ -133,7 +133,7 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="flex flex-wrap md:flex-nowrap items-center bg-[#0c0d10] border-b border-[#171a1f] h-auto md:h-14 px-6 py-2 md:py-0 shrink-0 text-xs text-[#8491a5] select-none z-20">
+      <section className="sticky top-14 flex items-center bg-[#0c0d10] border-b border-[#171a1f] h-14 px-4 shrink-0 text-xs text-[#8491a5] select-none z-30">
         <div className="relative mr-6 shrink-0 z-20">
           <button
             onClick={() => setMarketDropdownOpen(!marketDropdownOpen)}
@@ -177,7 +177,8 @@ export default function Home() {
           )}
         </div>
 
-        <div className="flex flex-wrap md:flex-nowrap items-center w-full justify-between gap-4 md:gap-0 mt-2 md:mt-0 font-semibold overflow-hidden">
+        <div className="flex-1 overflow-x-auto custom-scrollbar h-full flex items-center">
+          <div className="flex items-center w-max justify-between font-semibold">
           <div className="flex flex-col pr-6 border-r border-[#171a1f]/60">
             <span
               className={`text-sm font-bold leading-none ${changeInfo.isGreen ? 'text-[#00c087]' : 'text-[#ff3b30]'}`}
@@ -244,29 +245,30 @@ export default function Home() {
             <span className="font-mono text-white font-bold mt-0.5">440.78862</span>
           </div>
 
-          <button className="text-[#8491a5] hover:text-white pl-4 transition-colors">
-            <ChevronRight className="w-4 h-4" />
-          </button>
+            <button className="text-[#8491a5] hover:text-white pl-4 transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </section>
 
-      <main className="flex-1 flex p-4 gap-4 overflow-hidden min-h-0 w-full">
-        <div className="w-[75%] flex flex-col gap-4 min-h-0">
-          <div className="flex gap-4 h-[480px] shrink-0 w-full">
-            <div className="flex-1 min-h-0">
+      <main className="flex-1 flex flex-col lg:flex-row p-2 gap-2 overflow-y-auto lg:overflow-hidden min-h-0 w-full custom-scrollbar">
+        <div className="w-full lg:w-[75%] flex flex-col gap-2 min-h-0 shrink-0 lg:shrink">
+          <div className="flex flex-col lg:flex-row gap-2 lg:flex-[1.6] min-h-0 w-full shrink-0 lg:shrink">
+            <div className="w-full lg:flex-1 min-h-[300px] lg:min-h-0">
               <TradingChart />
             </div>
-            <div className="w-[30%] shrink-0 h-full min-h-0">
+            <div className="w-full lg:w-[30%] shrink-0 min-h-[400px] lg:min-h-0 lg:h-full">
               <OrderBook />
             </div>
           </div>
 
-          <div className="flex-1 min-h-0">
+          <div className="w-full lg:flex-1 min-h-[300px] lg:min-h-0 flex flex-col shrink-0 lg:shrink">
             <DashboardTabs />
           </div>
         </div>
-        <div className="w-[25%] flex flex-col min-h-0">
-          <div className="flex-1 overflow-y-auto no-scrollbar">
+        <div className="w-full lg:w-[25%] flex flex-col min-h-0 shrink-0 lg:shrink min-h-[500px] lg:min-h-0">
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
             <OrderEntryPanel />
           </div>
         </div>

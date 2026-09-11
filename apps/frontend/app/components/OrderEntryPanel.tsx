@@ -141,7 +141,7 @@ export default function OrderEntryPanel() {
 
   return (
     <div
-      className="flex flex-col h-full rounded-xl p-4 text-white select-none font-sans justify-between min-h-[500px]"
+      className="flex flex-col fixed  rounded-xl p-4 text-white select-none font-sans justify-between min-h-[500px]"
       style={{ backgroundColor: BP.bg, border: `1px solid ${BP.border}` }}
     >
       <form onSubmit={handleSubmitOrder} className="flex flex-col gap-4">

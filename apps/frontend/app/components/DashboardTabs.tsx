@@ -97,7 +97,7 @@ export default function DashboardTabs() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0c0d10] text-[#f2f4f7] border-t border-[#171a1f] select-none font-sans">
+    <div className="flex flex-col  bg-[#0c0d10] text-[#f2f4f7] border-t border-[#171a1f] select-none font-sans">
       <div className="flex items-center justify-between border-b border-[#171a1f] bg-[#08090b] px-4 h-11 shrink-0">
         <div className="flex space-x-2">
           {[
@@ -144,7 +144,7 @@ export default function DashboardTabs() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 text-xs font-mono">
+      <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 text-xs font-mono">
         {activeTab === 'positions' && (
           <div className="min-w-full">
             {openPositions.length === 0 ? (

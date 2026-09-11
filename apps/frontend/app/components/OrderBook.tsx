@@ -280,7 +280,7 @@ export default function OrderBook() {
 
           <div
             ref={bookRef}
-            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar font-mono text-xs"
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-xs"
           >
             {loadingDepth && bids.length === 0 && asks.length === 0 ? (
               <div className="flex items-center justify-center h-full text-zinc-600 text-[10px]">
@@ -360,7 +360,7 @@ export default function OrderBook() {
             <div className="text-right">Price (USD)</div>
             <div className="text-right">Quantity ({asset})</div>
           </div>
-          <div className="flex-1 overflow-y-auto no-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
+          <div className="flex-1 overflow-y-auto custom-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
             {marketTrades.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans text-xs">
                 <span>Waiting for trades...</span>
@@ -400,7 +400,7 @@ export default function OrderBook() {
             <div className="text-right">Price (USD)</div>
             <div className="text-right">Quantity ({asset})</div>
           </div>
-          <div className="flex-1 overflow-y-auto no-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
+          <div className="flex-1 overflow-y-auto custom-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
             {marketLiquidations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans text-xs">
                 <span>No liquidations yet</span>

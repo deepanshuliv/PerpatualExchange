@@ -25,13 +25,24 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+/* Custom Scrollbar for dark trading theme */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
 }
-
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+::-webkit-scrollbar-thumb {
+  background: #2B2F36;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3D4450;
+}
+/* Ensure inner divs can scroll without breaking flex layouts */
+.custom-scrollbar {
+  overflow-y: auto;
 }
 
 @keyframes ob-flash-up {
