@@ -72,28 +72,18 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-[#08090b] text-[#f2f4f7] font-sans selection:bg-zinc-800 selection:text-white">
       <header className="sticky top-0 flex items-center justify-between bg-[#0c0d10] border-b border-[#171a1f] px-6 h-14 shrink-0 z-40 select-none">
-        <div className="flex items-center space-x-8">
-          <div className="flex items-center space-x-2 cursor-pointer">
-            <div className="bg-[#ff3b30] p-1.5 rounded-lg flex items-center justify-center shadow-md">
-              <svg
-                className="w-4 h-4 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={3}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                />
-              </svg>
+        <div className="flex items-center">
+          <div className="flex items-center space-x-3 cursor-pointer">
+            <div className="flex items-center justify-center overflow-hidden rounded-md shadow-sm w-8 h-8 bg-black border border-[#242b35]">
+              <img src="/logo.jpg" alt="Axiom Logo" className="w-full h-full object-cover p-0.5" />
             </div>
-            <span className="text-white font-bold text-sm tracking-wide">Backpack</span>
+            <span className="text-white font-black text-lg tracking-widest uppercase drop-shadow-md">Axiom</span>
           </div>
 
-          <nav className="hidden md:flex items-center space-x-6 text-xs font-semibold text-[#8491a5]">
-            <a href="#" className="text-white border-b-2 border-white pb-4 pt-4 font-bold">
+          <div className="h-5 w-[1px] bg-[#242b35] mx-6 hidden md:block"></div>
+
+          <nav className="hidden md:flex items-center space-x-6 text-sm font-semibold text-[#8491a5]">
+            <a href="#" className="text-white border-b-2 border-white py-4 transition-colors">
               Futures
             </a>
           </nav>
