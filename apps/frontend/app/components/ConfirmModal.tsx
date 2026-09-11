@@ -36,22 +36,22 @@ const variantStyles: Record<
   { iconBg: string; iconShadow: string; confirmBtn: string }
 > = {
   danger: {
-    iconBg: "bg-[#ff3b30]",
-    iconShadow: "shadow-[#ff3b30]/10",
+    iconBg: "bg-[#F23645]",
+    iconShadow: "shadow-[#F23645]/10",
     confirmBtn:
-      "bg-[#ff3b30] text-white hover:bg-[#e6352b] border border-[#ff3b30]/20",
+      "bg-[#F23645] text-white hover:bg-[#d42d38] border border-transparent",
   },
   default: {
-    iconBg: "bg-[#171a1f]",
+    iconBg: "bg-[#161A1E]",
     iconShadow: "shadow-black/20",
     confirmBtn:
-      "bg-white text-black hover:bg-zinc-200 border border-white/10",
+      "bg-white text-black hover:bg-zinc-200 border border-transparent",
   },
   success: {
-    iconBg: "bg-[#00c087]",
-    iconShadow: "shadow-[#00c087]/10",
+    iconBg: "bg-[#14F195]",
+    iconShadow: "shadow-[#14F195]/10",
     confirmBtn:
-      "bg-[#00c087] text-black hover:bg-[#00a876] border border-[#00c087]/20",
+      "bg-[#14F195] text-black hover:bg-[#12d886] border border-transparent",
   },
 };
 
@@ -79,41 +79,41 @@ export default function ConfirmModal({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-[380px] bg-[#12161c] border border-[#1d222b] rounded-2xl p-7 flex flex-col shadow-2xl text-[#f2f4f7]"
+        className="relative w-full max-w-[380px] bg-[#0B0E11] border border-[#2B2F36] rounded-xl p-6 flex flex-col shadow-2xl text-white"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={onClose}
           disabled={loading}
-          className="absolute top-4 right-4 text-[#8491a5] hover:text-white transition-colors disabled:opacity-50"
+          className="absolute top-4 right-4 text-[#848E9C] hover:text-white transition-colors disabled:opacity-50"
         >
           <X className="h-5 w-5" />
         </button>
 
-        <div className="flex flex-col items-center text-center mb-5">
+        <div className="flex flex-col items-center text-center mb-5 mt-2">
           <div
-            className={`${styles.iconBg} p-3 rounded-[16px] flex items-center justify-center shadow-lg ${styles.iconShadow} mb-4`}
+            className={`${styles.iconBg} p-3 rounded-xl flex items-center justify-center shadow-lg ${styles.iconShadow} mb-4 text-white ${variant === 'success' ? 'text-black' : ''}`}
           >
             {icon}
           </div>
           <h2 className="text-lg font-bold text-white tracking-wide">{title}</h2>
-          <p className="text-xs text-[#8491a5] mt-2 leading-relaxed max-w-[280px]">
+          <p className="text-xs text-[#848E9C] mt-2 leading-relaxed max-w-[280px]">
             {description}
           </p>
         </div>
 
         {details && details.length > 0 && (
-          <div className="w-full bg-[#0c0d10] border border-[#171a1f] rounded-xl p-3.5 mb-5 space-y-2">
+          <div className="w-full bg-[#161A1E] border border-[#2B2F36] rounded-lg p-4 mb-6 space-y-3">
             {details.map((detail) => (
               <div
                 key={detail.label}
                 className="flex items-center justify-between text-xs"
               >
-                <span className="text-[#8491a5] font-semibold">{detail.label}</span>
+                <span className="text-[#848E9C] font-semibold">{detail.label}</span>
                 {detail.input ? (
                   <div className="flex items-center gap-1">
                     {detail.input.prefix && (
-                      <span className="text-[#8491a5] font-mono">{detail.input.prefix}</span>
+                      <span className="text-[#848E9C] font-mono">{detail.input.prefix}</span>
                     )}
                     <input
                       type="text"
@@ -122,7 +122,7 @@ export default function ConfirmModal({
                       onChange={(e) => detail.input!.onChange(e.target.value)}
                       placeholder={detail.input.placeholder}
                       disabled={loading}
-                      className="w-28 text-right text-white font-bold font-mono bg-[#171a1f] border border-[#242b35] rounded-lg px-2 py-1 focus:outline-none focus:border-[#00c087] disabled:opacity-50"
+                      className="w-28 text-right text-white font-bold font-mono bg-[#0B0E11] border border-[#2B2F36] rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#14F195] disabled:opacity-50"
                     />
                   </div>
                 ) : (
@@ -137,14 +137,14 @@ export default function ConfirmModal({
           <button
             onClick={onClose}
             disabled={loading}
-            className="flex-1 py-3 rounded-xl font-bold text-xs bg-[#171a1f] text-[#8491a5] hover:text-white hover:bg-[#1c222b] border border-[#242b35] transition-colors disabled:opacity-50 cursor-pointer"
+            className="flex-1 py-3 rounded-lg font-bold text-xs bg-[#161A1E] text-[#848E9C] hover:text-white hover:bg-[#2B2F36] border border-[#2B2F36] transition-colors disabled:opacity-50 cursor-pointer"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
             disabled={loading || confirmDisabled}
-            className={`flex-1 py-3 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 cursor-pointer ${styles.confirmBtn}`}
+            className={`flex-1 py-3 rounded-lg font-bold text-xs transition-colors disabled:opacity-50 cursor-pointer ${styles.confirmBtn}`}
           >
             {loading ? "Processing..." : confirmLabel}
           </button>
