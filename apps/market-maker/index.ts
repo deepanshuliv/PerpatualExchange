@@ -22,7 +22,6 @@ async function bootstrap() {
     console.log(`🚀 [Market Maker Bot] Started strategy for ${marketKey}`);
   }
 
-  // Periodic balance health check & replenishment
   setInterval(async () => {
     for (const strategy of strategies) {
       await strategy.checkAndReplenishBalance(

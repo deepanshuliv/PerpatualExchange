@@ -71,9 +71,6 @@ export function sendCandleSnapshot(client: { ws: WebSocket }, stream: string) {
 
 type EngineEvent = WebsocketTypes.WsStreamingMessage;
 
-// The WS service is a thin relay: every engine event is forwarded as-is to the
-// clients subscribed to its stream. The only derived data is candles, which are
-// built from real executed trades.
 export function checkMarketUpdateAndSendToSubsribedUser(update: EngineEvent) {
   const executionTime = Date.now();
   const transactionTime = update.payload.transactionTime;

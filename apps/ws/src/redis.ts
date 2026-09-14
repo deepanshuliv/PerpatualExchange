@@ -23,7 +23,6 @@ export async function startConsumerGroup() {
     }
   }
 
-  // Consumer loop
   (async () => {
     while (true) {
       try {

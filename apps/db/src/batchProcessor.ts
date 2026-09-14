@@ -22,8 +22,6 @@ interface ParsedEvent {
   event: DbEvent;
 }
 
-// Events must be applied in this order within a batch: an order has to be
-// created before it can be liquidated or cancelled.
 const TYPE_ORDER: Record<DbEvent['type'], number> = {
   create_order: 0,
   liquidation: 1,
@@ -107,7 +105,6 @@ function parseMessages(messages: StreamMessage[]): {
     }
   }
 
-  // Stable sort keeps message order within each type.
   events.sort((a, b) => TYPE_ORDER[a.event.type] - TYPE_ORDER[b.event.type]);
 
   return { events, invalidMsgIds };
@@ -145,10 +142,6 @@ function processFillEvent(
       state.makerFillAcc.set(fill.orderId, (state.makerFillAcc.get(fill.orderId) ?? 0) + fill.qty);
     }
 
-    // A fill can reference a maker order we haven't seen a create event for yet
-    // (its create event may be later in the stream or already processed). Insert
-    // a "skeleton" row from the fill data so the foreign key on Fill resolves;
-    // the real create event, if it arrives, overwrites these placeholder fields.
     const pending = state.ordersToCreate.get(fill.orderId);
     const isSkeleton = pending?.isSkeleton === true;
 
@@ -422,8 +415,6 @@ export async function processMessageBatch(messages: StreamMessage[]): Promise<{
     return { ackIds: [], invalidIds: invalidMsgIds };
   }
 
-  // Look up which of the referenced orders already exist so each handler can
-  // decide between "create" and "update".
   const orderIds = collectOrderIds(events);
   const existingOrders = await prisma.order.findMany({
     where: { id: { in: orderIds } },

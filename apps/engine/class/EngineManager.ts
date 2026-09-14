@@ -202,7 +202,10 @@ export default class EngineManager {
     } else if (request.type === 'get_open_orders') {
       const { correlationId } = request;
       const { market, userId } = request.payload;
-      const openOrders = this.matchingManger.getOpenOrders(userId, market);
+      const openOrders = this.matchingManger.getOpenOrders(userId, market).map(o => ({
+        ...o,
+        transactionTime: o.createdAt.getTime(),
+      }));
       await this.sendTobackend({
         correlationId,
         type: 'get_open_orders',
@@ -211,7 +214,13 @@ export default class EngineManager {
     } else if (request.type === 'get_fills') {
       const { correlationId } = request;
       const { userId } = request.payload;
-      const fills = this.matchingManger.getFills(userId);
+      const fills = this.matchingManger.getFills(userId).map(f => ({
+        ...f,
+        type: f.type || 'LIMIT',
+        kind: f.kind || (f.buyerId === userId ? 'LONG' : 'SHORT'),
+        status: f.status || 'FILLED',
+        transactionTime: f.transactionTime || Date.now(),
+      }));
       await this.sendTobackend({
         correlationId,
         type: 'get_fills',
@@ -318,7 +327,6 @@ export default class EngineManager {
         }));
         console.log(`[Snapshot] Successfully uploaded ${key} to R2.`);
         
-        // After successful upload, prune memory state
         this.matchingManger.pruneState();
         return;
       } catch (err) {
@@ -377,6 +385,13 @@ export default class EngineManager {
     await this.loadLatestSnapshotFromR2();
     console.log('snapshot loaded');
 
+    if (!this.redisReadPointer) {
+      const latest = await this.subsciberRedisClient.xRevRange(ENGINE_STREAM, '+', '-', {
+        COUNT: 1,
+      });
+      this.redisReadPointer = latest[0]?.id ?? '$';
+    }
+
     const now = Date.now();
     for (const market of allMarketsList) {
       await this.publishMarketUpdates(market, [], now);
@@ -396,7 +411,7 @@ export default class EngineManager {
 
     while (1) {
       try {
-        const readFrom = this.redisReadPointer || '0-0';
+        const readFrom = this.redisReadPointer || '$';
 
         const response = (await this.subsciberRedisClient.xRead(
           [{ key: ENGINE_STREAM, id: readFrom }],

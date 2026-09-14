@@ -1,7 +1,3 @@
-/**
- * Exchange endpoint stress benchmark.
- * Run: bun scripts/stress-benchmark.ts
- */
 
 const API_BASE = process.env.API_BASE || 'http://localhost:3001';
 const CONCURRENCY = Number(process.env.CONCURRENCY || 100);

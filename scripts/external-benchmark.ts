@@ -1,7 +1,3 @@
-/**
- * External exchange benchmark for comparison (Binance + Backpack).
- * Run: bun scripts/external-benchmark.ts
- */
 
 const CONCURRENCY = Number(process.env.CONCURRENCY || 100);
 const REQUESTS_PER_ENDPOINT = Number(process.env.REQUESTS || 500);

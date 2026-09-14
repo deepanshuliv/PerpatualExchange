@@ -1,4 +1,3 @@
-# Only ignore build artifacts and snapshots
 apps/engine/snapshots
 node_modules
 **/node_modules

@@ -74,7 +74,6 @@ export default function TradingChart() {
           ? "Shorts pay Longs"
           : "Neutral";
 
-  // Depth Chart calculation
   const depthData = useMemo(() => {
     const sortedBids = [...bids].sort((a, b) => b.price - a.price).slice(0, 15);
     const sortedAsks = [...asks].sort((a, b) => a.price - b.price).slice(0, 15);
@@ -211,7 +210,6 @@ export default function TradingChart() {
           </div>
         </div>
       ) : activeTab === "depth" ? (
-        /* Depth Visualization Tab */
         <div className="flex-1 flex flex-col min-h-0 bg-[#08090b] p-4 gap-4 overflow-y-auto">
           <div className="flex items-center justify-between border-b border-[#171a1f] pb-3">
             <div>
@@ -225,7 +223,6 @@ export default function TradingChart() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 flex-1 min-h-[260px]">
-            {/* Bid Side */}
             <div className="bg-[#0c0d10] border border-[#171a1f] rounded-lg p-3 flex flex-col">
               <span className="text-[10px] text-[#00c087] font-bold uppercase mb-2">Bid Depth (Cumulative Buys)</span>
               <div className="flex-1 flex flex-col justify-end space-y-1 overflow-hidden">
@@ -245,7 +242,6 @@ export default function TradingChart() {
               </div>
             </div>
 
-            {/* Ask Side */}
             <div className="bg-[#0c0d10] border border-[#171a1f] rounded-lg p-3 flex flex-col">
               <span className="text-[10px] text-[#ff3b30] font-bold uppercase mb-2">Ask Depth (Cumulative Sells)</span>
               <div className="flex-1 flex flex-col justify-end space-y-1 overflow-hidden">
@@ -267,7 +263,6 @@ export default function TradingChart() {
           </div>
         </div>
       ) : activeTab === "margin" ? (
-        /* Margin & Leverage Specifications Tab */
         <div className="flex-1 flex flex-col min-h-0 bg-[#08090b] p-4 gap-4 overflow-y-auto">
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-[#0c0d10] border border-[#171a1f] rounded-lg p-3">
@@ -325,7 +320,6 @@ export default function TradingChart() {
           </div>
         </div>
       ) : activeTab === "funding" ? (
-        /* Funding Rate Tab */
         <div className="flex-1 flex flex-col min-h-0 bg-[#08090b] p-4 gap-4 overflow-y-auto">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-[#0c0d10] border border-[#171a1f] rounded-lg p-3">
@@ -374,7 +368,6 @@ export default function TradingChart() {
           </div>
         </div>
       ) : (
-        /* Market Info Tab */
         <div className="flex-1 flex flex-col min-h-0 bg-[#08090b] p-4 gap-4 overflow-y-auto">
           <div className="flex items-center space-x-2 text-white border-b border-[#171a1f] pb-3">
             <FileText className="w-4 h-4 text-blue-400" />

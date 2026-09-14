@@ -23,25 +23,21 @@ export class MarketMakerStrategy {
     this.isRunning = true;
     console.log(`[MM Strategy: ${this.config.market}] Initializing for bot users: ${this.userId} & ${this.takerUserId}`);
 
-    // Ensure initial balances for both maker and taker
     await this.client.ensureBalance(this.userId, initialBalance, minBalanceThreshold);
     await this.client.ensureBalance(this.takerUserId, initialBalance, minBalanceThreshold);
 
-    // Run 1-second limit order requote loop (provides depth)
     this.requoteTimer = setInterval(() => {
       this.requote().catch((err) => {
         console.error(`[MM Strategy: ${this.config.market}] Requote error:`, err);
       });
     }, requoteIntervalMs);
 
-    // Run active organic trade loop (executes trades, builds candles, updates volume & last price)
     this.tradeTimer = setInterval(() => {
       this.executeOrganicTrade().catch((err) => {
         console.error(`[MM Strategy: ${this.config.market}] Trade execution error:`, err);
       });
     }, 2500);
 
-    // Initial immediate requote and trade
     setTimeout(() => this.requote(), 400);
     setTimeout(() => this.executeOrganicTrade(), 1200);
   }
@@ -71,7 +67,6 @@ export class MarketMakerStrategy {
       return;
     }
 
-    // 1. Fetch current open orders to cancel stale ones
     const openOrders = await this.client.getOpenOrders(this.userId, this.config.market);
     for (const order of openOrders) {
       if (order.orderId) {
@@ -79,18 +74,15 @@ export class MarketMakerStrategy {
       }
     }
 
-    // 2. Generate and place new bid and ask levels
     const { levels, spreadPercent, baseQty, qtyVariance, marginRatio, priceDecimals, qtyDecimals } = this.config;
 
     for (let i = 1; i <= levels; i++) {
-      // Calculate jittered quantity
       const jitter = (Math.random() * 2 - 1) * qtyVariance;
       const levelQty = Math.max(
         this.round(baseQty * (1 + jitter) * (1 + i * 0.1), qtyDecimals),
         Math.pow(10, -qtyDecimals),
       );
 
-      // Bid level (Buy limit)
       const bidPrice = this.round(markPrice * (1 - spreadPercent * i), priceDecimals);
       if (bidPrice > 0) {
         const bidMargin = this.round(levelQty * bidPrice * marginRatio, 2);
@@ -104,7 +96,6 @@ export class MarketMakerStrategy {
         );
       }
 
-      // Ask level (Sell limit)
       const askPrice = this.round(markPrice * (1 + spreadPercent * i), priceDecimals);
       if (askPrice > 0) {
         const askMargin = this.round(levelQty * askPrice * marginRatio, 2);
@@ -129,7 +120,6 @@ export class MarketMakerStrategy {
     this.tradeCounter++;
     const { baseQty, marginRatio, qtyDecimals } = this.config;
 
-    // Alternate buy/sell with small random variations
     const isBuy = Math.random() > 0.48;
     const kind: Shared.KIND = isBuy ? 'LONG' : 'SHORT';
     const tradeQty = Math.max(

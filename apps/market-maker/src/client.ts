@@ -216,7 +216,7 @@ export class EngineClient {
         correlationId,
         payload: { userId, orderId },
       },
-      false, // fire and forget for maximum throughput
+      false,
     );
   }
 
@@ -243,7 +243,7 @@ export class EngineClient {
           margin: String(margin),
         },
       },
-      false, // async order dispatch to minimize requote delay
+      false,
     );
   }
 

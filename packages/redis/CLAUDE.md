@@ -54,7 +54,6 @@ Bun.serve({
       },
     },
   },
-  // optional websocket support
   websocket: {
     open: (ws) => {
       ws.send("Hello, world!");
@@ -63,7 +62,6 @@ Bun.serve({
       ws.send(message);
     },
     close: (ws) => {
-      // handle close
     }
   },
   development: {
@@ -90,7 +88,6 @@ With the following `frontend.tsx`:
 import React from "react";
 import { createRoot } from "react-dom/client";
 
-// import .css files directly and it works
 import './index.css';
 
 const root = createRoot(document.body);

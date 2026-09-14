@@ -56,8 +56,6 @@ function archiveIfRolled(
   return history;
 }
 
-// Candles are built exclusively from real executed trades, so the OHLC always
-// reflects actual traded prices and volume.
 export function applyTradeToLiveCandles(
   market: string,
   price: number,

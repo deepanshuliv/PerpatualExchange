@@ -218,9 +218,9 @@ export default function AuthModal() {
                     style={{
                       backgroundColor: isActive
                         ? strength <= 2
-                          ? BP.red
-                          : strength <= 4
-                            ? '#eab308' // yellow-500
+                            ? BP.red
+                            : strength <= 4
+                            ? '#eab308'
                             : BP.green
                         : BP.border,
                     }}

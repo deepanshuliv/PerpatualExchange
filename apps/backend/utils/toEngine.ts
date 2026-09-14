@@ -84,7 +84,7 @@ async function seedMarketCacheFromStream() {
   }
 }
 
-const ENGINE_RPC_TIMEOUT_MS = 1_000;
+const ENGINE_RPC_TIMEOUT_MS = 5_000;
 
 export async function sendToEngine(
   engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST,
@@ -142,11 +142,26 @@ function handleEngineResponse(rawMessage: unknown) {
     }
   }
 
-  const { success, data, error } = EngineResponse.BACKEND_RESPONSE_SCHEMA.safeParse(rawMessage);
-  if (!success) {
-    console.log('[handleEngineResponse] error', rawMessage, error?.format());
+  const validation = EngineResponse.BACKEND_RESPONSE_SCHEMA.safeParse(rawMessage);
+  if (!validation.success) {
+    console.error('[Backend] Invalid engine response:', validation.error.format());
+    const corrId = (rawMessage as { correlationId?: string })?.correlationId;
+    if (corrId && correlationIdToResolveMap.has(corrId)) {
+      const pending = correlationIdToResolveMap.get(corrId);
+      if (pending) {
+        clearTimeout(pending.timer);
+        pending.resolve({
+          type: 'error',
+          correlationId: corrId,
+          payload: { error: 'Backend Zod validation failed: ' + JSON.stringify(validation.error.format()) }
+        } as any);
+        correlationIdToResolveMap.delete(corrId);
+      }
+    }
     return;
   }
+
+  const data = validation.data;
 
   console.log(
     `[Backend] Engine response received: type=${data.type} | correlationId=${data.correlationId}`,
