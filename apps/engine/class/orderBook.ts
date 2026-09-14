@@ -680,4 +680,13 @@ export default class OrderBookManager {
       asks,
     };
   }
+
+  pruneState() {
+    for (const [orderId, order] of this.orders.entries()) {
+      if (order.status === 'FILLED' || order.status === 'CANCELLED') {
+        this.orders.delete(orderId);
+      }
+    }
+    this.fills = [];
+  }
 }

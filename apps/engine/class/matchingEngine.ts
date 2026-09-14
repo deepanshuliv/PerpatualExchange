@@ -700,4 +700,8 @@ export default class MatchingEngine {
       );
     }
   }
+
+  pruneState() {
+    this.orderBook.pruneState();
+  }
 }

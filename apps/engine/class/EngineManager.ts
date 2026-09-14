@@ -3,6 +3,8 @@ import { EngineRequest, EngineResponse, type RedisStreamResponse } from '@repo/s
 import type { EngineSnapShotInstanceType } from '@repo/shared-types/internal-types';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+
 import { allMarketsList, type MARKET_AVAILABEL } from '../../../packages/shared-types/shared';
 import BinanceClassListner from './binanceListner';
 import MatchingEngine from './matchingEngine';
@@ -12,6 +14,17 @@ const FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
 const SNAPSHOT_INTERVAL_MS = 3 * 1000;
 const ENGINE_STREAM = process.env.ENGINE_STREAM || 'to-engine';
 const BACKEND_STREAM = process.env.BACKEND_STREAM || 'to-backend';
+
+const r2 = new S3Client({
+  region: 'auto',
+  endpoint: process.env.R2_ENDPOINT || '',
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+  },
+});
+const R2_BUCKET = process.env.R2_BUCKET_NAME || 'perp-exchange-snapshots';
+
 
 const SILENT_BROADCAST_TYPES = new Set([
   'markprice_updated',
@@ -186,15 +199,6 @@ export default class EngineManager {
           payload: positions,
         });
       }
-    } else if (request.type === 'get_fills') {
-      const { correlationId } = request;
-      const { userId } = request.payload;
-      const fills = this.matchingManger.getFills(userId);
-      await this.sendTobackend({
-        correlationId,
-        type: 'get_fills',
-        payload: fills,
-      });
     } else if (request.type === 'get_depth') {
       const { correlationId } = request;
       const { market } = request.payload;
@@ -204,18 +208,7 @@ export default class EngineManager {
         type: 'get_depth',
         payload: depth,
       });
-    } else if (request.type === 'get_open_orders') {
-      const { correlationId } = request;
-      const { userId, market } = request.payload;
-      const orders = this.matchingManger.getOpenOrders(userId, market);
-      await this.sendTobackend({
-        correlationId,
-        type: 'get_open_orders',
-        payload: orders.map((o) => ({
-          ...o,
-          transactionTime: o.createdAt.getTime(),
-        })),
-      });
+
     } else if (request.type === 'markprice_updated') {
       const { price, market } = request.payload;
 
@@ -291,66 +284,65 @@ export default class EngineManager {
     }
   }
 
-  async addSnapShotInFile(data: any) {
-    const path = await this.getSnapShotFolderPath();
-    const date = Date.now();
-    await fs.writeFile(`${path}/${date}.txt`, JSON.stringify(data));
-  }
-
-  async loadLatestSnapShotfromFile() {
-    const pathLocation = await this.getSnapShotFolderPath();
-
-    const files = await fs.readdir(pathLocation);
-    if (files.length === 0) {
-      return null;
-    }
-
-    let latestFile = '';
-    let latestTimestamp = 0;
-
-    for (const file of files) {
-      const stringDate = file.split('.')[0];
-      const timestamp = Number(stringDate);
-      if (!isNaN(timestamp) && latestTimestamp < timestamp) {
-        latestTimestamp = timestamp;
-        latestFile = file;
+  async uploadSnapshotToR2(data: any) {
+    const jsonStr = JSON.stringify(data);
+    const key = `snapshot-latest.json`;
+    
+    let retries = 3;
+    let delay = 1000;
+    while (retries > 0) {
+      try {
+        await r2.send(new PutObjectCommand({
+          Bucket: R2_BUCKET,
+          Key: key,
+          Body: jsonStr,
+          ContentType: 'application/json'
+        }));
+        console.log(`[Snapshot] Successfully uploaded ${key} to R2.`);
+        
+        // After successful upload, prune memory state
+        this.matchingManger.pruneState();
+        return;
+      } catch (err) {
+        retries--;
+        console.error(`[Snapshot] R2 upload failed. Retries left: ${retries}`, err);
+        if (retries === 0) {
+          console.error('[Snapshot] Exhausted all retries for R2 upload.');
+        } else {
+          await new Promise((res) => setTimeout(res, delay));
+          delay *= 2;
+        }
       }
     }
+  }
 
-    if (!latestFile) {
-      return null;
-    }
-
-    const latestFilePathName = path.join(pathLocation, latestFile);
-    console.log('[LATEST_FILEPATH]', latestFilePathName);
-
+  async loadLatestSnapshotFromR2() {
+    console.log('[Snapshot] Attempting to load snapshot-latest.json from R2...');
     try {
-      const data = await fs.readFile(latestFilePathName, 'utf8');
+      const response = await r2.send(new GetObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: 'snapshot-latest.json',
+      }));
+      
+      const str = await response.Body?.transformToString();
+      if (!str) return null;
+      
       type EngineSnapshotWithPointer = EngineSnapShotInstanceType & {
         redisReadPointer: string;
       };
-      const parsedSnapShot = JSON.parse(data || '{}') as EngineSnapshotWithPointer;
+      const parsedSnapShot = JSON.parse(str) as EngineSnapshotWithPointer;
       if (parsedSnapShot) {
         this.matchingManger.loadSnapShot(parsedSnapShot);
         this.redisReadPointer = parsedSnapShot.redisReadPointer || '';
+        console.log('[Snapshot] Loaded successfully from R2.');
       }
-    } catch (err) {
-      console.log('[loadLatestSnapShotfromFile] error', err);
+    } catch (err: any) {
+      if (err.name === 'NoSuchKey') {
+        console.log('[Snapshot] No existing snapshot found in R2. Starting fresh.');
+      } else {
+        console.log('[loadLatestSnapshotFromR2] error', err);
+      }
     }
-  }
-
-  async getSnapShotFolderPath() {
-    const currentFilePath = import.meta.dir;
-    const rootFolder = path.join(currentFilePath, '..');
-    const destinationFolder = path.join(rootFolder, 'snapshots');
-
-    try {
-      await fs.stat(destinationFolder);
-    } catch (error) {
-      await fs.mkdir(destinationFolder, { recursive: true });
-    }
-
-    return destinationFolder;
   }
 
   async start() {
@@ -364,7 +356,7 @@ export default class EngineManager {
     console.log('connected to binance');
 
     console.log('loading snapshot...');
-    await this.loadLatestSnapShotfromFile();
+    await this.loadLatestSnapshotFromR2();
     console.log('snapshot loaded');
 
     const now = Date.now();
@@ -375,12 +367,12 @@ export default class EngineManager {
 
     setInterval(async () => {
       try {
-        await this.addSnapShotInFile({
+        await this.uploadSnapshotToR2({
           ...this.matchingManger.createSnapShot(),
           redisReadPointer: this.redisReadPointer,
         });
       } catch (err) {
-        console.log('[addSnapShotInFile] error', err);
+        console.log('[uploadSnapshotToR2] error', err);
       }
     }, SNAPSHOT_INTERVAL_MS);
 
