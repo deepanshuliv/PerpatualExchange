@@ -4,72 +4,93 @@ import { InternalTypes } from "@repo/shared-types";
 import jwt from "jsonwebtoken"
 
 export async function signIn(req: Request, res: Response) {
-    const { success, data } = InternalTypes.AUTHENTICATION_SCHEMA.safeParse(req.body);
-    if (!success) {
-        return res.status(411).json({
-            msg: "please provide all fields"
-        })
-    }
-
-    const { username, password } = data;
-
-    const user = await prisma.user.findFirst({ where: { username } });
-    if (!user) {
-        return res.status(411).json({
-            msg: "user is not present please go to signup "
-        })
-    }
-    if (user.password !== password) {
-        return res.status(411).json({
-            msg: "invalid password  "
-        })
-    }
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!);
-
-    res.status(200).json({
-        token,
-        userId: user.id,
-        user: {
-            id: user.id,
-            username: user.username
+    try {
+        const { success, data } = InternalTypes.AUTHENTICATION_SCHEMA.safeParse(req.body);
+        if (!success) {
+            return res.status(411).json({
+                msg: "please provide all fields"
+            })
         }
-    })
+
+        const { username, password } = data;
+
+        const user = await prisma.user.findFirst({ where: { username } });
+        if (!user) {
+            return res.status(411).json({
+                msg: "user is not present please go to signup "
+            })
+        }
+        if (user.password !== password) {
+            return res.status(411).json({
+                msg: "invalid password  "
+            })
+        }
+        
+        if (!process.env.JWT_SECRET) {
+            console.error('[signIn] JWT_SECRET is not defined');
+            return res.status(500).json({ msg: "internal server error" });
+        }
+        
+        const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
+
+        res.status(200).json({
+            token,
+            userId: user.id,
+            user: {
+                id: user.id,
+                username: user.username
+            }
+        })
+    } catch (error) {
+        console.error('[signIn] error:', error);
+        res.status(500).json({ msg: "internal server error" });
+    }
 }
 
 export async function signUp(req: Request, res: Response) {
-    const { success, data } = InternalTypes.AUTHENTICATION_SCHEMA.safeParse(req.body);
-    if (!success) {
-        return res.status(411).json({
-            message: "please provide all fields"
-        })
-    }
-
-    const { username, password } = data;
-
-    const user = await prisma.user.findFirst({ where: { username } });
-
-    if (user) {
-        return res.status(403).json({
-            msg: "user is already exists, go to signin"
-        })
-    }
-
-    const newUser = await prisma.user.create({ data: { username, password } });
-
-    if (!newUser) {
-        return res.status(403).json({
-            msg: "internal server error"
-        })
-    }
-
-    const token = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET!);
-
-    res.status(201).json({
-        token,
-        userId: newUser.id,
-        user: {
-            id: newUser.id,
-            username: newUser.username
+    try {
+        const { success, data } = InternalTypes.AUTHENTICATION_SCHEMA.safeParse(req.body);
+        if (!success) {
+            return res.status(411).json({
+                message: "please provide all fields"
+            })
         }
-    })
+
+        const { username, password } = data;
+
+        const user = await prisma.user.findFirst({ where: { username } });
+
+        if (user) {
+            return res.status(403).json({
+                msg: "user is already exists, go to signin"
+            })
+        }
+
+        const newUser = await prisma.user.create({ data: { username, password } });
+
+        if (!newUser) {
+            return res.status(403).json({
+                msg: "internal server error"
+            })
+        }
+
+        if (!process.env.JWT_SECRET) {
+            console.error('[signUp] JWT_SECRET is not defined');
+            return res.status(500).json({ msg: "internal server error" });
+        }
+
+        const token = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET);
+
+        res.status(201).json({
+            token,
+            userId: newUser.id,
+            user: {
+                id: newUser.id,
+                username: newUser.username
+            }
+        })
+    } catch (error) {
+        console.error('[signUp] error:', error);
+        res.status(500).json({ msg: "internal server error" });
+    }
 }

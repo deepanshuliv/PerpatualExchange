@@ -237,7 +237,7 @@ export async function getCandles(req: Request, res: Response) {
     return res.status(400).json({ msg: 'invalid market' });
   }
 
-  const interval = req.params.interval;
+  const interval = req.params.interval as string;
   if (!['1m', '5m', '15m', '1h', '1d'].includes(interval)) {
     return res.status(400).json({ msg: 'invalid interval, use 1m, 5m, 15m, 1h, or 1d' });
   }

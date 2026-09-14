@@ -62,8 +62,8 @@ interface TradingContextType {
   openOrders: Order[];
   fills: Fill[];
   loadingDepth: boolean;
-  authModalMode: 'login' | 'signup' | null;
-  setAuthModalMode: (mode: 'login' | 'signup' | null) => void;
+  authModalMode: 'login' | 'signup' | 'forgot_password' | null;
+  setAuthModalMode: (mode: 'login' | 'signup' | 'forgot_password' | null) => void;
   login: (username: string, password?: string) => Promise<boolean>;
   signup: (username: string, password?: string) => Promise<boolean>;
   logout: () => void;
@@ -234,7 +234,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [markPricesByMarket, setMarkPricesByMarket] = useState<Record<string, number>>({});
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
   const [fills, setFills] = useState<Fill[]>([]);
-  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | null>(null);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | 'forgot_password' | null>(null);
 
   const openPositionsWithPnl = useMemo(
     () =>

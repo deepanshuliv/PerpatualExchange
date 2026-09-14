@@ -4,6 +4,17 @@ import { Eye, EyeOff, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useTrading } from '../context/TradingContext';
 
+const BP = {
+  bg: '#0B0E11',
+  border: '#2B2F36',
+  inputBg: '#161A1E',
+  muted: '#848E9C',
+  green: '#14F195',
+  red: '#F23645',
+  errorBg: 'rgba(255, 77, 79, 0.1)',
+  errorBorder: '#3A1C1C',
+} as const;
+
 export default function AuthModal() {
   const { authModalMode, setAuthModalMode, login, signup } = useTrading();
 
@@ -17,6 +28,7 @@ export default function AuthModal() {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   useEffect(() => {
     setEmail('');
@@ -24,11 +36,14 @@ export default function AuthModal() {
     setConfirmPassword('');
     setAgree(false);
     setError('');
+    setResetSuccess(false);
   }, [authModalMode]);
 
   if (!authModalMode) return null;
 
   const isLogin = authModalMode === 'login';
+  const isSignup = authModalMode === 'signup';
+  const isForgotPassword = authModalMode === 'forgot_password';
 
   const getPasswordStrength = () => {
     if (!password) return 0;
@@ -46,13 +61,27 @@ export default function AuthModal() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setResetSuccess(false);
+
+    if (isForgotPassword) {
+      if (!email.trim()) {
+        setError('Please enter your email.');
+        return;
+      }
+      setLoading(true);
+      setTimeout(() => {
+        setResetSuccess(true);
+        setLoading(false);
+      }, 800);
+      return;
+    }
 
     if (!email.trim() || !password) {
       setError('Please fill out all fields.');
       return;
     }
 
-    if (!isLogin) {
+    if (isSignup) {
       if (password !== confirmPassword) {
         setError('Passwords do not match.');
         return;
@@ -87,109 +116,167 @@ export default function AuthModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 font-sans select-none">
-      <div className="relative w-full max-w-[400px] bg-[#0B0E11] border border-[#2B2F36] rounded-xl p-6 flex flex-col shadow-2xl text-white">
+      <div
+        className="relative w-full max-w-[400px] rounded-xl p-6 flex flex-col shadow-2xl text-white"
+        style={{ backgroundColor: BP.bg, border: `1px solid ${BP.border}` }}
+      >
         <button
           onClick={() => setAuthModalMode(null)}
-          className="absolute top-4 right-4 text-[#848E9C] hover:text-white transition-colors"
+          className="absolute top-4 right-4 hover:text-white transition-colors"
+          style={{ color: BP.muted }}
         >
           <X className="h-5 w-5" />
         </button>
 
         <div className="flex flex-col mb-6">
           <h2 className="text-xl font-bold text-white tracking-wide">
-            {isLogin ? 'Log in' : 'Create account'}
+            {isLogin ? 'Log in' : isForgotPassword ? 'Reset Password' : 'Create account'}
           </h2>
         </div>
 
         {error && (
-          <div className="w-full text-xs py-3 px-4 rounded-lg mb-4" style={{ color: '#F23645', backgroundColor: 'rgba(255, 77, 79, 0.1)', border: '1px solid #3A1C1C' }}>
+          <div
+            className="w-full text-xs py-3 px-4 rounded-lg mb-4"
+            style={{
+              color: BP.red,
+              backgroundColor: BP.errorBg,
+              border: `1px solid ${BP.errorBorder}`,
+            }}
+          >
             {error}
           </div>
         )}
 
-        <form onSubmit={handleAuth} className="w-full flex flex-col space-y-4">
-          <div className="flex flex-col space-y-1.5 w-full">
-            <span className="text-xs text-[#848E9C] font-semibold">Email</span>
-            <input
-              type="text"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-[#161A1E] border border-[#2B2F36] focus:border-[#14F195] focus:outline-none rounded-lg p-3 text-sm text-white font-semibold transition-colors placeholder:text-[#848E9C]"
-            />
+        {isForgotPassword && resetSuccess && (
+          <div
+            className="w-full text-xs py-3 px-4 rounded-lg mb-4"
+            style={{
+              color: BP.green,
+              backgroundColor: 'rgba(20, 241, 149, 0.1)',
+              border: '1px solid rgba(20, 241, 149, 0.2)',
+            }}
+          >
+            Password reset to: DummyPassword123!
           </div>
+        )}
 
-          <div className="flex flex-col space-y-1.5 w-full relative">
-            <span className="text-xs text-[#848E9C] font-semibold">Password</span>
-            <div className="relative">
+        <form onSubmit={handleAuth} className="w-full flex flex-col gap-4">
+          <div
+            className="rounded-lg p-4 flex flex-col gap-2"
+            style={{ backgroundColor: BP.inputBg }}
+          >
+            <span className="text-xs" style={{ color: BP.muted }}>
+              Email
+            </span>
+            <div className="flex items-center justify-between gap-3">
               <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#161A1E] border border-[#2B2F36] focus:border-[#14F195] focus:outline-none rounded-lg p-3 pr-11 text-sm text-white font-semibold transition-colors placeholder:text-[#848E9C]"
+                type="text"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-transparent text-sm font-bold text-white outline-none placeholder:font-normal placeholder:opacity-50"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#848E9C] hover:text-white"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
             </div>
           </div>
 
-          {!isLogin && (
-            <div className="flex items-center space-x-1.5 w-full">
+          {!isForgotPassword && (
+            <div
+              className="rounded-lg p-4 flex flex-col gap-2 relative"
+              style={{ backgroundColor: BP.inputBg }}
+            >
+              <span className="text-xs" style={{ color: BP.muted }}>
+                Password
+              </span>
+              <div className="flex items-center justify-between gap-3">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-transparent text-sm font-bold text-white outline-none placeholder:font-normal placeholder:opacity-50 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 hover:text-white"
+                  style={{ color: BP.muted }}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isSignup && (
+            <div className="flex items-center gap-1.5 w-full">
               {[1, 2, 3, 4, 5].map((index) => {
                 const isActive = strength >= index;
                 return (
                   <div
                     key={`strength-${index}`}
-                    className={`h-1 flex-1 rounded-sm transition-colors ${
-                      isActive
+                    className="h-1 flex-1 rounded-sm transition-colors"
+                    style={{
+                      backgroundColor: isActive
                         ? strength <= 2
-                          ? 'bg-[#F23645]'
+                          ? BP.red
                           : strength <= 4
-                            ? 'bg-yellow-500'
-                            : 'bg-[#14F195]'
-                        : 'bg-[#2B2F36]'
-                    }`}
+                            ? '#eab308' // yellow-500
+                            : BP.green
+                        : BP.border,
+                    }}
                   />
                 );
               })}
             </div>
           )}
 
-          {!isLogin && (
-            <div className="flex flex-col space-y-1.5 w-full relative">
-              <span className="text-xs text-[#848E9C] font-semibold">Confirm Password</span>
-              <div className="relative">
+          {isSignup && (
+            <div
+              className="rounded-lg p-4 flex flex-col gap-2 relative"
+              style={{ backgroundColor: BP.inputBg }}
+            >
+              <span className="text-xs" style={{ color: BP.muted }}>
+                Confirm Password
+              </span>
+              <div className="flex items-center justify-between gap-3">
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   placeholder="Confirm your password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-[#161A1E] border border-[#2B2F36] focus:border-[#14F195] focus:outline-none rounded-lg p-3 pr-11 text-sm text-white font-semibold transition-colors placeholder:text-[#848E9C]"
+                  className="w-full bg-transparent text-sm font-bold text-white outline-none placeholder:font-normal placeholder:opacity-50 pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#848E9C] hover:text-white"
+                  className="absolute right-4 hover:text-white"
+                  style={{ color: BP.muted }}
                 >
-                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
           )}
 
-          {!isLogin && (
-            <label className="flex items-start space-x-2 text-[11px] text-[#848E9C] font-semibold cursor-pointer select-none leading-relaxed mt-1">
+          {isSignup && (
+            <label
+              className="flex items-start gap-2 text-[11px] font-semibold cursor-pointer select-none leading-relaxed mt-1"
+              style={{ color: BP.muted }}
+            >
               <input
                 type="checkbox"
                 checked={agree}
                 onChange={() => setAgree(!agree)}
-                className="w-3.5 h-3.5 rounded border-[#2B2F36] bg-[#161A1E] accent-[#14F195] outline-none cursor-pointer mt-0.5"
+                className="w-3.5 h-3.5 rounded outline-none cursor-pointer mt-0.5"
+                style={{
+                  backgroundColor: BP.inputBg,
+                  border: `1px solid ${BP.border}`,
+                  accentColor: BP.green,
+                }}
               />
               <span>
                 By signing up, I agree to the{' '}
@@ -202,20 +289,36 @@ export default function AuthModal() {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3.5 rounded-lg font-bold text-sm shadow-sm transition-colors mt-2 ${
-              isLogin
-                ? 'bg-white text-black hover:bg-zinc-200'
-                : 'bg-[#14F195] text-black hover:bg-[#12d886]'
-            } disabled:opacity-50 cursor-pointer`}
+            className="w-full py-3.5 rounded-lg font-bold text-sm transition-all cursor-pointer disabled:opacity-50 mt-2 hover:opacity-90"
+            style={{ backgroundColor: '#FFFFFF', color: '#000000' }}
           >
-            {loading ? 'Processing...' : isLogin ? 'Log in' : 'Sign up'}
+            {loading
+              ? 'Processing...'
+              : isLogin
+                ? 'Log in'
+                : isForgotPassword
+                  ? 'Reset Password'
+                  : 'Sign up'}
           </button>
         </form>
 
-        <div className="w-full flex items-center justify-between mt-6 text-xs font-semibold pt-4 border-t border-[#2B2F36]">
-          {isLogin ? (
+        <div
+          className="w-full flex items-center justify-between mt-6 text-xs font-semibold pt-4"
+          style={{ borderTop: `1px solid ${BP.border}` }}
+        >
+          {isForgotPassword ? (
+            <span style={{ color: BP.muted }}>
+              Remember your password?{' '}
+              <button
+                onClick={() => setAuthModalMode('login')}
+                className="text-white hover:underline"
+              >
+                Log in
+              </button>
+            </span>
+          ) : isLogin ? (
             <>
-              <span className="text-[#848E9C]">
+              <span style={{ color: BP.muted }}>
                 New here?{' '}
                 <button
                   onClick={() => setAuthModalMode('signup')}
@@ -224,11 +327,17 @@ export default function AuthModal() {
                   Sign up
                 </button>
               </span>
-              <button className="text-[#848E9C] hover:text-white hover:underline">Forgot Password</button>
+              <button
+                onClick={() => setAuthModalMode('forgot_password')}
+                className="hover:text-white hover:underline"
+                style={{ color: BP.muted }}
+              >
+                Forgot Password
+              </button>
             </>
           ) : (
             <>
-              <span className="text-[#848E9C]">
+              <span style={{ color: BP.muted }}>
                 Have an account?{' '}
                 <button
                   onClick={() => setAuthModalMode('login')}
@@ -237,7 +346,9 @@ export default function AuthModal() {
                   Log in
                 </button>
               </span>
-              <button className="text-[#848E9C] hover:text-white hover:underline">Add referral</button>
+              <button className="hover:text-white hover:underline" style={{ color: BP.muted }}>
+                Add referral
+              </button>
             </>
           )}
         </div>

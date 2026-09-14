@@ -75,6 +75,6 @@ export async function injectMarkPrice(req: Request, res: Response) {
     });
   } catch (err: unknown) {
     console.log('[injectMarkPrice] error', err);
-    return res.status(503).json({ msg: message });
+    return res.status(503).json({ msg: (err as any).message || 'error' });
   }
 }
