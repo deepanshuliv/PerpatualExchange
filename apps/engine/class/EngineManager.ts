@@ -199,6 +199,24 @@ export default class EngineManager {
           payload: positions,
         });
       }
+    } else if (request.type === 'get_open_orders') {
+      const { correlationId } = request;
+      const { market, userId } = request.payload;
+      const openOrders = this.matchingManger.getOpenOrders(userId, market);
+      await this.sendTobackend({
+        correlationId,
+        type: 'get_open_orders',
+        payload: openOrders,
+      });
+    } else if (request.type === 'get_fills') {
+      const { correlationId } = request;
+      const { userId } = request.payload;
+      const fills = this.matchingManger.getFills(userId);
+      await this.sendTobackend({
+        correlationId,
+        type: 'get_fills',
+        payload: fills,
+      });
     } else if (request.type === 'get_depth') {
       const { correlationId } = request;
       const { market } = request.payload;
