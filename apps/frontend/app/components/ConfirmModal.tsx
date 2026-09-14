@@ -3,9 +3,9 @@
 import React from "react";
 import { X } from "lucide-react";
 
-export type ConfirmVariant = "danger" | "default" | "success";
+type ConfirmVariant = "danger" | "default" | "success";
 
-export interface ConfirmDetail {
+interface ConfirmDetail {
   label: string;
   value?: string;
   input?: {

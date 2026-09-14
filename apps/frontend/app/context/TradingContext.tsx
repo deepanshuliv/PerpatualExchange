@@ -13,13 +13,13 @@ import {
 import { parseDepthSnapshot } from '../utils/orderbook';
 import { calculateUnrealizedPnl } from '../utils/position';
 
-export interface MarketTrade {
+interface MarketTrade {
   price: number;
   qty: number;
   time: number;
 }
 
-export interface MarketLiquidation {
+interface MarketLiquidation {
   userId: string;
   kind: 'LONG' | 'SHORT';
   price: number;

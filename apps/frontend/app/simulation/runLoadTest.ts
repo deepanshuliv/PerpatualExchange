@@ -12,7 +12,7 @@ export interface LoadTestConfig {
   delayMaxSec: number;
 }
 
-export interface SimUser {
+interface SimUser {
   username: string;
   token: string;
 }
@@ -73,7 +73,7 @@ const midFromDepth = (bids: unknown, asks: unknown): number | null => {
   return null;
 };
 
-export async function fetchMarkPrice(market: SimMarket): Promise<number> {
+async function fetchMarkPrice(market: SimMarket): Promise<number> {
   const { fallback } = MARKET[market];
 
   try {

@@ -1,5 +1,5 @@
 export const FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
-export const MAX_FUNDING_RATE = 0.0005;
+const MAX_FUNDING_RATE = 0.0005;
 
 export function startFundingTimer(from = Date.now()): number {
   return from + FUNDING_INTERVAL_MS;

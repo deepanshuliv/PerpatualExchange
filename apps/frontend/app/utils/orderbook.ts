@@ -63,18 +63,5 @@ export function groupOrderBookRows(
   });
 }
 
-export function midPriceFromOrderbook(
-  bids: OrderBookRow[],
-  asks: OrderBookRow[],
-): number | null {
-  const bestBid = bids[0]?.price;
-  const bestAsk = asks[0]?.price;
 
-  if (bestBid && bestAsk) {
-    return (bestBid + bestAsk) / 2;
-  }
-  if (bestBid) return bestBid;
-  if (bestAsk) return bestAsk;
-  return null;
-}
 
