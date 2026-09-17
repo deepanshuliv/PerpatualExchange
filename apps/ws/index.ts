@@ -9,7 +9,7 @@ async function bootstrap() {
 
     const port = Number(process.env.PORT || 8080);
     const host = process.env.HOST || '0.0.0.0';
-    const wss = new WebSocketServer({ port, host });
+    const wss = new WebSocketServer({ port, host, maxPayload: 64 * 1024 });
 
     wss.on('listening', () => {
       console.log(`WebSocket server is listening on ${host}:${port}`);
@@ -22,7 +22,10 @@ async function bootstrap() {
         ws,
         subscriptions: new Set<string>(),
       };
-      registerClient(client);
+      if (!registerClient(client)) {
+        ws.close(1013, 'server connection limit reached');
+        return;
+      }
 
       ws.on('message', function message(_data) {
         let parsedData;

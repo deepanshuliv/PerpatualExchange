@@ -1,1 +1,0 @@
-# Workspace Agent Rules

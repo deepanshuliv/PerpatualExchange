@@ -62,6 +62,18 @@ JWT_SECRET=generate-another-long-random-secret
 CORS_ORIGINS=https://exchange.deepanshu.live
 NEXT_PUBLIC_API_URL=https://exchange.deepanshu.live/api
 NEXT_PUBLIC_WS_URL=wss://exchange.deepanshu.live/ws
+
+# Optional remote engine backup. Local snapshots are always written to the
+# engine_snapshots Docker volume even when these values are left empty.
+R2_ENDPOINT=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=perp-exchange-snapshots
+
+# Bounded historical storage and engine-side memory.
+HISTORY_RETENTION_DAYS=90
+ENGINE_MAX_IN_MEMORY_FILLS=100000
+ENGINE_MAX_OPEN_ORDERS=100000
 ```
 
 Create the Cloudflare records in the next section before starting Caddy, so it can issue the origin certificates.
@@ -71,10 +83,30 @@ Build the image and apply database migrations:
 ```bash
 docker compose build --pull
 docker compose up -d postgres redis
-docker compose run --rm db-consumer \
-  bunx prisma migrate deploy --config packages/db/prisma.config.ts
+docker compose run --rm -w /app/packages/db db-consumer \
+  bun run prisma migrate deploy
 docker compose up -d
 docker compose ps
+```
+
+## Storage safety
+
+The engine checkpoints locally to the `engine_snapshots` volume every few
+seconds and uses R2 only as an optional remote copy. Docker container logs are
+rotated at 10 MB × 3 files. Redis streams are trimmed and its AOF is rewritten
+automatically. Raw tick data is retained for 30 days; fills and terminal orders
+are retained for `HISTORY_RETENTION_DAYS` (90 by default). Open orders and
+positions remain until they are closed or cancelled; the engine rejects new
+resting limit orders after `ENGINE_MAX_OPEN_ORDERS` (100,000 by default).
+
+The VM still needs basic capacity monitoring because no finite disk can be
+guaranteed never to fill. Check it periodically with:
+
+```bash
+df -h
+docker system df
+docker compose ps
+docker compose logs --tail=100 engine db-consumer redis
 ```
 
 ## 3. Cloudflare DNS
@@ -119,8 +151,8 @@ docker compose up -d frontend caddy
 ```bash
 git pull --ff-only
 docker compose build --pull
-docker compose run --rm db-consumer \
-  bunx prisma migrate deploy --config packages/db/prisma.config.ts
+docker compose run --rm -w /app/packages/db db-consumer \
+  bun run prisma migrate deploy
 docker compose up -d
 ```
 

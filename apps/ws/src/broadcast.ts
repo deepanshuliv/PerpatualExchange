@@ -8,9 +8,19 @@ interface ClientConnection {
 }
 
 const activeClients = new Set<ClientConnection>();
+const configuredMaxClients = Number(process.env.WS_MAX_CLIENTS);
+const MAX_CLIENTS =
+  Number.isInteger(configuredMaxClients) && configuredMaxClients > 0 ? configuredMaxClients : 1_000;
+const configuredMaxBufferedBytes = Number(process.env.WS_MAX_BUFFERED_BYTES);
+const MAX_BUFFERED_BYTES =
+  Number.isInteger(configuredMaxBufferedBytes) && configuredMaxBufferedBytes > 0
+    ? configuredMaxBufferedBytes
+    : 4 * 1024 * 1024;
 
 export function registerClient(client: ClientConnection) {
+  if (activeClients.size >= MAX_CLIENTS) return false;
   activeClients.add(client);
+  return true;
 }
 
 export function unregisterClient(client: ClientConnection) {
@@ -21,8 +31,28 @@ function sendToSubscribers(stream: string, data: Record<string, unknown>) {
   const message = JSON.stringify({ stream, data });
   for (const client of activeClients) {
     if (client.subscriptions.has(stream)) {
-      client.ws.send(message);
+      safeSend(client, message);
     }
+  }
+}
+
+function safeSend(client: ClientConnection, message: string) {
+  if (client.ws.readyState !== 1) {
+    unregisterClient(client);
+    return;
+  }
+
+  // A slow consumer otherwise makes ws retain every broadcast in memory.
+  if (client.ws.bufferedAmount > MAX_BUFFERED_BYTES) {
+    unregisterClient(client);
+    client.ws.close(1013, 'client is too slow');
+    return;
+  }
+
+  try {
+    client.ws.send(message);
+  } catch (_) {
+    unregisterClient(client);
   }
 }
 
@@ -48,7 +78,7 @@ function broadcastCandle(
   });
 }
 
-export function sendCandleSnapshot(client: { ws: WebSocket }, stream: string) {
+export function sendCandleSnapshot(client: ClientConnection, stream: string) {
   const match = stream.match(/^candle\.([^.]+)\.(1m|5m|15m|1h|1d)$/);
   if (!match) return;
 
@@ -56,7 +86,8 @@ export function sendCandleSnapshot(client: { ws: WebSocket }, stream: string) {
   const candles = getCandleSeries(market!, interval as '1m' | '5m' | '15m' | '1h' | '1d');
   if (candles.length === 0) return;
 
-  client.ws.send(
+  safeSend(
+    client,
     JSON.stringify({
       stream,
       data: {
@@ -100,7 +131,12 @@ export function checkMarketUpdateAndSendToSubsribedUser(update: EngineEvent) {
         executionTime,
       });
 
-      const { candle1m, candle5m, candle15m, candle1h, candle1d } = applyTradeToLiveCandles(market, price, qty, transactionTime);
+      const { candle1m, candle5m, candle15m, candle1h, candle1d } = applyTradeToLiveCandles(
+        market,
+        price,
+        qty,
+        transactionTime,
+      );
       broadcastCandle(market, '1m', candle1m, transactionTime, executionTime);
       broadcastCandle(market, '5m', candle5m, transactionTime, executionTime);
       broadcastCandle(market, '15m', candle15m, transactionTime, executionTime);

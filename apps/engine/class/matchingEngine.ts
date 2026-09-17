@@ -2,7 +2,6 @@ import { Shared } from '@repo/shared-types';
 import type {
   EngineSnapShotInstanceType,
   Fills,
-  Orderdetails,
   PositionDetails,
 } from '@repo/shared-types/internal-types';
 import Balance from './balance';

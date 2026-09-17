@@ -85,6 +85,12 @@ async function seedMarketCacheFromStream() {
 }
 
 const ENGINE_RPC_TIMEOUT_MS = 5_000;
+const DEFAULT_MAX_PENDING_ENGINE_REQUESTS = 10_000;
+const configuredMaxPendingEngineRequests = Number(process.env.BACKEND_MAX_PENDING_REQUESTS);
+const MAX_PENDING_ENGINE_REQUESTS =
+  Number.isInteger(configuredMaxPendingEngineRequests) && configuredMaxPendingEngineRequests > 0
+    ? configuredMaxPendingEngineRequests
+    : DEFAULT_MAX_PENDING_ENGINE_REQUESTS;
 
 export async function sendToEngine(
   engineRequest: EngineRequest.BACKEND_ENGINE_REQUEST,
@@ -92,6 +98,10 @@ export async function sendToEngine(
   await connectRedisClient(publisher, 'Backend-Publisher');
 
   const streamKey = process.env.ENGINE_STREAM || 'to-engine';
+
+  if (correlationIdToResolveMap.size >= MAX_PENDING_ENGINE_REQUESTS) {
+    throw new Error('Engine request queue is full; retry shortly');
+  }
 
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -103,10 +113,10 @@ export async function sendToEngine(
 
     publisher
       .xAdd(
-        streamKey, 
-        '*', 
+        streamKey,
+        '*',
         { data: JSON.stringify(engineRequest) },
-        { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+        { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } },
       )
       .then((msgId) => {
         console.log(
@@ -153,7 +163,9 @@ function handleEngineResponse(rawMessage: unknown) {
         pending.resolve({
           type: 'error',
           correlationId: corrId,
-          payload: { error: 'Backend Zod validation failed: ' + JSON.stringify(validation.error.format()) }
+          payload: {
+            error: 'Backend Zod validation failed: ' + JSON.stringify(validation.error.format()),
+          },
         } as any);
         correlationIdToResolveMap.delete(corrId);
       }

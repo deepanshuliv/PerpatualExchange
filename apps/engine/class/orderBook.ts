@@ -11,6 +11,19 @@ import type {
 } from '@repo/shared-types/internal-types';
 import { OrderedMap } from 'js-sdsl';
 
+const DEFAULT_MAX_IN_MEMORY_FILLS = 100_000;
+const configuredMaxInMemoryFills = Number(process.env.ENGINE_MAX_IN_MEMORY_FILLS);
+const MAX_IN_MEMORY_FILLS =
+  Number.isInteger(configuredMaxInMemoryFills) && configuredMaxInMemoryFills > 0
+    ? configuredMaxInMemoryFills
+    : DEFAULT_MAX_IN_MEMORY_FILLS;
+const DEFAULT_MAX_OPEN_ORDERS = 100_000;
+const configuredMaxOpenOrders = Number(process.env.ENGINE_MAX_OPEN_ORDERS);
+const MAX_OPEN_ORDERS =
+  Number.isInteger(configuredMaxOpenOrders) && configuredMaxOpenOrders > 0
+    ? configuredMaxOpenOrders
+    : DEFAULT_MAX_OPEN_ORDERS;
+
 export default class OrderBookManager {
   private orderBook: OrderBook;
   private fills: Fills[];
@@ -182,6 +195,10 @@ export default class OrderBookManager {
     margin: number,
     market: Shared.MARKET_AVAILABEL,
   ) {
+    if (type === 'LIMIT' && this.orders.size >= MAX_OPEN_ORDERS) {
+      return null;
+    }
+
     const currentOrder = this.createUserOrder(userId, kind, type, qty, margin, market, price);
 
     let fillInfo: FillInfo[] = [];
@@ -280,6 +297,9 @@ export default class OrderBookManager {
     }
 
     if (remianingQty === 0) {
+      if (type !== 'LIMIT') {
+        this.orders.delete(currentOrder.orderId);
+      }
       const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
       return {
         orderId: currentOrder.orderId,
@@ -315,6 +335,13 @@ export default class OrderBookManager {
         sameSide?.setElement(currentOrder.data.price, newBid);
       }
     }
+
+    // A market order never rests on the book. Remove its terminal record even
+    // when the book could only fill it partially (or not at all).
+    if (type !== 'LIMIT') {
+      this.orders.delete(currentOrder.orderId);
+    }
+
     const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
     return {
       filledQty: totalQty,
@@ -338,6 +365,10 @@ export default class OrderBookManager {
     margin: number,
     market: Shared.MARKET_AVAILABEL,
   ) {
+    if (type === 'LIMIT' && this.orders.size >= MAX_OPEN_ORDERS) {
+      return null;
+    }
+
     const currrentOrder = this.createUserOrder(userId, kind, type, qty, margin, market, price);
     const fillInfo: FillInfo[] = [];
     const generatedFills: Fills[] = [];
@@ -439,6 +470,9 @@ export default class OrderBookManager {
     }
 
     if (remianingQty === 0) {
+      if (type !== 'LIMIT') {
+        this.orders.delete(currrentOrder.orderId);
+      }
       const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
       return {
         filledQty: totalQty,
@@ -475,6 +509,13 @@ export default class OrderBookManager {
         sameSide?.setElement(currrentOrder.data.price, newBid);
       }
     }
+
+    // A market/liquidation order never rests on the book. Without this cleanup,
+    // an unfilled market order would accumulate in the in-memory order map.
+    if (type !== 'LIMIT') {
+      this.orders.delete(currrentOrder.orderId);
+    }
+
     const { totalQty, totalSpent } = this.calculateTotalTrade(fillInfo);
     return {
       filledQty: totalQty,
@@ -609,6 +650,9 @@ export default class OrderBookManager {
       transactionTime: Date.now(),
     };
     this.fills.push(fillDetail);
+    if (this.fills.length > MAX_IN_MEMORY_FILLS) {
+      this.fills.splice(0, this.fills.length - MAX_IN_MEMORY_FILLS);
+    }
     return fillDetail;
   }
 
@@ -635,7 +679,11 @@ export default class OrderBookManager {
       return null;
     }
     tempOrder.status = status;
-    this.orders.set(orderId, tempOrder);
+    if (status === 'FILLED' || status === 'CANCELLED') {
+      this.orders.delete(orderId);
+    } else {
+      this.orders.set(orderId, tempOrder);
+    }
     return tempOrder;
   }
 

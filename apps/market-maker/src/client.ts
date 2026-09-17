@@ -22,7 +22,6 @@ export class EngineClient {
     }
   >();
   private markPrices = new Map<string, number>();
-  private priceCallbacks = new Set<(market: Shared.MARKET_AVAILABEL, price: number) => void>();
 
   constructor() {
     this.publisher = redisClient.duplicate();
@@ -38,11 +37,6 @@ export class EngineClient {
     this.startStreamListener().catch((err) => {
       console.error('[EngineClient] Stream listener crashed:', err);
     });
-  }
-
-  onMarkPriceUpdate(callback: (market: Shared.MARKET_AVAILABEL, price: number) => void) {
-    this.priceCallbacks.add(callback);
-    return () => this.priceCallbacks.delete(callback);
   }
 
   getLatestMarkPrice(market: string): number | null {
@@ -90,9 +84,6 @@ export class EngineClient {
       const price = Number(msg.payload.price);
       if (Number.isFinite(price) && price > 0) {
         this.markPrices.set(market, price);
-        for (const cb of this.priceCallbacks) {
-          cb(market, price);
-        }
       }
     }
 

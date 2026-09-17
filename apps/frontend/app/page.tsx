@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useTrading } from './context/TradingContext';
 import TradingChart from './components/TradingChart';
 import OrderBook from './components/OrderBook';
@@ -9,7 +9,7 @@ import DashboardTabs from './components/DashboardTabs';
 import AuthModal from './components/AuthModal';
 import ConfirmModal from './components/ConfirmModal';
 import { formatFundingRate } from './utils/funding';
-import { ChevronDown, ChevronRight, TrendingUp, LogOut } from 'lucide-react';
+import { ChevronDown, ChevronRight, LogOut } from 'lucide-react';
 
 export default function Home() {
   const {
@@ -70,7 +70,7 @@ export default function Home() {
   const changeInfo = get24HChange();
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#08090b] text-[#f2f4f7] font-sans selection:bg-zinc-800 selection:text-white">
+    <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-[#08090b] text-[#f2f4f7] font-sans selection:bg-zinc-800 selection:text-white">
       <header className="sticky top-0 flex items-center justify-between bg-[#0c0d10] border-b border-[#171a1f] px-6 h-14 shrink-0 z-40 select-none">
         <div className="flex items-center">
           <div className="flex items-center space-x-3 cursor-pointer">
@@ -242,23 +242,25 @@ export default function Home() {
         </div>
       </section>
 
-      <main className="flex-1 flex flex-col lg:flex-row p-2 gap-2 overflow-y-auto lg:overflow-hidden min-h-0 w-full custom-scrollbar">
-        <div className="w-full lg:w-[75%] flex flex-col gap-2 min-h-0 shrink-0 lg:shrink">
-          <div className="flex flex-col lg:flex-row gap-2 lg:flex-[1.6] min-h-0 w-full shrink-0 lg:shrink">
-            <div className="w-full lg:flex-1 min-h-[300px] lg:min-h-0">
+      <main className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-y-auto p-2 lg:grid lg:grid-cols-[minmax(0,2.1fr)_minmax(250px,0.9fr)_minmax(280px,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+        <div className="flex min-h-0 w-full shrink-0 flex-col gap-2 lg:h-full lg:min-w-0">
+          <div className="flex min-h-[300px] w-full shrink-0 flex-col gap-2 lg:min-h-0 lg:flex-[1.6]">
+            <div className="min-h-[300px] w-full lg:min-h-0 lg:flex-1 lg:min-w-0">
               <TradingChart />
-            </div>
-            <div className="w-full lg:w-[30%] shrink-0 min-h-[400px] lg:min-h-0 lg:h-full">
-              <OrderBook />
             </div>
           </div>
 
-          <div className="w-full lg:flex-1 min-h-[300px] lg:min-h-0 flex flex-col shrink-0 lg:shrink">
+          <div className="flex min-h-[300px] w-full shrink-0 flex-col lg:min-h-0 lg:flex-1">
             <DashboardTabs />
           </div>
         </div>
-        <div className="w-full lg:w-[25%] flex flex-col min-h-0 shrink-0 lg:shrink min-h-[500px] lg:min-h-0">
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
+
+        <div className="min-h-[400px] w-full shrink-0 lg:h-full lg:min-h-0 lg:min-w-0">
+          <OrderBook />
+        </div>
+
+        <div className="flex min-h-[500px] w-full shrink-0 flex-col lg:h-full lg:min-h-0 lg:min-w-0">
+          <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
             <OrderEntryPanel />
           </div>
         </div>

@@ -41,6 +41,23 @@ body {
 }
 .custom-scrollbar {
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2b2f36 transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2b2f36;
+  border: 1px solid #0c0d10;
+  border-radius: 999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 @keyframes ob-flash-up {

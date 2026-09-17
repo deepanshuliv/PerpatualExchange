@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { runLoadTest, type LoadTestConfig, type SimMarket } from './runLoadTest';
 
 const MARKETS: { value: SimMarket; label: string; symbol: string }[] = [

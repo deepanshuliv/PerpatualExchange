@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Lock, Unlock, Minus, Plus } from "lucide-react";
 import type { OrderBookRow } from "types";
 import { useTrading } from "../context/TradingContext";
@@ -354,13 +354,13 @@ export default function OrderBook() {
           </div>
         </>
       ) : activeTab === "trades" ? (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="grid grid-cols-3 text-[10px] font-bold text-[#8491a5] px-3 py-1.5 border-b border-[#171a1f] bg-[#0c0d10] shrink-0">
             <div>Time</div>
             <div className="text-right">Price (USD)</div>
             <div className="text-right">Quantity ({asset})</div>
           </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
+          <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
             {marketTrades.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans text-xs">
                 <span>Waiting for trades...</span>
@@ -388,7 +388,7 @@ export default function OrderBook() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="px-3 py-2 border-b border-[#171a1f] bg-[#12161c]/40 shrink-0">
             <p className="text-[10px] text-[#8491a5] leading-relaxed">
               Real-time liquidations occurring on the order book.
@@ -400,7 +400,7 @@ export default function OrderBook() {
             <div className="text-right">Price (USD)</div>
             <div className="text-right">Quantity ({asset})</div>
           </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
+          <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
             {marketLiquidations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans text-xs">
                 <span>No liquidations yet</span>

@@ -8,9 +8,6 @@ export class MarketMakerStrategy {
   private userId: string;
   private takerUserId: string;
   private isRunning = false;
-  private requoteTimer: ReturnType<typeof setInterval> | null = null;
-  private tradeTimer: ReturnType<typeof setInterval> | null = null;
-  private tradeCounter = 0;
 
   constructor(config: MarketConfig, client: EngineClient) {
     this.config = config;
@@ -26,13 +23,13 @@ export class MarketMakerStrategy {
     await this.client.ensureBalance(this.userId, initialBalance, minBalanceThreshold);
     await this.client.ensureBalance(this.takerUserId, initialBalance, minBalanceThreshold);
 
-    this.requoteTimer = setInterval(() => {
+    setInterval(() => {
       this.requote().catch((err) => {
         console.error(`[MM Strategy: ${this.config.market}] Requote error:`, err);
       });
     }, requoteIntervalMs);
 
-    this.tradeTimer = setInterval(() => {
+    setInterval(() => {
       this.executeOrganicTrade().catch((err) => {
         console.error(`[MM Strategy: ${this.config.market}] Trade execution error:`, err);
       });
@@ -40,18 +37,6 @@ export class MarketMakerStrategy {
 
     setTimeout(() => this.requote(), 400);
     setTimeout(() => this.executeOrganicTrade(), 1200);
-  }
-
-  stop(): void {
-    this.isRunning = false;
-    if (this.requoteTimer) {
-      clearInterval(this.requoteTimer);
-      this.requoteTimer = null;
-    }
-    if (this.tradeTimer) {
-      clearInterval(this.tradeTimer);
-      this.tradeTimer = null;
-    }
   }
 
   private round(val: number, decimals: number): number {
@@ -117,7 +102,6 @@ export class MarketMakerStrategy {
     const markPrice = this.client.getLatestMarkPrice(this.config.market);
     if (!markPrice || markPrice <= 0) return;
 
-    this.tradeCounter++;
     const { baseQty, marginRatio, qtyDecimals } = this.config;
 
     const isBuy = Math.random() > 0.48;

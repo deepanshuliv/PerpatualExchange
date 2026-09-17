@@ -97,7 +97,7 @@ export default function DashboardTabs() {
   };
 
   return (
-    <div className="flex flex-col  bg-[#0c0d10] text-[#f2f4f7] border-t border-[#171a1f] select-none font-sans">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#0c0d10] text-[#f2f4f7] border-t border-[#171a1f] select-none font-sans">
       <div className="flex items-center justify-between border-b border-[#171a1f] bg-[#08090b] px-4 h-11 shrink-0">
         <div className="flex space-x-2">
           {[

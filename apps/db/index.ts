@@ -1,11 +1,13 @@
 import { connectRedisClient, redisClient } from '@repo/redis';
 import { type RedisStreamResponse } from '@repo/shared-types';
 import { processMessageBatch } from './src/batchProcessor';
+import { cleanupHistoricalData } from './src/retention';
 
 const CONSUMER_GROUP = process.env.DB_CONSUMER_GROUP || 'db-consumer-group';
 const CONSUMER_NAME = process.env.DB_CONSUMER_NAME || 'db-consumer';
 const STREAM_KEY = process.env.BACKEND_STREAM || 'to-backend';
 const BATCH_SIZE = 1000;
+const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 function readStream(
   subscriber: ReturnType<typeof redisClient.duplicate>,
@@ -69,6 +71,11 @@ async function startConsumer() {
 }
 
 async function bootstrap() {
+  void cleanupHistoricalData();
+  setInterval(() => {
+    void cleanupHistoricalData();
+  }, RETENTION_INTERVAL_MS);
+
   while (true) {
     try {
       await startConsumer();
