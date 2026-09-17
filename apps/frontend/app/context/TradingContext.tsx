@@ -251,6 +251,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const wsRef = useRef<WebSocket | null>(null);
   const tokenRef = useRef<string | null>(token);
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
   const marketRef = useRef(market);
   const chartIntervalRef = useRef(chartInterval);
   const [wsReady, setWsReady] = useState(false);
@@ -307,7 +308,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!token) return;
     const interval = setInterval(() => {
       refreshUserData();
-    }, 3000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [market, token]);
 
@@ -693,14 +694,35 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const activeToken = authToken ?? token;
     if (!activeToken) return;
 
-    try {
-      const balanceJson = await api.getAvailableEquity(activeToken);
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current;
+    }
+
+    let refreshPromise: Promise<void> = Promise.resolve();
+    refreshPromise = (async () => {
+      try {
+        const [balanceJson, positionsJson, ordersJson, fillsJson] = await Promise.all([
+          api.getAvailableEquity(activeToken),
+          api.getOpenPositions(activeToken),
+          api.getOpenOrders(activeToken),
+          api.getFills(activeToken),
+        ]);
+
+        const authFailed = [balanceJson, positionsJson, ordersJson, fillsJson].some(
+          (result) => result.status === 401 || result.status === 403,
+        );
+        if (authFailed) {
+          if (tokenRef.current === activeToken) {
+            logout();
+          }
+          return;
+        }
+
       if (balanceJson.ok && balanceJson.data != null) {
         const available = Number(balanceJson.data);
         setBalance(Number.isFinite(available) ? available : 0);
       }
 
-      const positionsJson = await api.getOpenPositions(activeToken);
       if (positionsJson.ok && positionsJson.data != null) {
         const raw = positionsJson.data;
         const positionsList = Array.isArray(raw) ? raw : [raw];
@@ -727,7 +749,6 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         void fetchMarkPricesForMarkets(formatted.map((pos) => pos.market));
       }
 
-      const ordersJson = await api.getOpenOrders(activeToken);
       if (ordersJson.ok && Array.isArray(ordersJson.data)) {
         const formattedOrders: Order[] = ordersJson.data.map((ord: any) => ({
           id: ord.orderId || ord.id,
@@ -745,7 +766,6 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setOpenOrders(formattedOrders);
       }
 
-      const fillsJson = await api.getFills(activeToken);
       if (fillsJson.ok && Array.isArray(fillsJson.data)) {
         const formattedFills: Fill[] = fillsJson.data.map((f: any) => ({
           id: f.id || f.orderId,
@@ -761,9 +781,17 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }));
         setFills(formattedFills);
       }
-    } catch (err) {
-      console.log('[refreshUserData] error', err);
-    }
+      } catch (err) {
+        console.log('[refreshUserData] error', err);
+      } finally {
+        if (refreshInFlightRef.current === refreshPromise) {
+          refreshInFlightRef.current = null;
+        }
+      }
+    })();
+
+    refreshInFlightRef.current = refreshPromise;
+    return refreshPromise;
   };
 
   const signup = async (username: string, password?: string): Promise<boolean> => {

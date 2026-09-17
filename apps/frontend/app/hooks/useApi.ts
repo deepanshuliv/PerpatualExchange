@@ -2,9 +2,22 @@
 
 import { createCorrelationId } from '../utils/correlationId';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
 
-export const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
+function resolveWebSocketBase() {
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL.replace(/\/$/, '');
+  }
+
+  if (typeof window === 'undefined') {
+    return 'ws://localhost:8080';
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws`;
+}
+
+export const WS_BASE = resolveWebSocketBase();
 
 export interface PlaceOrderParams {
   qty: string;
@@ -15,10 +28,11 @@ export interface PlaceOrderParams {
   margin: number;
 }
 
-const getHeaders = (token?: string) => {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+const getHeaders = (token?: string, hasJsonBody = false) => {
+  const headers: Record<string, string> = {};
+  if (hasJsonBody) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -72,34 +86,34 @@ export const apiService = {
     const res = await fetch(`${API_BASE}/equity/available`, {
       headers: getHeaders(token),
     });
-    return res.json();
+    return { status: res.status, ...(await res.json()) };
   },
 
   getOpenPositions: async (token: string) => {
     const res = await fetch(`${API_BASE}/positions/open/all`, {
       headers: getHeaders(token),
     });
-    return res.json();
+    return { status: res.status, ...(await res.json()) };
   },
 
   getOpenOrders: async (token: string) => {
     const res = await fetch(`${API_BASE}/orders/open/all`, {
       headers: getHeaders(token),
     });
-    return res.json();
+    return { status: res.status, ...(await res.json()) };
   },
 
   getFills: async (token: string) => {
     const res = await fetch(`${API_BASE}/fills`, {
       headers: getHeaders(token),
     });
-    return res.json();
+    return { status: res.status, ...(await res.json()) };
   },
 
   provisionSimUser: async (label: string, amount: number) => {
     const res = await fetch(`${API_BASE}/sim/provision`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(undefined, true),
       body: JSON.stringify({ label, amount }),
     });
     const json = await res.json();
@@ -109,7 +123,7 @@ export const apiService = {
   injectMarkPrice: async (market: string, price: number) => {
     const res = await fetch(`${API_BASE}/sim/inject-mark-price`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(undefined, true),
       body: JSON.stringify({ market, price }),
     });
     const json = await res.json();
@@ -119,7 +133,7 @@ export const apiService = {
   signup: async (username: string, password?: string) => {
     const res = await fetch(`${API_BASE}/signup`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(undefined, true),
       body: JSON.stringify({ username, password: password }),
     });
     const json = await res.json();
@@ -129,7 +143,7 @@ export const apiService = {
   signin: async (username: string, password?: string) => {
     const res = await fetch(`${API_BASE}/signin`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(undefined, true),
       body: JSON.stringify({ username, password: password }),
     });
     const json = await res.json();
@@ -139,7 +153,7 @@ export const apiService = {
   onramp: async (token: string, amount: number) => {
     const res = await fetch(`${API_BASE}/onramp`, {
       method: 'POST',
-      headers: getHeaders(token),
+      headers: getHeaders(token, true),
       body: JSON.stringify({
         correlationId: createCorrelationId(),
         type: 'add_balance',
@@ -153,7 +167,7 @@ export const apiService = {
   placeOrder: async (token: string, orderData: PlaceOrderParams) => {
     const res = await fetch(`${API_BASE}/order`, {
       method: 'POST',
-      headers: getHeaders(token),
+      headers: getHeaders(token, true),
       body: JSON.stringify({
         correlationId: createCorrelationId(),
         type: 'create_order',
@@ -174,7 +188,7 @@ export const apiService = {
   cancelOrder: async (token: string, orderId: string) => {
     const res = await fetch(`${API_BASE}/order/cancel`, {
       method: 'POST',
-      headers: getHeaders(token),
+      headers: getHeaders(token, true),
       body: JSON.stringify({
         correlationId: createCorrelationId(),
         type: 'cancel_order',

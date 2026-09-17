@@ -7,10 +7,12 @@ async function bootstrap() {
   try {
     await startConsumerGroup();
 
-    const wss = new WebSocketServer({ port: 8080 });
+    const port = Number(process.env.PORT || 8080);
+    const host = process.env.HOST || '0.0.0.0';
+    const wss = new WebSocketServer({ port, host });
 
     wss.on('listening', () => {
-      console.log('WebSocket server is listening on port 8080');
+      console.log(`WebSocket server is listening on ${host}:${port}`);
     });
 
     wss.on('connection', function connection(ws) {
