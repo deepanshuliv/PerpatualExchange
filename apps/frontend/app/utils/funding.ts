@@ -30,7 +30,7 @@ export function formatFundingRate(rate: number): string {
 }
 
 export function fundingRateColorClass(rate: number): string {
-  if (rate > 0) return "text-[#ff3b30]";
-  if (rate < 0) return "text-[#00c087]";
-  return "text-[#8491a5]";
+  if (rate > 0) return "text-down";
+  if (rate < 0) return "text-up";
+  return "text-muted";
 }

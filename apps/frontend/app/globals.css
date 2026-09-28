@@ -1,68 +1,136 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/*
+ * Design tokens — one cool-neutral gray family, and green/red used only for
+ * market direction. Every component references these via Tailwind utilities
+ * (bg-surface, text-muted, border-line, text-up, …).
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: Arial, Helvetica, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-warn: var(--warn);
+  --color-accent: var(--accent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Jet black base with pure neutral (untinted) grays. */
+:root {
+  --canvas: #0a0a0a;
+  --surface: #0f0f0f;
+  --raised: #171717;
+  --hover: #1f1f1f;
+  --line: #1c1c1c;
+  --line-strong: #2b2b2b;
+
+  --fg: #ededed;
+  --muted: #8f8f8f;
+  --subtle: #5e5e5e;
+
+  --up: #2ebd85;
+  --down: #ef5f6b;
+  --warn: #d9a441;
+  --accent: #f0524f;
+}
+
+html,
+body {
+  background: var(--canvas);
+  color: var(--fg);
 }
 
 body {
-  background: #08090b;
-  color: #f2f4f7;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+}
+
+.font-mono,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 1px solid var(--subtle);
+  outline-offset: 1px;
+}
+
+/* Text fields show focus through their own (or their wrapper's) border,
+   so never draw a second outline inside the field. */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+  outline: none;
+}
+
+/* Checkboxes and radios have no wrapper border, so keep a visible ring. */
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible {
+  outline: 1px solid var(--subtle);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: #2b2b2b;
+  color: #fff;
 }
 
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2B2F36;
-  border-radius: 4px;
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #3D4450;
-}
+
 .custom-scrollbar {
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: #2b2f36 transparent;
+  scrollbar-color: var(--line-strong) transparent;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #2b2f36;
-  border: 1px solid #0c0d10;
-  border-radius: 999px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+/* Hide number spinners on numeric inputs */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 @keyframes ob-flash-up {
   0% {
-    background-color: rgba(0, 192, 135, 0.22);
+    background-color: rgba(46, 189, 133, 0.18);
   }
   100% {
     background-color: transparent;
@@ -71,19 +139,11 @@ body {
 
 @keyframes ob-flash-down {
   0% {
-    background-color: rgba(255, 59, 48, 0.22);
+    background-color: rgba(239, 95, 107, 0.18);
   }
   100% {
     background-color: transparent;
   }
-}
-
-.ob-depth-bar {
-  transition: background 0.35s ease-out;
-}
-
-.ob-size-cell {
-  transition: color 0.2s ease-out;
 }
 
 .ob-flash-up {
@@ -94,17 +154,39 @@ body {
   animation: ob-flash-down 0.45s ease-out;
 }
 
-.ob-row-enter {
-  animation: ob-row-enter 0.2s ease-out;
-}
-
-@keyframes ob-row-enter {
+@keyframes fade-in {
   from {
     opacity: 0;
-    transform: translateY(-2px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.anim-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+
+.anim-dialog-in {
+  animation: dialog-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-in,
+  .anim-dialog-in,
+  .ob-flash-up,
+  .ob-flash-down {
+    animation: none;
   }
 }

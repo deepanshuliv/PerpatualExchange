@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { X } from "lucide-react";
 
 type ConfirmVariant = "danger" | "default" | "success";
@@ -29,29 +29,21 @@ interface ConfirmModalProps {
   confirmDisabled?: boolean;
   icon: React.ReactNode;
   details?: ConfirmDetail[];
+  error?: string;
 }
 
-const variantStyles: Record<
-  ConfirmVariant,
-  { iconBg: string; iconShadow: string; confirmBtn: string }
-> = {
+const variantStyles: Record<ConfirmVariant, { icon: string; confirmBtn: string }> = {
   danger: {
-    iconBg: "bg-[#F23645]",
-    iconShadow: "shadow-[#F23645]/10",
-    confirmBtn:
-      "bg-[#F23645] text-white hover:bg-[#d42d38] border border-transparent",
+    icon: "bg-down/10 text-down",
+    confirmBtn: "bg-down text-canvas hover:brightness-110",
   },
   default: {
-    iconBg: "bg-[#161A1E]",
-    iconShadow: "shadow-black/20",
-    confirmBtn:
-      "bg-white text-black hover:bg-zinc-200 border border-transparent",
+    icon: "bg-raised text-fg",
+    confirmBtn: "bg-fg text-canvas hover:bg-white",
   },
   success: {
-    iconBg: "bg-[#14F195]",
-    iconShadow: "shadow-[#14F195]/10",
-    confirmBtn:
-      "bg-[#14F195] text-black hover:bg-[#12d886] border border-transparent",
+    icon: "bg-up/10 text-up",
+    confirmBtn: "bg-up text-canvas hover:brightness-110",
   },
 };
 
@@ -68,85 +60,103 @@ export default function ConfirmModal({
   confirmDisabled = false,
   icon,
   details,
+  error,
 }: ConfirmModalProps) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, loading, onClose]);
+
   if (!open) return null;
 
   const styles = variantStyles[variant];
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 font-sans select-none"
-      onClick={onClose}
+      className="anim-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-sans backdrop-blur-[2px] select-none"
+      onClick={loading ? undefined : onClose}
     >
       <div
-        className="relative w-full max-w-[380px] bg-[#0B0E11] border border-[#2B2F36] rounded-xl p-6 flex flex-col shadow-2xl text-white"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+        className="anim-dialog-in relative flex w-full max-w-[380px] flex-col rounded-xl border border-line-strong bg-surface p-5 text-fg shadow-2xl shadow-black/50"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={onClose}
           disabled={loading}
-          className="absolute top-4 right-4 text-[#848E9C] hover:text-white transition-colors disabled:opacity-50"
+          aria-label="Close"
+          className="absolute right-3 top-3 rounded-md p-1.5 text-subtle transition-colors hover:bg-raised hover:text-fg disabled:opacity-50"
         >
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4" />
         </button>
 
-        <div className="flex flex-col items-center text-center mb-5 mt-2">
-          <div
-            className={`${styles.iconBg} p-3 rounded-xl flex items-center justify-center shadow-lg ${styles.iconShadow} mb-4 text-white ${variant === 'success' ? 'text-black' : ''}`}
-          >
+        <div className="mb-5 flex items-start gap-3 pr-8">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${styles.icon}`}>
             {icon}
           </div>
-          <h2 className="text-lg font-bold text-white tracking-wide">{title}</h2>
-          <p className="text-xs text-[#848E9C] mt-2 leading-relaxed max-w-[280px]">
-            {description}
-          </p>
+          <div className="flex flex-col gap-1 pt-0.5">
+            <h2 id="confirm-modal-title" className="text-[15px] font-semibold tracking-tight">
+              {title}
+            </h2>
+            <p className="text-[13px] leading-relaxed text-muted">{description}</p>
+          </div>
         </div>
 
         {details && details.length > 0 && (
-          <div className="w-full bg-[#161A1E] border border-[#2B2F36] rounded-lg p-4 mb-6 space-y-3">
+          <dl className="mb-5 divide-y divide-line rounded-lg border border-line bg-canvas/40 px-3.5">
             {details.map((detail) => (
-              <div
-                key={detail.label}
-                className="flex items-center justify-between text-xs"
-              >
-                <span className="text-[#848E9C] font-semibold">{detail.label}</span>
+              <div key={detail.label} className="flex min-h-10 items-center justify-between gap-4 py-2 text-[13px]">
+                <dt className="text-muted">{detail.label}</dt>
                 {detail.input ? (
-                  <div className="flex items-center gap-1">
+                  <dd className="flex h-8 items-center gap-1 rounded-md border border-line-strong bg-raised px-2 transition-colors focus-within:border-subtle">
                     {detail.input.prefix && (
-                      <span className="text-[#848E9C] font-mono">{detail.input.prefix}</span>
+                      <span className="font-mono text-xs text-subtle">{detail.input.prefix}</span>
                     )}
                     <input
                       type="text"
                       inputMode="decimal"
+                      autoFocus
                       value={detail.input.value}
                       onChange={(e) => detail.input!.onChange(e.target.value)}
                       placeholder={detail.input.placeholder}
                       disabled={loading}
-                      className="w-28 text-right text-white font-bold font-mono bg-[#0B0E11] border border-[#2B2F36] rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#14F195] disabled:opacity-50"
+                      className="w-24 bg-transparent text-right font-mono text-[13px] text-fg outline-none disabled:opacity-50"
                     />
-                  </div>
+                  </dd>
                 ) : (
-                  <span className="text-white font-bold font-mono">{detail.value}</span>
+                  <dd className="truncate font-mono text-xs text-fg">{detail.value}</dd>
                 )}
               </div>
             ))}
-          </div>
+          </dl>
         )}
 
-        <div className="flex items-center space-x-3 w-full">
+        {error && (
+          <p role="alert" className="mb-4 rounded-md border border-down/20 bg-down/10 px-3 py-2 text-xs text-down">
+            {error}
+          </p>
+        )}
+
+        <div className="flex items-center gap-2">
           <button
             onClick={onClose}
             disabled={loading}
-            className="flex-1 py-3 rounded-lg font-bold text-xs bg-[#161A1E] text-[#848E9C] hover:text-white hover:bg-[#2B2F36] border border-[#2B2F36] transition-colors disabled:opacity-50 cursor-pointer"
+            className="h-9 flex-1 rounded-md border border-line-strong text-[13px] font-medium text-fg transition-colors hover:bg-raised disabled:opacity-50"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
             disabled={loading || confirmDisabled}
-            className={`flex-1 py-3 rounded-lg font-bold text-xs transition-colors disabled:opacity-50 cursor-pointer ${styles.confirmBtn}`}
+            className={`h-9 flex-1 rounded-md text-[13px] font-semibold transition-[filter,background-color,transform] active:scale-[0.99] disabled:opacity-50 ${styles.confirmBtn}`}
           >
-            {loading ? "Processing..." : confirmLabel}
+            {loading ? "Processing…" : confirmLabel}
           </button>
         </div>
       </div>

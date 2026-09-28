@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Lock, Unlock, Minus, Plus } from "lucide-react";
+import { Lock, Unlock, Minus, Plus, LocateFixed } from "lucide-react";
+import { EmptyState, Panel, PanelTabs } from "./ui";
 import type { OrderBookRow } from "types";
 import { useTrading } from "../context/TradingContext";
 import { groupOrderBookRows } from "../utils/orderbook";
@@ -52,39 +53,27 @@ interface DepthRowProps {
 function DepthRow({ row, side, depthPercent, flash, formatPrice }: DepthRowProps) {
   if (row.price === 0) {
     return (
-      <div className="relative grid grid-cols-3 px-3 py-0.5 pointer-events-none opacity-0 select-none">
-        <div className="text-xs tabular-nums">&nbsp;</div>
-        <div className="text-xs tabular-nums">&nbsp;</div>
-        <div className="text-xs tabular-nums">&nbsp;</div>
+      <div aria-hidden className="px-3 py-[3px]">
+        &nbsp;
       </div>
     );
   }
 
   const isBid = side === "bid";
-  const color = isBid ? "rgba(0, 192, 135, 0.12)" : "rgba(239, 68, 68, 0.12)";
-  const priceColor = isBid ? "text-[#00c087]" : "text-[#ff3b30]";
   const flashClass =
     flash === "up" ? "ob-flash-up" : flash === "down" ? "ob-flash-down" : "";
 
   return (
     <div
-      className={`relative grid grid-cols-3 px-3 py-0.5 hover:bg-white/[0.03] cursor-pointer items-center transition-colors duration-150 ${flashClass}`}
+      className={`relative grid grid-cols-3 items-center px-3 py-[3px] transition-colors duration-150 hover:bg-hover/60 ${flashClass}`}
     >
       <div
-        className="absolute inset-0 pointer-events-none transition-all duration-300 ease-out"
-        style={{
-          background: `linear-gradient(to left, ${color} ${depthPercent}%, transparent ${depthPercent}%)`,
-        }}
+        className={`pointer-events-none absolute inset-y-0 right-0 transition-[width] duration-300 ease-out ${isBid ? "bg-up/10" : "bg-down/10"}`}
+        style={{ width: `${depthPercent}%` }}
       />
-      <div className={`relative z-10 ${priceColor} font-bold text-xs tabular-nums`}>
-        {formatPrice(row.price)}
-      </div>
-      <div className="relative z-10 text-right text-[#b0bbcb] tabular-nums text-xs">
-        {row.size.toFixed(4)}
-      </div>
-      <div className="relative z-10 text-right text-[#5d6b7e] tabular-nums text-xs">
-        {row.total.toFixed(4)}
-      </div>
+      <div className={`relative ${isBid ? "text-up" : "text-down"}`}>{formatPrice(row.price)}</div>
+      <div className="relative text-right text-fg/85">{row.size.toFixed(4)}</div>
+      <div className="relative text-right text-subtle">{row.total.toFixed(4)}</div>
     </div>
   );
 }
@@ -124,7 +113,7 @@ export default function OrderBook() {
 
   const formatDisplayPrice = (price: number) => {
     if (price <= 0) return "—";
-    return price.toLocaleString(undefined, { minimumFractionDigits: 1 });
+    return price.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 });
   };
 
   const groupedBids = useMemo(
@@ -162,136 +151,157 @@ export default function OrderBook() {
 
   const displayLastPrice = lastPrice > 0 ? lastPrice : markPrice;
 
+  const bestAsk = groupedAsks[0]?.price ?? 0;
+  const bestBid = groupedBids[0]?.price ?? 0;
+  const spread = bestAsk > 0 && bestBid > 0 ? bestAsk - bestBid : null;
+  const spreadPct = spread !== null && bestAsk > 0 ? (spread / bestAsk) * 100 : null;
+
+  // --- keep the current price (spread row) centred in the scrollable book ---
+  const asksBlockRef = useRef<HTMLDivElement>(null);
+  const [offCenter, setOffCenter] = useState(false);
+
+  const centerTarget = () => {
+    const book = bookRef.current;
+    if (!book) return 0;
+    const asksHeight = asksBlockRef.current?.offsetHeight ?? 0;
+    const spreadHeight = spreadRef.current?.offsetHeight ?? 0;
+    const max = book.scrollHeight - book.clientHeight;
+    return Math.max(0, Math.min(max, asksHeight + spreadHeight / 2 - book.clientHeight / 2));
+  };
+
+  const centerBook = (behavior: ScrollBehavior = "smooth") => {
+    bookRef.current?.scrollTo({ top: centerTarget(), behavior });
+    setOffCenter(false);
+  };
+
+  const handleBookScroll = () => {
+    const book = bookRef.current;
+    if (!book) return;
+    setOffCenter(Math.abs(book.scrollTop - centerTarget()) > 24);
+  };
+
+  // Start centred whenever the market or layout changes and rows are available.
+  const hasRows = bids.length > 0 || asks.length > 0;
+  const centeredForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeTab !== "book" || !hasRows) return;
+    const key = `${market}|${layout}`;
+    if (centeredForRef.current === key) return;
+    centeredForRef.current = key;
+    requestAnimationFrame(() => centerBook("auto"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [market, layout, hasRows, activeTab]);
+
   const wasLockedRef = useRef(isLocked);
   useEffect(() => {
-    if (isLocked && !wasLockedRef.current && spreadRef.current) {
-      spreadRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
-    }
+    if (isLocked && !wasLockedRef.current) centerBook();
     wasLockedRef.current = isLocked;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLocked]);
 
+  const layoutIcon = (mode: "both" | "asks" | "bids") => (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" aria-hidden>
+      <rect x="1" y="1.5" width="12" height="4.5" rx="1" className={mode === "bids" ? "fill-up" : "fill-down"} opacity={0.85} />
+      <rect x="1" y="8" width="12" height="4.5" rx="1" className={mode === "asks" ? "fill-down" : "fill-up"} opacity={0.85} />
+    </svg>
+  );
+
   return (
-    <div className="flex flex-col h-full bg-[#0c0d10] border border-[#171a1f] rounded-lg overflow-hidden select-none font-sans">
-      <div className="flex items-center justify-between border-b border-[#171a1f] bg-[#0c0d10] px-3 h-10 shrink-0">
-        <div className="flex space-x-1">
-          <button
-            onClick={() => setActiveTab("book")}
-            className={`px-3 py-1 text-xs font-bold transition-colors ${
-              activeTab === "book" ? "text-white border-b-2 border-white" : "text-[#8491a5] hover:text-white"
-            }`}
-          >
-            Book
-          </button>
-          <button
-            onClick={() => setActiveTab("trades")}
-            className={`px-3 py-1 text-xs font-bold transition-colors flex items-center space-x-1.5 ${
-              activeTab === "trades" ? "text-white border-b-2 border-white" : "text-[#8491a5] hover:text-white"
-            }`}
-          >
-            <span>Trades</span>
-            {marketTrades.length > 0 && (
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("liquidations")}
-            className={`px-3 py-1 text-xs font-bold transition-colors ${
-              activeTab === "liquidations" ? "text-white border-b-2 border-white" : "text-[#8491a5] hover:text-white"
-            }`}
-          >
-            Liquidation
-          </button>
-        </div>
-      </div>
+    <Panel>
+      <PanelTabs
+        tabs={[
+          { id: "book" as const, label: "Order book" },
+          {
+            id: "trades" as const,
+            label: (
+              <>
+                Trades
+                {marketTrades.length > 0 && <span className="h-1.5 w-1.5 rounded-full bg-up" />}
+              </>
+            ),
+          },
+          { id: "liquidations" as const, label: "Liquidations" },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
       {activeTab === "book" ? (
         <>
-          <div className="flex items-center justify-between px-3 h-9 bg-[#0c0d10] border-b border-[#171a1f] shrink-0">
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setLayout("both")}
-                className={`p-1 rounded transition-colors ${
-                  layout === "both" ? "bg-[#171a1f] text-white" : "text-[#8491a5] hover:text-white"
-                }`}
-                title="Show both buys and sells"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M4 6h16M4 12h16M4 18h16" className={layout === "both" ? "stroke-white" : "stroke-zinc-500"} />
-                  <path d="M4 6h16" className="stroke-red-500" />
-                  <path d="M4 18h16" className="stroke-emerald-500" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setLayout("asks")}
-                className={`p-1 rounded transition-colors ${
-                  layout === "asks" ? "bg-[#171a1f] text-white" : "text-[#8491a5] hover:text-white"
-                }`}
-                title="Show sells only"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M4 6h16M4 12h16M4 18h16" className="stroke-red-500" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setLayout("bids")}
-                className={`p-1 rounded transition-colors ${
-                  layout === "bids" ? "bg-[#171a1f] text-white" : "text-[#8491a5] hover:text-white"
-                }`}
-                title="Show buys only"
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M4 6h16M4 12h16M4 18h16" className="stroke-emerald-500" />
-                </svg>
-              </button>
+          <div className="flex h-9 shrink-0 items-center justify-between px-3">
+            <div className="flex items-center gap-0.5">
+              {(
+                [
+                  { id: "both", title: "Show bids and asks" },
+                  { id: "asks", title: "Show asks only" },
+                  { id: "bids", title: "Show bids only" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setLayout(opt.id)}
+                  title={opt.title}
+                  aria-label={opt.title}
+                  aria-pressed={layout === opt.id}
+                  className={`rounded p-1 transition-opacity ${
+                    layout === opt.id ? "bg-raised opacity-100" : "opacity-40 hover:opacity-80"
+                  }`}
+                >
+                  {layoutIcon(opt.id)}
+                </button>
+              ))}
 
               <button
                 onClick={() => setIsLocked(!isLocked)}
-                className="text-[#8491a5] hover:text-white p-1 rounded transition-colors"
+                className="ml-1 rounded p-1 text-subtle transition-colors hover:text-fg"
                 title={isLocked ? "Unlock scroll (spread won't auto-center)" : "Lock scroll to spread"}
+                aria-label={isLocked ? "Unlock scroll" : "Lock scroll to spread"}
               >
-                {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
               </button>
             </div>
 
-            <div className="flex items-center bg-[#12161c] border border-[#171a1f] rounded px-1.5 h-6">
+            <div className="flex h-6 items-center rounded-md bg-raised">
               <button
                 onClick={() => handlePrecisionChange("dec")}
-                className="text-[#8491a5] hover:text-white disabled:opacity-30"
+                className="flex h-6 w-6 items-center justify-center text-muted transition-colors hover:text-fg disabled:opacity-30"
                 disabled={precision <= 0.1}
+                aria-label="Decrease grouping"
               >
-                <Minus className="w-3 h-3" />
+                <Minus className="h-3 w-3" />
               </button>
-              <span className="text-[10px] text-white font-mono px-2 font-semibold">{precision}</span>
+              <span className="min-w-7 text-center font-mono text-[11px] text-fg">{precision}</span>
               <button
                 onClick={() => handlePrecisionChange("inc")}
-                className="text-[#8491a5] hover:text-white disabled:opacity-30"
+                className="flex h-6 w-6 items-center justify-center text-muted transition-colors hover:text-fg disabled:opacity-30"
                 disabled={precision >= 10}
+                aria-label="Increase grouping"
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="h-3 w-3" />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 text-[10px] font-bold text-[#8491a5] px-3 py-1.5 border-b border-[#171a1f] bg-[#0c0d10] shrink-0">
+          <div className="grid shrink-0 grid-cols-3 px-3 pb-1.5 text-[11px] text-subtle">
             <div>Price (USD)</div>
             <div className="text-right">Size ({asset})</div>
             <div className="text-right">Total ({asset})</div>
           </div>
 
+          <div className="relative flex min-h-0 flex-1 flex-col">
           <div
             ref={bookRef}
-            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar font-mono text-xs"
+            onScroll={handleBookScroll}
+            className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto font-mono text-xs"
           >
             {loadingDepth && bids.length === 0 && asks.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-zinc-600 text-[10px]">
-                Connecting to order book...
-              </div>
+              <EmptyState title="Connecting to order book…" />
             ) : (
               <>
                 {layout !== "bids" && (
-                  <div className="flex flex-col">
+                  <div ref={asksBlockRef} className="flex flex-col">
                     {asksToRender.length === 0 ? (
-                      <div className="text-center text-zinc-600 text-[10px] py-4">No Asks</div>
+                      <EmptyState title="No asks" />
                     ) : (
                       asksToRender.map((ask, idx) => {
                         const depthPercent = ask.price === 0 ? 0 : Math.min((ask.total / maxTotalAsks) * 100, 100);
@@ -312,26 +322,36 @@ export default function OrderBook() {
 
                 <div
                   ref={spreadRef}
-                  className="sticky top-0 z-20 flex items-center justify-between px-3 py-2 bg-[#12161c] border-y border-[#171a1f] shrink-0"
+                  className="sticky top-0 z-20 flex items-center justify-between gap-2 border-y border-line bg-surface px-3 py-1.5"
                 >
-                  <div className="flex items-center space-x-2">
+                  <div className="flex min-w-0 items-baseline gap-2">
                     <span
-                      className={`text-sm font-bold transition-colors duration-200 ${
-                        displayLastPrice >= markPrice ? "text-[#00c087]" : "text-[#ff3b30]"
+                      className={`text-[15px] font-medium transition-colors duration-200 ${
+                        displayLastPrice <= 0
+                          ? "text-subtle"
+                          : displayLastPrice >= markPrice
+                            ? "text-up"
+                            : "text-down"
                       }`}
                     >
                       {formatDisplayPrice(displayLastPrice)}
                     </span>
-                    <span className="text-[10px] text-[#8491a5] font-semibold" title="Index / Mark Price">
-                      Index: {formatDisplayPrice(markPrice)}
+                    <span className="truncate text-[11px] text-subtle" title="Mark price">
+                      {formatDisplayPrice(markPrice)}
                     </span>
                   </div>
+                  {spread !== null && spreadPct !== null && (
+                    <span className="shrink-0 whitespace-nowrap text-[11px] text-subtle" title="Spread">
+                      Spread <span className="text-muted">{spread.toFixed(precision < 1 ? 1 : 0)}</span>{" "}
+                      ({spreadPct.toFixed(3)}%)
+                    </span>
+                  )}
                 </div>
 
                 {layout !== "asks" && (
                   <div className="flex flex-col">
                     {displayedBids.length === 0 ? (
-                      <div className="text-center text-zinc-600 text-[10px] py-4">No Bids</div>
+                      <EmptyState title="No bids" />
                     ) : (
                       displayedBids.map((bid, idx) => {
                         const depthPercent = bid.price === 0 ? 0 : Math.min((bid.total / maxTotalBids) * 100, 100);
@@ -352,36 +372,45 @@ export default function OrderBook() {
               </>
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={() => centerBook()}
+            tabIndex={offCenter ? 0 : -1}
+            aria-hidden={!offCenter}
+            title="Scroll back to the current price"
+            className={`absolute bottom-3 left-1/2 z-30 flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border border-line-strong bg-raised/95 px-3 text-[11px] font-medium text-fg shadow-lg shadow-black/40 backdrop-blur transition-all duration-200 hover:bg-hover ${
+              offCenter ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0"
+            }`}
+          >
+            <LocateFixed className="h-3.5 w-3.5" />
+            Center
+          </button>
+          </div>
         </>
       ) : activeTab === "trades" ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="grid grid-cols-3 text-[10px] font-bold text-[#8491a5] px-3 py-1.5 border-b border-[#171a1f] bg-[#0c0d10] shrink-0">
-            <div>Time</div>
-            <div className="text-right">Price (USD)</div>
-            <div className="text-right">Quantity ({asset})</div>
+          <div className="grid shrink-0 grid-cols-3 px-3 py-2 text-[11px] text-subtle">
+            <div>Price (USD)</div>
+            <div className="text-right">Size ({asset})</div>
+            <div className="text-right">Time</div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto font-mono text-xs">
             {marketTrades.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans text-xs">
-                <span>Waiting for trades...</span>
-              </div>
+              <EmptyState title="No trades yet" hint="Trades stream in as orders match." />
             ) : (
               marketTrades.map((trade, idx) => (
                 <div
                   key={`trade-${trade.time}-${trade.price}-${idx}`}
-                  className="grid grid-cols-3 px-3 py-1.5 hover:bg-white/[0.02] items-center transition-colors"
+                  className="grid grid-cols-3 items-center px-3 py-[3px] transition-colors hover:bg-hover/60"
                 >
-                  <div className="text-[#8491a5] text-[10px]">
-                    {new Date(trade.time).toLocaleTimeString()}
-                  </div>
-                  <div
-                    className={`text-right font-bold tabular-nums ${
-                      trade.price >= markPrice ? "text-[#00c087]" : "text-[#ff3b30]"
-                    }`}
-                  >
+                  <div className={trade.price >= markPrice ? "text-up" : "text-down"}>
                     {trade.price.toLocaleString(undefined, { minimumFractionDigits: 1 })}
                   </div>
-                  <div className="text-right text-[#b0bbcb] tabular-nums">{trade.qty.toFixed(4)}</div>
+                  <div className="text-right text-fg/85">{trade.qty.toFixed(4)}</div>
+                  <div className="text-right text-subtle">
+                    {new Date(trade.time).toLocaleTimeString(undefined, { hour12: false })}
+                  </div>
                 </div>
               ))
             )}
@@ -389,44 +418,37 @@ export default function OrderBook() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="px-3 py-2 border-b border-[#171a1f] bg-[#12161c]/40 shrink-0">
-            <p className="text-[10px] text-[#8491a5] leading-relaxed">
-              Real-time liquidations occurring on the order book.
-            </p>
-          </div>
-          <div className="grid grid-cols-4 text-[10px] font-bold text-[#8491a5] px-3 py-1.5 border-b border-[#171a1f] bg-[#0c0d10] shrink-0">
-            <div>Time</div>
+          <div className="grid shrink-0 grid-cols-4 px-3 py-2 text-[11px] text-subtle">
             <div>Side</div>
             <div className="text-right">Price (USD)</div>
-            <div className="text-right">Quantity ({asset})</div>
+            <div className="text-right">Size ({asset})</div>
+            <div className="text-right">Time</div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar font-mono text-xs divide-y divide-[#171a1f]/20">
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto font-mono text-xs">
             {marketLiquidations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-[#8491a5] font-sans text-xs">
-                <span>No liquidations yet</span>
-              </div>
+              <EmptyState title="No liquidations" hint="Forced closes on this market appear here in real time." />
             ) : (
               marketLiquidations.map((liq, idx) => (
                 <div
                   key={`liq-${liq.time}-${liq.userId}-${idx}`}
-                  className="grid grid-cols-4 px-3 py-1.5 hover:bg-white/[0.02] items-center"
+                  className="grid grid-cols-4 items-center px-3 py-[3px] transition-colors hover:bg-hover/60"
                 >
-                  <div className="text-[#8491a5] text-[10px]">
-                    {new Date(liq.time).toLocaleTimeString()}
+                  <div className={`font-sans ${liq.kind === "LONG" ? "text-down" : "text-up"}`}>
+                    {liq.kind === "LONG" ? "Long" : "Short"}
                   </div>
-                  <div className={liq.kind === "LONG" ? "text-[#ff3b30] font-bold" : "text-[#00c087] font-bold"}>
-                    {liq.kind}
-                  </div>
-                  <div className="text-right text-white font-bold">
+                  <div className="text-right text-fg">
                     {liq.price.toLocaleString(undefined, { minimumFractionDigits: 1 })}
                   </div>
-                  <div className="text-right text-[#b0bbcb]">{liq.qty.toFixed(4)}</div>
+                  <div className="text-right text-fg/85">{liq.qty.toFixed(4)}</div>
+                  <div className="text-right text-subtle">
+                    {new Date(liq.time).toLocaleTimeString(undefined, { hour12: false })}
+                  </div>
                 </div>
               ))
             )}
           </div>
         </div>
       )}
-    </div>
+    </Panel>
   );
 }

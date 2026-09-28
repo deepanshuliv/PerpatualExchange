@@ -24,7 +24,7 @@ export default function SimulationPage() {
   const [config, setConfig] = useState<LoadTestConfig>(DEFAULT_CONFIG);
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const logBoxRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const selectedMarket = MARKETS.find((m) => m.value === config.market) ?? MARKETS[0];
@@ -34,8 +34,10 @@ export default function SimulationPage() {
     setLogs((prev) => [...prev, `[${stamp}] ${line}`]);
   }, []);
 
+  // Keep the newest line visible by scrolling the log box itself, never the page.
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const box = logBoxRef.current;
+    if (box && logs.length > 0) box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
   }, [logs]);
 
   const updateConfig = <K extends keyof LoadTestConfig>(key: K, value: LoadTestConfig[K]) => {
@@ -85,26 +87,23 @@ export default function SimulationPage() {
   };
 
   const inputClass =
-    'w-full bg-[#161a1e] border border-[#2a2f36] rounded px-3 py-2 text-sm text-[#f2f4f7] outline-none focus:border-[#f59e0b]/60 transition-colors';
+    'h-10 w-full rounded-md border border-line bg-raised px-3 font-mono text-sm text-fg outline-none transition-colors hover:border-line-strong focus:border-subtle disabled:opacity-50';
 
-  const labelClass = 'block text-xs text-[#9ca3af] mb-1.5';
+  const labelClass = 'mb-1.5 block text-xs text-muted';
 
   return (
-    <div className="min-h-screen bg-[#08090b] text-[#f2f4f7] font-sans">
-      <div className="max-w-3xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-semibold tracking-tight mb-2">Order Load Test</h1>
-        <p className="text-sm text-[#9ca3af] mb-1">
+    <div className="min-h-dvh bg-canvas font-sans text-fg">
+      <div className="mx-auto max-w-3xl px-5 py-12">
+        <Link href="/trade" className="text-[13px] text-muted transition-colors hover:text-fg">
+          ← Back to exchange
+        </Link>
+        <h1 className="mt-6 text-3xl font-semibold tracking-[-0.03em]">Order load test</h1>
+        <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted">
           Runs in phases: seeds the book, crosses the spread to generate trades, opens leveraged
           positions, then injects an adverse mark price so liquidations show up in the trading UI.
         </p>
-        <Link
-          href="/"
-          className="text-sm text-[#f59e0b] hover:text-[#fbbf24] transition-colors"
-        >
-          ← Back to trading UI
-        </Link>
 
-        <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5">
+        <div className="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 rounded-xl border border-line bg-surface p-6 sm:grid-cols-3">
           <div>
             <label className={labelClass}>Users</label>
             <input
@@ -147,7 +146,7 @@ export default function SimulationPage() {
                 </option>
               ))}
             </select>
-            <p className="text-[11px] text-[#6b7280] mt-1">Mark price fetched from feed when run starts</p>
+            <p className="mt-1 text-[11px] text-subtle">Mark price fetched from feed when run starts</p>
           </div>
 
           <div>
@@ -208,7 +207,7 @@ export default function SimulationPage() {
             type="button"
             onClick={handleRun}
             disabled={running}
-            className="px-5 py-2 rounded bg-[#f59e0b] text-[#08090b] text-sm font-semibold hover:bg-[#fbbf24] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="h-10 rounded-md bg-fg px-5 text-[13px] font-semibold text-canvas transition-[background-color,transform] hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {running ? 'Running…' : 'Run load test'}
           </button>
@@ -216,7 +215,7 @@ export default function SimulationPage() {
             <button
               type="button"
               onClick={handleStop}
-              className="px-5 py-2 rounded border border-[#2a2f36] text-sm text-[#9ca3af] hover:text-[#f2f4f7] hover:border-[#4b5563] transition-colors"
+              className="h-10 rounded-md border border-line-strong px-5 text-[13px] font-medium text-muted transition-colors hover:bg-raised hover:text-fg"
             >
               Stop
             </button>
@@ -224,10 +223,10 @@ export default function SimulationPage() {
         </div>
 
         <div className="mt-10">
-          <p className="text-[11px] uppercase tracking-wider text-[#6b7280] mb-2">Log</p>
-          <div className="bg-[#0d0f12] border border-[#1e2228] rounded-lg min-h-[280px] max-h-[420px] overflow-y-auto p-4 font-mono text-xs leading-relaxed text-[#d1d5db]">
+          <p className="mb-2 text-xs text-subtle">Log</p>
+          <div ref={logBoxRef} className="custom-scrollbar max-h-[420px] min-h-[280px] overflow-y-auto rounded-xl border border-line bg-surface p-4 font-mono text-xs leading-relaxed text-fg/85">
             {logs.length === 0 ? (
-              <span className="text-[#4b5563]">—</span>
+              <span className="text-subtle">No runs yet.</span>
             ) : (
               logs.map((line, i) => (
                 <div key={i} className="whitespace-pre-wrap break-words">
@@ -235,7 +234,6 @@ export default function SimulationPage() {
                 </div>
               ))
             )}
-            <div ref={logEndRef} />
           </div>
         </div>
       </div>

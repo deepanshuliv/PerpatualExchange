@@ -8,5 +8,5 @@ export function formatUsd(value: number, fractionDigits = 2): string {
 }
 
 export function balanceColorClass(value: number): string {
-  return value < 0 ? "text-[#ff3b30]" : "text-[#00c087]";
+  return value < 0 ? "text-down" : "text-fg";
 }

@@ -42,7 +42,7 @@ function toVolumeData(candles: ChartCandle[]): HistogramData[] {
   return candles.map((c) => ({
     time: toTime(c.openTime),
     value: c.volume,
-    color: c.close >= c.open ? "rgba(0, 192, 135, 0.45)" : "rgba(246, 70, 93, 0.45)",
+    color: c.close >= c.open ? "rgba(46, 189, 133, 0.35)" : "rgba(239, 95, 107, 0.35)",
   }));
 }
 
@@ -64,8 +64,11 @@ export default function CandlestickChart({
   const onHoverRef = useRef(onHoverCandle);
   const shouldFitRef = useRef(true);
 
-  candlesRef.current = candles;
-  onHoverRef.current = onHoverCandle;
+  // Keep the latest values available to chart callbacks without re-creating the chart.
+  useEffect(() => {
+    candlesRef.current = candles;
+    onHoverRef.current = onHoverCandle;
+  }, [candles, onHoverCandle]);
 
   useEffect(() => {
     shouldFitRef.current = true;
@@ -79,36 +82,36 @@ export default function CandlestickChart({
       width: container.clientWidth,
       height: container.clientHeight,
       layout: {
-        background: { type: ColorType.Solid, color: "#08090b" },
-        textColor: "#8491a5",
+        background: { type: ColorType.Solid, color: "#0f0f0f" },
+        textColor: "#5e5e5e",
         fontSize: 11,
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        fontFamily: `${getComputedStyle(document.documentElement).getPropertyValue("--font-geist-mono")}, ui-monospace, monospace`,
       },
       grid: {
-        vertLines: { color: "#12161c" },
-        horzLines: { color: "#12161c" },
+        vertLines: { color: "#171717" },
+        horzLines: { color: "#171717" },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: {
-          color: "#5d6b7e",
+          color: "#3a3a3a",
           width: 1,
           style: LineStyle.LargeDashed,
-          labelBackgroundColor: "#12161c",
+          labelBackgroundColor: "#2b2b2b",
         },
         horzLine: {
-          color: "#5d6b7e",
+          color: "#3a3a3a",
           width: 1,
           style: LineStyle.LargeDashed,
-          labelBackgroundColor: "#12161c",
+          labelBackgroundColor: "#2b2b2b",
         },
       },
       rightPriceScale: {
-        borderColor: "#171a1f",
+        borderColor: "#1c1c1c",
         scaleMargins: { top: 0.08, bottom: 0.22 },
       },
       timeScale: {
-        borderColor: "#171a1f",
+        borderColor: "#1c1c1c",
         timeVisible: true,
         secondsVisible: chartInterval === "1h",
         rightOffset: 6,
@@ -120,11 +123,11 @@ export default function CandlestickChart({
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#00c087",
-      downColor: "#f6465d",
+      upColor: "#2ebd85",
+      downColor: "#ef5f6b",
       borderVisible: false,
-      wickUpColor: "#00c087",
-      wickDownColor: "#f6465d",
+      wickUpColor: "#2ebd85",
+      wickDownColor: "#ef5f6b",
     });
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
@@ -217,7 +220,7 @@ export default function CandlestickChart({
     if (activePrice > 0) {
       priceLineRef.current = candleSeries.createPriceLine({
         price: activePrice,
-        color: "#00c087",
+        color: "#8f8f8f",
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
