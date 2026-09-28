@@ -22,6 +22,13 @@ type STATUS = z.infer<typeof STATUS_SCHEMA>
 type MARKET_AVAILABEL = z.infer<typeof MARKET_AVAILABEL_SCHEMA>
 const allMarketsList = MARKET_AVAILABEL_SCHEMA.options.map((o) => o.value)
 
+/** Highest leverage allowed per perpetual market (margin >= notional / MAX_LEVERAGE). */
+const MAX_LEVERAGE: Partial<Record<MARKET_AVAILABEL, number>> = {
+    BTCUSD: 75,
+    ETHUSD: 50,
+    SOLUSD: 20,
+}
+
 export {
     MARKET_AVAILABEL_SCHEMA,
     type MARKET_AVAILABEL,
@@ -32,5 +39,6 @@ export {
     type TYPE,
     type STATUS,
     allMarketsList,
+    MAX_LEVERAGE,
     STATUS_SCHEMA
 }

@@ -5,6 +5,8 @@ import type { Request, Response } from 'express';
 import { callEngine } from '../utils/callEngine';
 import { getCachedDepth, getCachedMarkPrice, sendToEngine } from '../utils/toEngine';
 
+const LEVERAGE_TOLERANCE = 0.02;
+
 export async function onRamp(req: Request, res: Response){
   const { success, data } = BackendRequest.ADD_BALANCE_SCHEMA.safeParse(req.body);
   if (!success) {
@@ -29,6 +31,27 @@ export async function createOrder(req: Request, res: Response) {
   }
 
   const { qty, price, market, type, kind, margin } = data.data;
+
+  const qtyNum = Number(qty);
+  const priceNum = Number(price);
+  const marginNum = Number(margin);
+  if (![qtyNum, priceNum, marginNum].every((n) => Number.isFinite(n) && n > 0)) {
+    return res.status(400).json({ msg: 'qty, price and margin must be positive numbers' });
+  }
+
+  const maxLeverage = Shared.MAX_LEVERAGE[market];
+  if (!maxLeverage) {
+    return res.status(400).json({ msg: `${market} is not a tradable market` });
+  }
+
+  // Market orders are sent with a price that includes slippage room, so allow a
+  // small tolerance before treating the margin as over the leverage cap.
+  const minMargin = (qtyNum * priceNum) / maxLeverage;
+  if (marginNum < minMargin * (1 - LEVERAGE_TOLERANCE)) {
+    return res.status(400).json({
+      msg: `Leverage above ${maxLeverage}x is not allowed on ${market}. Minimum margin is ${minMargin.toFixed(2)}.`,
+    });
+  }
 
   return callEngine(res, {
     correlationId: data.correlationId,

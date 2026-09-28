@@ -1,21 +1,15 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTrading } from '../context/TradingContext';
+import { Panel, Segmented } from './ui';
 
-const BP = {
-  bg: '#0B0E11',
-  border: '#2B2F36',
-  inputBg: '#161A1E',
-  muted: '#848E9C',
-  green: '#14F195',
-  red: '#F23645',
-  errorBg: 'rgba(255, 77, 79, 0.1)',
-  errorBorder: '#3A1C1C',
-} as const;
+const MARKET_SLIPPAGE = 0.01;
+const DEFAULT_LEVERAGE = 10;
+const LEVERAGE_PRESETS = [2, 5, 10, 20, 50];
 
 export default function OrderEntryPanel() {
-  const { market, balance, lastPrice, user, token, setAuthModalMode, placeOrder, refreshUserData } =
+  const { market, balance, lastPrice, bids, asks, user, token, setAuthModalMode, placeOrder, refreshUserData } =
     useTrading();
 
   const [side, setSide] = useState<'LONG' | 'SHORT'>('LONG');
@@ -30,23 +24,43 @@ export default function OrderEntryPanel() {
   const [successMsg, setSuccessMsg] = useState('');
 
   const getMarketInfo = () => {
-    if (market === 'ETHUSD') {
-      return { symbol: 'ETH', leverage: 50, badgeBg: 'bg-[#627eea]' };
-    }
-    if (market === 'SOLUSD') {
-      return { symbol: 'SOL', leverage: 20, badgeBg: 'bg-[#14F195]' };
-    }
-    return { symbol: 'BTC', leverage: 75, badgeBg: 'bg-[#f7931a]' };
+    if (market === 'ETHUSD') return { symbol: 'ETH', maxLeverage: 50 };
+    if (market === 'SOLUSD') return { symbol: 'SOL', maxLeverage: 20 };
+    return { symbol: 'BTC', maxLeverage: 75 };
   };
 
-  const { symbol, leverage, badgeBg } = getMarketInfo();
-  const accentColor = side === 'LONG' ? BP.green : BP.red;
+  const { symbol, maxLeverage } = getMarketInfo();
+  const [leverage, setLeverage] = useState(() => Math.min(DEFAULT_LEVERAGE, maxLeverage));
+  const isLong = side === 'LONG';
+
+  // Inputs belong to one market: clear them when the market changes, then seed
+  // the price from that market's first known price.
+  const seededMarketRef = useRef<string | null>(null);
+  // On a switch, lastPrice still holds the previous market's price for one render.
+  const stalePriceRef = useRef<number | null>(null);
+  const isFirstMarketRef = useRef(true);
+  useEffect(() => {
+    if (isFirstMarketRef.current) {
+      isFirstMarketRef.current = false;
+      return;
+    }
+    stalePriceRef.current = lastPrice;
+    setPriceInput('');
+    setQtyInput('');
+    setSliderVal(0);
+    setErrorMsg('');
+    setSuccessMsg('');
+    seededMarketRef.current = null;
+    setLeverage(Math.min(DEFAULT_LEVERAGE, maxLeverage));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [market]);
 
   useEffect(() => {
-    if (lastPrice > 0 && !priceInput) {
+    if (lastPrice > 0 && lastPrice !== stalePriceRef.current && seededMarketRef.current !== market) {
+      seededMarketRef.current = market;
       setPriceInput(lastPrice.toString());
     }
-  }, [lastPrice]);
+  }, [lastPrice, market]);
 
   const handleMidBBO = (type: 'MID' | 'BBO') => {
     if (lastPrice > 0) {
@@ -61,9 +75,22 @@ export default function OrderEntryPanel() {
 
   const priceVal = parseFloat(priceInput) || 0;
   const qtyVal = parseFloat(qtyInput) || 0;
-  const effectivePrice = orderType === 'MARKET' ? lastPrice || priceVal : priceVal;
+  // Market orders fill against the opposite side of the book. The engine treats
+  // the submitted price as a limit, so we send the best price plus 1% slippage room.
+  const bestAsk = asks.length ? Math.min(...asks.map((a) => a.price)) : 0;
+  const bestBid = bids.length ? Math.max(...bids.map((b) => b.price)) : 0;
+  const expectedFill = (isLong ? bestAsk : bestBid) || lastPrice;
+  const effectivePrice = orderType === 'MARKET' ? expectedFill : priceVal;
   const orderValue = effectivePrice * qtyVal;
   const marginRequired = orderValue > 0 ? orderValue / leverage : 0;
+
+  const handleLeverageChange = (next: number) => {
+    setLeverage(next);
+    // Leverage changes the margin for the same size; refresh the % of balance used.
+    if (balance > 0 && effectivePrice > 0 && qtyVal > 0) {
+      setSliderVal(Math.min(Math.round(((qtyVal * effectivePrice) / next / balance) * 100), 100));
+    }
+  };
 
   const handleSliderClick = (percent: number) => {
     setSliderVal(percent);
@@ -110,28 +137,43 @@ export default function OrderEntryPanel() {
 
     setLoading(true);
     try {
-      const finalPrice = orderType === 'MARKET' ? lastPrice || priceVal : priceVal;
-      await placeOrder(
+      const finalPrice =
+        orderType === 'MARKET' ? expectedFill * (isLong ? 1 + MARKET_SLIPPAGE : 1 - MARKET_SLIPPAGE) : priceVal;
+      const result = await placeOrder(
         qtyInput,
         finalPrice,
         orderType === 'LIMIT' ? 'LIMIT' : 'MARKET',
         side,
         marginRequired,
       );
-      setSuccessMsg(`Successfully placed ${side} order for ${qtyInput} ${symbol}`);
+      const filled = Number(result?.filledQty ?? NaN);
+      const spent = Number(result?.totalSpent ?? NaN);
+      if (orderType === 'MARKET' && filled === 0) {
+        setErrorMsg('No liquidity within 1% of the best price. Nothing was filled.');
+        return;
+      }
+      if (filled > 0 && spent > 0) {
+        const avg = spent / filled;
+        setSuccessMsg(
+          `${isLong ? 'Bought' : 'Sold'} ${filled} ${symbol} at ${avg.toLocaleString(undefined, { maximumFractionDigits: 2 })}` +
+            (filled < qtyVal ? `. ${+(qtyVal - filled).toFixed(6)} ${symbol} resting on the book.` : '.'),
+        );
+      } else {
+        setSuccessMsg(`${isLong ? 'Buy' : 'Sell'} order for ${qtyInput} ${symbol} is on the book.`);
+      }
       setQtyInput('');
       setSliderVal(0);
       refreshUserData();
-    } catch (err: any) {
+    } catch (err) {
       console.log('[handleSubmitOrder] error', err);
-      setErrorMsg(err.message || 'Failed to place order');
+      setErrorMsg(err instanceof Error && err.message ? err.message : 'Failed to place order');
     } finally {
       setLoading(false);
     }
   };
 
   const getEstLiquidationPrice = () => {
-    if (qtyVal <= 0 || effectivePrice <= 0) return '--';
+    if (qtyVal <= 0 || effectivePrice <= 0) return '—';
     const liqPrice =
       side === 'LONG'
         ? effectivePrice * (1 - 0.95 / leverage)
@@ -139,269 +181,228 @@ export default function OrderEntryPanel() {
     return `$${liqPrice.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
   };
 
+  const fmtUsd = (n: number) =>
+    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   return (
-    <div
-      className="flex flex-col fixed  rounded-xl p-4 text-white select-none font-sans justify-between min-h-[500px]"
-      style={{ backgroundColor: BP.bg, border: `1px solid ${BP.border}` }}
-    >
-      <form onSubmit={handleSubmitOrder} className="flex flex-col gap-4">
-        <div
-          className="grid grid-cols-2 rounded-lg p-1 h-11 shrink-0"
-          style={{ backgroundColor: BP.inputBg }}
-        >
-          <button
-            type="button"
-            onClick={() => setSide('LONG')}
-            className="rounded-md font-semibold text-xs transition-all"
-            style={
-              side === 'LONG'
-                ? { color: BP.green, border: `1px solid ${BP.green}`, background: 'transparent' }
-                : { color: BP.muted, border: '1px solid transparent', background: 'transparent' }
-            }
-          >
-            Buy / Long
-          </button>
-          <button
-            type="button"
-            onClick={() => setSide('SHORT')}
-            className="rounded-md font-semibold text-xs transition-all"
-            style={
-              side === 'SHORT'
-                ? { color: BP.red, border: `1px solid ${BP.red}`, background: 'transparent' }
-                : { color: BP.muted, border: '1px solid transparent', background: 'transparent' }
-            }
-          >
-            Sell / Short
-          </button>
-        </div>
-
-        <div className="flex items-center gap-5 text-sm">
-          {(['LIMIT', 'MARKET'] as const).map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setOrderType(type)}
-              className="font-semibold transition-colors pb-1"
-              style={
-                orderType === type
-                  ? { color: '#FFFFFF', borderBottom: '2px solid #FFFFFF' }
-                  : { color: BP.muted, borderBottom: '2px solid transparent' }
-              }
-            >
-              {type === 'LIMIT' ? 'Limit' : 'Market'}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between text-xs">
-          <span style={{ color: BP.muted }}>Available Equity</span>
-          <span className="font-mono font-semibold text-white">
-            $
-            {balance.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
+    <Panel>
+      <form onSubmit={handleSubmitOrder} className="flex min-h-0 flex-1 flex-col">
+        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
+          <div className="grid grid-cols-2 gap-1 rounded-md bg-raised p-1">
+            {(['LONG', 'SHORT'] as const).map((s) => {
+              const active = side === s;
+              const long = s === 'LONG';
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSide(s)}
+                  aria-pressed={active}
+                  className={`h-8 rounded-[5px] text-[13px] font-medium transition-colors ${
+                    active
+                      ? long
+                        ? 'bg-up/15 text-up'
+                        : 'bg-down/15 text-down'
+                      : 'text-muted hover:text-fg'
+                  }`}
+                >
+                  {long ? 'Buy / Long' : 'Sell / Short'}
+                </button>
+              );
             })}
-          </span>
-        </div>
+          </div>
 
-        {orderType === 'LIMIT' && (
-          <div
-            className="rounded-lg p-4 flex flex-col gap-2"
-            style={{ backgroundColor: BP.inputBg }}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs" style={{ color: BP.muted }}>
-                Price
+          <div>
+            <Segmented
+              size="md"
+              options={[
+                { id: 'LIMIT', label: 'Limit' },
+                { id: 'MARKET', label: 'Market' },
+              ]}
+              value={orderType}
+              onChange={setOrderType}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted">Leverage</span>
+              <span className="font-mono text-fg">
+                {leverage}x <span className="text-subtle">/ {maxLeverage}x max</span>
               </span>
-              <div className="flex gap-2 text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => handleMidBBO('MID')}
-                  className="font-semibold hover:underline"
-                  style={{ color: BP.green }}
-                >
-                  Mid
-                </button>
-                <span style={{ color: BP.border }}>|</span>
-                <button
-                  type="button"
-                  onClick={() => handleMidBBO('BBO')}
-                  className="font-semibold hover:underline"
-                  style={{ color: BP.green }}
-                >
-                  BBO
-                </button>
-              </div>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <input
+              type="range"
+              min={1}
+              max={maxLeverage}
+              step={1}
+              value={leverage}
+              onChange={(e) => handleLeverageChange(Number(e.target.value))}
+              aria-label="Leverage"
+              className="h-1 w-full cursor-pointer accent-[var(--fg)]"
+            />
+            <div className="grid grid-cols-4 gap-1">
+              {LEVERAGE_PRESETS.filter((l) => l <= maxLeverage)
+                .concat(maxLeverage)
+                .filter((l, i, all) => all.indexOf(l) === i)
+                .slice(-4)
+                .map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => handleLeverageChange(l)}
+                    className={`h-7 rounded-md font-mono text-[11px] transition-colors ${
+                      leverage === l ? 'bg-hover text-fg' : 'bg-raised text-muted hover:bg-hover hover:text-fg'
+                    }`}
+                  >
+                    {l}x
+                  </button>
+                ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted">Available</span>
+            <span className="font-mono text-fg">${fmtUsd(balance)}</span>
+          </div>
+
+          {orderType === 'LIMIT' && (
+            <label className="flex flex-col gap-1.5">
+              <span className="flex items-center justify-between text-xs">
+                <span className="text-muted">Price</span>
+                <span className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleMidBBO('MID')}
+                    className="text-muted transition-colors hover:text-fg"
+                  >
+                    Mid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMidBBO('BBO')}
+                    className="text-muted transition-colors hover:text-fg"
+                  >
+                    BBO
+                  </button>
+                </span>
+              </span>
+              <span className="flex h-10 items-center rounded-md border border-line bg-raised px-3 transition-colors focus-within:border-subtle hover:border-line-strong">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={priceInput}
+                  onChange={(e) => setPriceInput(e.target.value)}
+                  placeholder="0.0"
+                  className="w-full min-w-0 bg-transparent font-mono text-sm text-fg outline-none placeholder:text-subtle"
+                />
+                <span className="shrink-0 text-xs text-subtle">USD</span>
+              </span>
+            </label>
+          )}
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted">Size</span>
+            <span className="flex h-10 items-center rounded-md border border-line bg-raised px-3 transition-colors focus-within:border-subtle hover:border-line-strong">
               <input
                 type="text"
-                value={priceInput}
-                onChange={(e) => setPriceInput(e.target.value)}
-                placeholder="0"
-                className="w-full bg-transparent text-xl font-bold text-white outline-none font-mono"
+                inputMode="decimal"
+                value={qtyInput}
+                onChange={(e) => handleQtyChange(e.target.value)}
+                placeholder="0.0000"
+                className="w-full min-w-0 bg-transparent font-mono text-sm text-fg outline-none placeholder:text-subtle"
               />
-              <div
-                className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold text-white shrink-0"
-                style={{ backgroundColor: BP.border }}
-              >
-                $
-              </div>
-            </div>
-          </div>
-        )}
+              <span className="shrink-0 text-xs text-subtle">{symbol}</span>
+            </span>
+          </label>
 
-        <div
-          className="rounded-lg p-4 flex flex-col gap-2"
-          style={{ backgroundColor: BP.inputBg }}
-        >
-          <span className="text-xs" style={{ color: BP.muted }}>
-            Quantity
-          </span>
-          <div className="flex items-center justify-between gap-3">
-            <input
-              type="text"
-              value={qtyInput}
-              onChange={(e) => handleQtyChange(e.target.value)}
-              placeholder="0"
-              className="w-full bg-transparent text-xl font-bold text-white outline-none font-mono"
-            />
-            <div
-              className={`px-2 py-1 rounded text-[11px] text-black font-bold shrink-0 ${badgeBg}`}
-            >
-              {symbol}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2 py-1">
-          <div className="relative w-full h-1 rounded" style={{ backgroundColor: BP.border }}>
-            <div
-              className="absolute top-0 left-0 h-full rounded transition-all duration-150"
-              style={{ width: `${sliderVal}%`, backgroundColor: accentColor }}
-            />
-            {[0, 25, 50, 75, 100].map((mark) => (
+          <div className="grid grid-cols-4 gap-1">
+            {[25, 50, 75, 100].map((pct) => (
               <button
-                key={mark}
+                key={pct}
                 type="button"
-                onClick={() => handleSliderClick(mark)}
-                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 transition-all"
-                style={{
-                  left: `calc(${mark}% - 6px)`,
-                  backgroundColor: sliderVal >= mark ? accentColor : BP.bg,
-                  borderColor: sliderVal >= mark ? accentColor : BP.border,
-                }}
-              />
+                onClick={() => handleSliderClick(pct)}
+                className={`h-7 rounded-md font-mono text-[11px] transition-colors ${
+                  sliderVal === pct
+                    ? 'bg-hover text-fg'
+                    : 'bg-raised text-muted hover:bg-hover hover:text-fg'
+                }`}
+              >
+                {pct}%
+              </button>
             ))}
           </div>
-          <div
-            className="flex justify-between text-[10px] font-medium"
-            style={{ color: BP.muted }}
-          >
-            <span>0%</span>
-            <span>25%</span>
-            <span>50%</span>
-            <span>75%</span>
-            <span>100%</span>
-          </div>
-        </div>
 
-        <div
-          className="rounded-lg p-4 flex flex-col gap-2"
-          style={{ backgroundColor: BP.inputBg }}
-        >
-          <span className="text-xs" style={{ color: BP.muted }}>
-            Order Value
-          </span>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xl font-bold text-white font-mono">
-              {orderValue.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
+          <div className="relative h-1 overflow-hidden rounded-full bg-raised" aria-hidden>
             <div
-              className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold text-white shrink-0"
-              style={{ backgroundColor: BP.border }}
-            >
-              $
+              className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-200 ${isLong ? 'bg-up' : 'bg-down'}`}
+              style={{ width: `${sliderVal}%` }}
+            />
+          </div>
+
+          <dl className="flex flex-col gap-2 border-t border-line pt-3 text-xs">
+            <div className="flex justify-between">
+              <dt className="text-muted">Order value</dt>
+              <dd className="font-mono text-fg">{orderValue > 0 ? `$${fmtUsd(orderValue)}` : '—'}</dd>
             </div>
-          </div>
+            <div className="flex justify-between">
+              <dt className="text-muted">Margin required</dt>
+              <dd className="font-mono text-fg">{marginRequired > 0 ? `$${fmtUsd(marginRequired)}` : '—'}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted">Est. liquidation price</dt>
+              <dd className="font-mono text-fg">
+                {getEstLiquidationPrice()}
+              </dd>
+            </div>
+          </dl>
+
+          {errorMsg && (
+            <p role="alert" className="rounded-md border border-down/20 bg-down/10 px-3 py-2 text-xs text-down">
+              {errorMsg}
+            </p>
+          )}
+          {successMsg && (
+            <p role="status" className="rounded-md border border-up/20 bg-up/10 px-3 py-2 text-xs text-up">
+              {successMsg}
+            </p>
+          )}
         </div>
 
-        <div className="flex flex-col gap-2 text-xs">
-          <div className="flex justify-between">
-            <span style={{ color: BP.muted }}>Margin Required</span>
-            <span className="font-mono text-white">
-              {marginRequired > 0
-                ? `$${marginRequired.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                : '--'}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span style={{ color: BP.muted }}>Est. Liquidation Price</span>
-            <span className="font-mono text-white">{getEstLiquidationPrice()}</span>
-          </div>
-        </div>
-
-        {errorMsg && (
-          <div
-            className="text-sm py-3 px-4 rounded-lg"
-            style={{
-              color: BP.red,
-              backgroundColor: BP.errorBg,
-              border: `1px solid ${BP.errorBorder}`,
-            }}
-          >
-            {errorMsg}
-          </div>
-        )}
-        {successMsg && (
-          <div
-            className="text-sm py-3 px-4 rounded-lg"
-            style={{
-              color: BP.green,
-              backgroundColor: 'rgba(20, 241, 149, 0.1)',
-              border: `1px solid rgba(20, 241, 149, 0.2)`,
-            }}
-          >
-            {successMsg}
-          </div>
-        )}
-
-        <div className="pt-1">
+        <div className="shrink-0 border-t border-line p-3">
           {user && token ? (
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 rounded-lg font-bold text-sm transition-all cursor-pointer disabled:opacity-50 text-white"
-              style={{ backgroundColor: side === 'LONG' ? BP.green : BP.red }}
+              className={`h-10 w-full rounded-md text-[13px] font-semibold text-canvas transition-[filter,transform] hover:brightness-110 active:scale-[0.99] disabled:opacity-50 ${
+                isLong ? 'bg-up' : 'bg-down'
+              }`}
             >
-              {loading
-                ? 'Placing Order...'
-                : `${side === 'LONG' ? 'Buy / Long' : 'Sell / Short'} ${symbol}-PERP`}
+              {loading ? 'Placing order…' : `${isLong ? 'Buy / Long' : 'Sell / Short'} ${symbol}`}
             </button>
           ) : (
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => setAuthModalMode('signup')}
-                className="w-full py-3.5 rounded-lg bg-white text-black hover:bg-zinc-200 font-bold text-sm transition-colors cursor-pointer"
-              >
-                Sign up to trade
-              </button>
+            <div className="flex flex-col items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => setAuthModalMode('login')}
-                className="w-full py-3.5 rounded-lg font-bold text-sm transition-colors cursor-pointer text-white"
-                style={{ backgroundColor: BP.inputBg, border: `1px solid ${BP.border}` }}
+                className="h-10 w-full rounded-md bg-fg text-[13px] font-semibold text-canvas transition-colors hover:bg-white active:scale-[0.99]"
               >
                 Log in to trade
               </button>
+              <p className="text-xs text-muted">
+                New to Axiom?{' '}
+                <button
+                  type="button"
+                  onClick={() => setAuthModalMode('signup')}
+                  className="font-medium text-fg underline-offset-2 hover:underline"
+                >
+                  Create an account
+                </button>
+              </p>
             </div>
           )}
         </div>
       </form>
-    </div>
+    </Panel>
   );
 }
