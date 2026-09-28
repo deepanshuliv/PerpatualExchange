@@ -30,7 +30,7 @@ const TYPE_ORDER: Record<DbEvent['type'], number> = {
 
 interface UserRecord {
   id: string;
-  username: string;
+  email: string;
   password: string;
 }
 
@@ -79,7 +79,9 @@ interface BatchWriteState {
 }
 
 function ensureUser(users: Map<string, UserRecord>, userId: string) {
-  users.set(userId, { id: userId, username: `user_${userId}`, password: '' });
+  // Placeholder for engine-only users (market maker, simulation). The reserved
+  // .invalid domain can't collide with a real signup, and an empty password can't log in.
+  users.set(userId, { id: userId, email: `${userId}@internal.invalid`, password: '' });
 }
 
 function parseMessages(messages: StreamMessage[]): {

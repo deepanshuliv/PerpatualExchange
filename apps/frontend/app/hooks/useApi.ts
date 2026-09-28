@@ -130,21 +130,31 @@ export const apiService = {
     return { status: res.status, ...json };
   },
 
-  signup: async (username: string, password?: string) => {
+  signup: async (email: string, password: string) => {
     const res = await fetch(`${API_BASE}/signup`, {
       method: 'POST',
       headers: getHeaders(undefined, true),
-      body: JSON.stringify({ username, password: password }),
+      body: JSON.stringify({ email, password }),
     });
     const json = await res.json();
     return { status: res.status, ...json };
   },
 
-  signin: async (username: string, password?: string) => {
+  signin: async (email: string, password: string) => {
     const res = await fetch(`${API_BASE}/signin`, {
       method: 'POST',
       headers: getHeaders(undefined, true),
-      body: JSON.stringify({ username, password: password }),
+      body: JSON.stringify({ email, password }),
+    });
+    const json = await res.json();
+    return { status: res.status, ...json };
+  },
+
+  resetPassword: async (email: string, password: string) => {
+    const res = await fetch(`${API_BASE}/reset-password`, {
+      method: 'POST',
+      headers: getHeaders(undefined, true),
+      body: JSON.stringify({ email, password }),
     });
     const json = await res.json();
     return { status: res.status, ...json };

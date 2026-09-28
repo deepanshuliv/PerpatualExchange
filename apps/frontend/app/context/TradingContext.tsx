@@ -39,6 +39,14 @@ export interface ChartCandle {
 
 export type ChartInterval = '1m' | '5m' | '15m' | '1h' | '1d';
 
+/** Engine reply to a new order. */
+export interface PlacedOrder {
+  orderId: string;
+  filledQty: number;
+  totalQty: number;
+  totalSpent: number;
+}
+
 interface TradingContextType {
   market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD';
   setMarket: (market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD') => void;
@@ -48,7 +56,7 @@ interface TradingContextType {
   loadingCandles: boolean;
   wsReady: boolean;
   token: string | null;
-  user: { id: string; username: string } | null;
+  user: { id: string; email: string } | null;
   balance: number;
   bids: OrderBookRow[];
   asks: OrderBookRow[];
@@ -64,8 +72,9 @@ interface TradingContextType {
   loadingDepth: boolean;
   authModalMode: 'login' | 'signup' | 'forgot_password' | null;
   setAuthModalMode: (mode: 'login' | 'signup' | 'forgot_password' | null) => void;
-  login: (username: string, password?: string) => Promise<boolean>;
-  signup: (username: string, password?: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  signup: (email: string, password: string) => Promise<AuthResult>;
+  resetPassword: (email: string, password: string) => Promise<AuthResult>;
   logout: () => void;
   deposit: (amount: number) => Promise<{ ok: boolean; msg?: string }>;
   placeOrder: (
@@ -74,7 +83,7 @@ interface TradingContextType {
     type: 'LIMIT' | 'MARKET',
     kind: 'LONG' | 'SHORT',
     margin: number,
-  ) => Promise<any>;
+  ) => Promise<PlacedOrder>;
   cancelOrder: (orderId: string) => Promise<boolean>;
   refreshUserData: () => void;
 }
@@ -208,11 +217,13 @@ function mergePriceIntoCandles(
   return prev;
 }
 
+export type AuthResult = { ok: boolean; msg?: string };
+
 export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const api = useApi();
   const [market, setMarket] = useState<'BTCUSD' | 'ETHUSD' | 'SOLUSD'>('BTCUSD');
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<{ id: string; username: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [balance, setBalance] = useState<number>(0);
 
   const [bids, setBids] = useState<OrderBookRow[]>([]);
@@ -281,7 +292,9 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const savedUser = localStorage.getItem('perp_user');
     if (savedToken && savedUser) {
       setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+      // Sessions saved before the switch to email login stored `username`.
+      const parsed = JSON.parse(savedUser) as { id: string; email?: string; username?: string };
+      setUser({ id: parsed.id, email: parsed.email ?? parsed.username ?? '' });
       void refreshUserData(savedToken);
     }
   }, []);
@@ -532,6 +545,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchDepth = async () => {
     try {
       const json = await api.getDepth(market);
+      // Ignore responses for a market the user has already switched away from.
+      if (marketRef.current !== market) return;
       if (json.ok && json.data) {
         applyDepthFromApi(json.data.bids, json.data.asks);
       }
@@ -545,6 +560,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchLastPrice = async () => {
     try {
       const json = await api.getTickerPrice(market);
+      // Ignore responses for a market the user has already switched away from.
+      if (marketRef.current !== market) return;
       if (json.ok && json.price && Number(json.price) > 0) {
         const price = Number(json.price);
         setLastPrice(price);
@@ -562,6 +579,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchTrades = async () => {
     try {
       const json = await api.getTrades(market);
+      // Ignore responses for a market the user has already switched away from.
+      if (marketRef.current !== market) return;
       if (json.ok && Array.isArray(json.data)) {
         const formatted: MarketTrade[] = json.data.map(
           (item: { price: number; qty: number; time: number }) => ({
@@ -580,6 +599,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchLiquidations = async () => {
     try {
       const json = await api.getLiquidations(market);
+      // Ignore responses for a market the user has already switched away from.
+      if (marketRef.current !== market) return;
       if (json.ok && Array.isArray(json.data)) {
         const formatted: MarketLiquidation[] = json.data.map(
           (item: {
@@ -608,6 +629,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchCandles = async () => {
     try {
       const json = await api.getCandles(market, chartInterval);
+      // Ignore responses for a market the user has already switched away from.
+      if (marketRef.current !== market) return;
       if (json.ok && Array.isArray(json.data)) {
         const formatted: ChartCandle[] = json.data.map(
           (item: {
@@ -650,6 +673,8 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const fetchMarkPrice = async () => {
     try {
       const json = await api.getMarkPrice(market);
+      // Ignore responses for a market the user has already switched away from.
+      if (marketRef.current !== market) return;
       const price = Number(json?.price);
       if (price > 0) {
         setMarkPrice(price);
@@ -750,7 +775,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (ordersJson.ok && Array.isArray(ordersJson.data)) {
-        const formattedOrders: Order[] = ordersJson.data.map((ord: any) => ({
+        const formattedOrders: Order[] = ordersJson.data.map((ord: Order & { orderId?: string; qty?: number; createdAt?: string }) => ({
           id: ord.orderId || ord.id,
           userId: ord.userId,
           type: ord.type,
@@ -767,7 +792,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (fillsJson.ok && Array.isArray(fillsJson.data)) {
-        const formattedFills: Fill[] = fillsJson.data.map((f: any) => ({
+        const formattedFills: Fill[] = fillsJson.data.map((f: Fill & { createdAt?: string }) => ({
           id: f.id || f.orderId,
           orderId: f.orderId,
           buyerId: f.buyerId,
@@ -794,9 +819,9 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return refreshPromise;
   };
 
-  const signup = async (username: string, password?: string): Promise<boolean> => {
+  const signup = async (email: string, password: string): Promise<AuthResult> => {
     try {
-      const json = await api.signup(username, password);
+      const json = await api.signup(email, password);
       if (json.status === 201 && json.token && json.user) {
         setToken(json.token);
         setUser(json.user);
@@ -804,30 +829,41 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         localStorage.setItem('perp_user', JSON.stringify(json.user));
 
         await performOnramp(json.token, 10000);
-        return true;
+        return { ok: true };
       }
-      return false;
+      return { ok: false, msg: json.msg || 'Could not create your account.' };
     } catch (err) {
       console.log('[signup] error', err);
-      return false;
+      return { ok: false, msg: 'Could not reach the server. Please try again.' };
     }
   };
 
-  const login = async (username: string, password?: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<AuthResult> => {
     try {
-      const json = await api.signin(username, password);
+      const json = await api.signin(email, password);
       if (json.status === 200 && json.token && json.user) {
         setToken(json.token);
         setUser(json.user);
         localStorage.setItem('perp_token', json.token);
         localStorage.setItem('perp_user', JSON.stringify(json.user));
         await refreshUserData(json.token);
-        return true;
+        return { ok: true };
       }
-      return false;
+      return { ok: false, msg: json.msg || 'Incorrect email or password.' };
     } catch (err) {
       console.log('[login] error', err);
-      return false;
+      return { ok: false, msg: 'Could not reach the server. Please try again.' };
+    }
+  };
+
+  const resetPassword = async (email: string, password: string): Promise<AuthResult> => {
+    try {
+      const json = await api.resetPassword(email, password);
+      if (json.status === 200 && json.ok) return { ok: true };
+      return { ok: false, msg: json.msg || 'Could not reset your password.' };
+    } catch (err) {
+      console.log('[resetPassword] error', err);
+      return { ok: false, msg: 'Could not reach the server. Please try again.' };
     }
   };
 
@@ -872,7 +908,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     type: 'LIMIT' | 'MARKET',
     kind: 'LONG' | 'SHORT',
     margin: number,
-  ): Promise<any> => {
+  ): Promise<PlacedOrder> => {
     if (!token) {
       throw new Error('User must be logged in to trade');
     }
@@ -889,11 +925,11 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (json.status === 200 && json.ok) {
         refreshUserData();
-        return json.data;
+        return json.data as PlacedOrder;
       } else {
         throw new Error(json.msg || 'parse error ');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.log('[placeOrder] error', err);
       throw err;
     }
@@ -945,6 +981,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setAuthModalMode,
         login,
         signup,
+        resetPassword,
         logout,
         deposit,
         placeOrder,

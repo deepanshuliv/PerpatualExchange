@@ -37,7 +37,7 @@ export async function provisionSimUser(req: Request, res: Response) {
       ok: true,
       token,
       userId,
-      user: { id: userId, username: label },
+      user: { id: userId, email: label },
     });
   } catch (err: unknown) {
     console.log('[provisionSimUser] error', err);

@@ -1,357 +1,305 @@
 'use client';
 
 import { Eye, EyeOff, X } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTrading } from '../context/TradingContext';
 
-const BP = {
-  bg: '#0B0E11',
-  border: '#2B2F36',
-  inputBg: '#161A1E',
-  muted: '#848E9C',
-  green: '#14F195',
-  red: '#F23645',
-  errorBg: 'rgba(255, 77, 79, 0.1)',
-  errorBorder: '#3A1C1C',
-} as const;
+const PASSWORD_MIN_LENGTH = 8;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function AuthModal() {
-  const { authModalMode, setAuthModalMode, login, signup } = useTrading();
+const inputBox =
+  'flex h-10 items-center gap-2 rounded-md border border-line bg-raised px-3 transition-colors focus-within:border-subtle hover:border-line-strong';
+const inputEl = 'w-full min-w-0 bg-transparent text-sm text-fg outline-none placeholder:text-subtle';
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  autoComplete: 'current-password' | 'new-password';
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-xs text-muted">{label}</span>
+      <span className={inputBox}>
+        <input
+          type={visible ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={inputEl}
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? 'Hide password' : 'Show password'}
+          className="shrink-0 text-subtle transition-colors hover:text-fg"
+        >
+          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </span>
+    </label>
+  );
+}
+
+function passwordStrength(password: string) {
+  if (!password) return 0;
+  let score = 0;
+  if (password.length >= PASSWORD_MIN_LENGTH) score += 1;
+  if (/[A-Z]/.test(password)) score += 1;
+  if (/[0-9]/.test(password)) score += 1;
+  if (/[a-z]/.test(password)) score += 1;
+  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+  return score;
+}
+
+function StrengthMeter({ password }: { password: string }) {
+  if (!password) return null;
+  const strength = passwordStrength(password);
+  const color = strength <= 2 ? 'bg-down' : strength <= 4 ? 'bg-warn' : 'bg-up';
+  const label = strength <= 2 ? 'Weak' : strength <= 4 ? 'Fair' : 'Strong';
+  return (
+    <span className="-mt-2 flex items-center gap-2">
+      <span className="flex flex-1 gap-1">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <span key={i} className={`h-1 flex-1 rounded-full transition-colors ${strength >= i ? color : 'bg-raised'}`} />
+        ))}
+      </span>
+      <span className="w-11 text-right text-[11px] text-subtle">{label}</span>
+    </span>
+  );
+}
+
+export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () => void } = {}) {
+  const { authModalMode, setAuthModalMode, login, signup, resetPassword } = useTrading();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agree, setAgree] = useState(false);
-
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resetSuccess, setResetSuccess] = useState(false);
+
+  // Carried across the switch from "reset password" back to "log in".
+  const carryRef = useRef<{ email: string; notice: string } | null>(null);
 
   useEffect(() => {
-    setEmail('');
+    const carry = carryRef.current;
+    carryRef.current = null;
+    setEmail(carry?.email ?? '');
+    setNotice(carry?.notice ?? '');
     setPassword('');
     setConfirmPassword('');
     setAgree(false);
     setError('');
-    setResetSuccess(false);
   }, [authModalMode]);
+
+  useEffect(() => {
+    if (!authModalMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAuthModalMode(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [authModalMode, setAuthModalMode]);
 
   if (!authModalMode) return null;
 
   const isLogin = authModalMode === 'login';
   const isSignup = authModalMode === 'signup';
-  const isForgotPassword = authModalMode === 'forgot_password';
+  const isReset = authModalMode === 'forgot_password';
 
-  const getPasswordStrength = () => {
-    if (!password) return 0;
-    let score = 0;
-    if (password.length >= 6) score += 1;
-    if (/[A-Z]/.test(password)) score += 1;
-    if (/[0-9]/.test(password)) score += 1;
-    if (/[a-z]/.test(password)) score += 1;
-    if (/[^A-Za-z0-9]/.test(password)) score += 1;
-    return score;
+  const validate = (): string | null => {
+    const trimmed = email.trim();
+    if (!trimmed) return 'Enter your email.';
+    if (!EMAIL_PATTERN.test(trimmed)) return 'Enter a valid email address.';
+    if (!password) return isLogin ? 'Enter your password.' : 'Enter a new password.';
+    if (!isLogin && password.length < PASSWORD_MIN_LENGTH) {
+      return `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
+    }
+    if (!isLogin && password !== confirmPassword) return 'Passwords do not match.';
+    if (isSignup && !agree) return 'Please accept the User Agreement and Privacy Policy.';
+    return null;
   };
 
-  const strength = getPasswordStrength();
-
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setResetSuccess(false);
+    setNotice('');
 
-    if (isForgotPassword) {
-      if (!email.trim()) {
-        setError('Please enter your email.');
-        return;
-      }
-      setLoading(true);
-      setTimeout(() => {
-        setResetSuccess(true);
-        setLoading(false);
-      }, 800);
+    const problem = validate();
+    if (problem) {
+      setError(problem);
       return;
     }
 
-    if (!email.trim() || !password) {
-      setError('Please fill out all fields.');
-      return;
-    }
-
-    if (isSignup) {
-      if (password !== confirmPassword) {
-        setError('Passwords do not match.');
-        return;
-      }
-      if (!agree) {
-        setError('You must agree to the User Agreement and Privacy Policy.');
-        return;
-      }
-    }
-
+    const normalizedEmail = email.trim().toLowerCase();
     setLoading(true);
     try {
-      let success = false;
-      if (isLogin) {
-        success = await login(email.trim(), password);
-      } else {
-        success = await signup(email.trim(), password);
+      if (isReset) {
+        const result = await resetPassword(normalizedEmail, password);
+        if (!result.ok) {
+          setError(result.msg ?? 'Could not reset your password.');
+          return;
+        }
+        carryRef.current = { email: normalizedEmail, notice: 'Password updated. Log in with your new password.' };
+        setAuthModalMode('login');
+        return;
       }
 
-      if (success) {
+      const result = isLogin ? await login(normalizedEmail, password) : await signup(normalizedEmail, password);
+      if (result.ok) {
         setAuthModalMode(null);
+        onAuthenticated?.();
       } else {
-        setError(isLogin ? 'Invalid credentials.' : 'Username already exists.');
+        setError(result.msg ?? 'Something went wrong. Please try again.');
       }
     } catch (err) {
-      console.log('[handleAuth] error', err);
-      setError('An unexpected error occurred. Please try again.');
+      console.log('[AuthModal] error', err);
+      setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const title = isLogin ? 'Log in to Axiom' : isReset ? 'Reset your password' : 'Create your account';
+  const subtitle = isLogin
+    ? 'Welcome back. Enter your details to continue.'
+    : isReset
+      ? 'Choose a new password for your account.'
+      : 'Start trading perpetuals in under a minute.';
+  const submitLabel = isLogin ? 'Log in' : isReset ? 'Update password' : 'Create account';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 font-sans select-none">
+    <div
+      className="anim-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-sans backdrop-blur-[2px]"
+      onClick={() => setAuthModalMode(null)}
+    >
       <div
-        className="relative w-full max-w-[400px] rounded-xl p-6 flex flex-col shadow-2xl text-white"
-        style={{ backgroundColor: BP.bg, border: `1px solid ${BP.border}` }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        className="anim-dialog-in relative flex w-full max-w-[400px] flex-col rounded-xl border border-line-strong bg-surface p-6 text-fg shadow-2xl shadow-black/50"
+        onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={() => setAuthModalMode(null)}
-          className="absolute top-4 right-4 hover:text-white transition-colors"
-          style={{ color: BP.muted }}
+          aria-label="Close"
+          className="absolute right-3 top-3 rounded-md p-1.5 text-subtle transition-colors hover:bg-raised hover:text-fg"
         >
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4" />
         </button>
 
-        <div className="flex flex-col mb-6">
-          <h2 className="text-xl font-bold text-white tracking-wide">
-            {isLogin ? 'Log in' : isForgotPassword ? 'Reset Password' : 'Create account'}
+        <div className="mb-6 flex flex-col gap-1">
+          <img src="/logo.jpg" alt="" className="mb-3 h-8 w-8 rounded-md border border-line-strong object-cover" />
+          <h2 id="auth-modal-title" className="text-lg font-semibold tracking-tight">
+            {title}
           </h2>
+          <p className="text-[13px] text-muted">{subtitle}</p>
         </div>
 
         {error && (
-          <div
-            className="w-full text-xs py-3 px-4 rounded-lg mb-4"
-            style={{
-              color: BP.red,
-              backgroundColor: BP.errorBg,
-              border: `1px solid ${BP.errorBorder}`,
-            }}
-          >
+          <p role="alert" className="mb-4 rounded-md border border-down/20 bg-down/10 px-3 py-2 text-xs text-down">
             {error}
-          </div>
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="mb-4 rounded-md border border-up/20 bg-up/10 px-3 py-2 text-xs text-up">
+            {notice}
+          </p>
         )}
 
-        {isForgotPassword && resetSuccess && (
-          <div
-            className="w-full text-xs py-3 px-4 rounded-lg mb-4"
-            style={{
-              color: BP.green,
-              backgroundColor: 'rgba(20, 241, 149, 0.1)',
-              border: '1px solid rgba(20, 241, 149, 0.2)',
-            }}
-          >
-            Password reset to: DummyPassword123!
-          </div>
-        )}
-
-        <form onSubmit={handleAuth} className="w-full flex flex-col gap-4">
-          <div
-            className="rounded-lg p-4 flex flex-col gap-2"
-            style={{ backgroundColor: BP.inputBg }}
-          >
-            <span className="text-xs" style={{ color: BP.muted }}>
-              Email
-            </span>
-            <div className="flex items-center justify-between gap-3">
+        <form onSubmit={handleSubmit} noValidate className="flex w-full flex-col gap-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted">Email</span>
+            <span className={inputBox}>
               <input
-                type="text"
-                placeholder="Enter your email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoFocus
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-transparent text-sm font-bold text-white outline-none placeholder:font-normal placeholder:opacity-50"
+                className={inputEl}
               />
-            </div>
-          </div>
+            </span>
+          </label>
 
-          {!isForgotPassword && (
-            <div
-              className="rounded-lg p-4 flex flex-col gap-2 relative"
-              style={{ backgroundColor: BP.inputBg }}
-            >
-              <span className="text-xs" style={{ color: BP.muted }}>
-                Password
-              </span>
-              <div className="flex items-center justify-between gap-3">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-transparent text-sm font-bold text-white outline-none placeholder:font-normal placeholder:opacity-50 pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 hover:text-white"
-                  style={{ color: BP.muted }}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
+          <PasswordField
+            label={isLogin ? 'Password' : 'New password'}
+            value={password}
+            onChange={setPassword}
+            placeholder={isLogin ? 'Enter your password' : `At least ${PASSWORD_MIN_LENGTH} characters`}
+            autoComplete={isLogin ? 'current-password' : 'new-password'}
+          />
+          {!isLogin && <StrengthMeter password={password} />}
+
+          {!isLogin && (
+            <PasswordField
+              label="Confirm password"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              placeholder="Repeat your password"
+              autoComplete="new-password"
+            />
           )}
 
           {isSignup && (
-            <div className="flex items-center gap-1.5 w-full">
-              {[1, 2, 3, 4, 5].map((index) => {
-                const isActive = strength >= index;
-                return (
-                  <div
-                    key={`strength-${index}`}
-                    className="h-1 flex-1 rounded-sm transition-colors"
-                    style={{
-                      backgroundColor: isActive
-                        ? strength <= 2
-                            ? BP.red
-                            : strength <= 4
-                            ? '#eab308'
-                            : BP.green
-                        : BP.border,
-                    }}
-                  />
-                );
-              })}
-            </div>
-          )}
-
-          {isSignup && (
-            <div
-              className="rounded-lg p-4 flex flex-col gap-2 relative"
-              style={{ backgroundColor: BP.inputBg }}
-            >
-              <span className="text-xs" style={{ color: BP.muted }}>
-                Confirm Password
-              </span>
-              <div className="flex items-center justify-between gap-3">
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  placeholder="Confirm your password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-transparent text-sm font-bold text-white outline-none placeholder:font-normal placeholder:opacity-50 pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-4 hover:text-white"
-                  style={{ color: BP.muted }}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {isSignup && (
-            <label
-              className="flex items-start gap-2 text-[11px] font-semibold cursor-pointer select-none leading-relaxed mt-1"
-              style={{ color: BP.muted }}
-            >
+            <label className="flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-muted select-none">
               <input
                 type="checkbox"
                 checked={agree}
                 onChange={() => setAgree(!agree)}
-                className="w-3.5 h-3.5 rounded outline-none cursor-pointer mt-0.5"
-                style={{
-                  backgroundColor: BP.inputBg,
-                  border: `1px solid ${BP.border}`,
-                  accentColor: BP.green,
-                }}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-[var(--up)]"
               />
               <span>
-                By signing up, I agree to the{' '}
-                <span className="text-white hover:underline">User Agreement</span> and{' '}
-                <span className="text-white hover:underline">Privacy Policy</span>.
+                I agree to the <span className="text-fg">User Agreement</span> and{' '}
+                <span className="text-fg">Privacy Policy</span>.
               </span>
             </label>
+          )}
+
+          {isLogin && (
+            <button
+              type="button"
+              onClick={() => {
+                carryRef.current = { email: email.trim(), notice: '' };
+                setAuthModalMode('forgot_password');
+              }}
+              className="-mt-1 self-end text-xs text-muted transition-colors hover:text-fg"
+            >
+              Forgot password?
+            </button>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 rounded-lg font-bold text-sm transition-all cursor-pointer disabled:opacity-50 mt-2 hover:opacity-90"
-            style={{ backgroundColor: '#FFFFFF', color: '#000000' }}
+            className="mt-1 h-10 w-full rounded-md bg-fg text-[13px] font-semibold text-canvas transition-[background-color,transform] hover:bg-white active:scale-[0.99] disabled:opacity-50"
           >
-            {loading
-              ? 'Processing...'
-              : isLogin
-                ? 'Log in'
-                : isForgotPassword
-                  ? 'Reset Password'
-                  : 'Sign up'}
+            {loading ? 'Please wait…' : submitLabel}
           </button>
         </form>
 
-        <div
-          className="w-full flex items-center justify-between mt-6 text-xs font-semibold pt-4"
-          style={{ borderTop: `1px solid ${BP.border}` }}
-        >
-          {isForgotPassword ? (
-            <span style={{ color: BP.muted }}>
-              Remember your password?{' '}
-              <button
-                onClick={() => setAuthModalMode('login')}
-                className="text-white hover:underline"
-              >
-                Log in
-              </button>
-            </span>
-          ) : isLogin ? (
-            <>
-              <span style={{ color: BP.muted }}>
-                New here?{' '}
-                <button
-                  onClick={() => setAuthModalMode('signup')}
-                  className="text-white hover:underline"
-                >
-                  Sign up
-                </button>
-              </span>
-              <button
-                onClick={() => setAuthModalMode('forgot_password')}
-                className="hover:text-white hover:underline"
-                style={{ color: BP.muted }}
-              >
-                Forgot Password
-              </button>
-            </>
-          ) : (
-            <>
-              <span style={{ color: BP.muted }}>
-                Have an account?{' '}
-                <button
-                  onClick={() => setAuthModalMode('login')}
-                  className="text-white hover:underline"
-                >
-                  Log in
-                </button>
-              </span>
-              <button className="hover:text-white hover:underline" style={{ color: BP.muted }}>
-                Add referral
-              </button>
-            </>
-          )}
-        </div>
+        <p className="mt-5 border-t border-line pt-4 text-center text-xs text-muted">
+          {isLogin ? "Don't have an account? " : isReset ? 'Remembered it? ' : 'Already have an account? '}
+          <button
+            onClick={() => setAuthModalMode(isLogin ? 'signup' : 'login')}
+            className="font-medium text-fg transition-colors hover:text-white"
+          >
+            {isLogin ? 'Sign up' : 'Log in'}
+          </button>
+        </p>
       </div>
     </div>
   );

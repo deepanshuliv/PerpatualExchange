@@ -35,11 +35,35 @@ export const ENGINESNAPSHOT_SCHEMA = ENGINESNAPSHOT_BASE.extend({
 });
 export type EngineSnapShotInstanceType = z.infer<typeof ENGINESNAPSHOT_SCHEMA>;
 
+/** Emails are compared case-insensitively, so normalise before validating. */
+const EMAIL_SCHEMA = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email({ message: 'Enter a valid email address' }));
+
+export const PASSWORD_MIN_LENGTH = 8;
+const NEW_PASSWORD_SCHEMA = z
+  .string()
+  .min(PASSWORD_MIN_LENGTH, { message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` })
+  .max(128, { message: 'Password must be at most 128 characters' });
+
+/** Log in: any non-empty password, so accounts created under older rules can still sign in. */
 export const AUTHENTICATION_SCHEMA = z.object({
-  username: z.string(),
-  password: z.string().min(1),
+  email: EMAIL_SCHEMA,
+  password: z.string().min(1, { message: 'Enter your password' }),
 });
 export type AUTHENTICATION = z.infer<typeof AUTHENTICATION_SCHEMA>;
+
+export const SIGNUP_SCHEMA = z.object({
+  email: EMAIL_SCHEMA,
+  password: NEW_PASSWORD_SCHEMA,
+});
+
+export const RESET_PASSWORD_SCHEMA = z.object({
+  email: EMAIL_SCHEMA,
+  password: NEW_PASSWORD_SCHEMA,
+});
 
 export const COLLATERAL_SCHEMA = z.object({
   balance: z.number(),

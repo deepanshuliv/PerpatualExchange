@@ -154,7 +154,8 @@ async function getUsers(
   const raw = localStorage.getItem('perp_user');
   if (!token || !raw) return users;
 
-  const name = (JSON.parse(raw) as { username?: string }).username ?? 'logged-in';
+  const stored = JSON.parse(raw) as { email?: string; username?: string };
+  const name = stored.email ?? stored.username ?? 'logged-in';
   log(`Using logged-in account "${name}" for ${config.users} workers`);
   await apiService.onramp(token, fund * config.users);
 
