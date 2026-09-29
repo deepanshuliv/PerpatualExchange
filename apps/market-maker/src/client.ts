@@ -8,7 +8,7 @@ import {
 
 const ENGINE_STREAM = process.env.ENGINE_STREAM || 'to-engine';
 const BACKEND_STREAM = process.env.BACKEND_STREAM || 'to-backend';
-const RPC_TIMEOUT_MS = 2_000;
+const RPC_TIMEOUT_MS = 5_000;
 
 export class EngineClient {
   private publisher: RedisClientType;
@@ -22,6 +22,11 @@ export class EngineClient {
     }
   >();
   private markPrices = new Map<string, number>();
+  private listenerReadyResolve!: () => void;
+  private listenerReady = new Promise<void>((resolve) => {
+    this.listenerReadyResolve = resolve;
+  });
+  private listenerReadySignaled = false;
 
   constructor() {
     this.publisher = redisClient.duplicate();
@@ -34,9 +39,14 @@ export class EngineClient {
       connectRedisClient(this.subscriber, 'MarketMaker-Subscriber'),
     ]);
 
-    this.startStreamListener().catch((err) => {
+    void this.startStreamListener().catch((err) => {
       console.error('[EngineClient] Stream listener crashed:', err);
     });
+
+    // Do not let strategies issue RPCs until the listener has completed its
+    // initial stream position. This avoids losing the first responses during
+    // startup, especially while Redis is restoring its AOF/RDB dataset.
+    await this.listenerReady;
   }
 
   getLatestMarkPrice(market: string): number | null {
@@ -44,11 +54,20 @@ export class EngineClient {
   }
 
   private async startStreamListener() {
-    const latest = await this.subscriber.xRevRange(BACKEND_STREAM, '+', '-', { COUNT: 1 });
-    let lastId = latest[0]?.id ?? '$';
+    let lastId: string | null = null;
 
     while (true) {
       try {
+        if (lastId === null) {
+          const latest = await this.subscriber.xRevRange(BACKEND_STREAM, '+', '-', { COUNT: 1 });
+          lastId = latest[0]?.id ?? '$';
+
+          if (!this.listenerReadySignaled) {
+            this.listenerReadySignaled = true;
+            this.listenerReadyResolve();
+          }
+        }
+
         const response = (await this.subscriber.xRead([{ key: BACKEND_STREAM, id: lastId }], {
           COUNT: 100,
           BLOCK: 0,
@@ -71,6 +90,10 @@ export class EngineClient {
         }
       } catch (err) {
         console.error('[EngineClient] Error in stream reader loop:', err);
+        // Redis can reject commands with LOADING while restoring its
+        // persistence files. Re-establish the stream cursor after it becomes
+        // ready instead of permanently killing the market-maker listener.
+        lastId = null;
         await new Promise((res) => setTimeout(res, 1000));
       }
     }
@@ -103,10 +126,10 @@ export class EngineClient {
   ): Promise<T | null> {
     if (!waitForResponse) {
       await this.publisher.xAdd(
-        ENGINE_STREAM, 
-        '*', 
+        ENGINE_STREAM,
+        '*',
         { data: JSON.stringify(request) },
-        { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+        { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } },
       );
       return null;
     }
@@ -116,10 +139,10 @@ export class EngineClient {
       if (!correlationId) {
         this.publisher
           .xAdd(
-            ENGINE_STREAM, 
-            '*', 
+            ENGINE_STREAM,
+            '*',
             { data: JSON.stringify(request) },
-            { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
+            { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } },
           )
           .then(() => resolve(null as unknown as T))
           .catch(reject);
@@ -137,19 +160,21 @@ export class EngineClient {
         timer,
       });
 
-      this.publisher.xAdd(
-        ENGINE_STREAM, 
-        '*', 
-        { data: JSON.stringify(request) },
-        { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
-      ).catch((err) => {
-        const pending = this.correlationMap.get(correlationId);
-        if (pending) {
-          clearTimeout(pending.timer);
-          this.correlationMap.delete(correlationId);
-        }
-        reject(err);
-      });
+      this.publisher
+        .xAdd(
+          ENGINE_STREAM,
+          '*',
+          { data: JSON.stringify(request) },
+          { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } },
+        )
+        .catch((err) => {
+          const pending = this.correlationMap.get(correlationId);
+          if (pending) {
+            clearTimeout(pending.timer);
+            this.correlationMap.delete(correlationId);
+          }
+          reject(err);
+        });
     });
   }
 
@@ -175,7 +200,9 @@ export class EngineClient {
           },
           true,
         );
-        console.log(`[EngineClient] Auto-replenished ${userId}: added $${Math.max(topupAmount, targetBalance)}`);
+        console.log(
+          `[EngineClient] Auto-replenished ${userId}: added $${Math.max(topupAmount, targetBalance)}`,
+        );
       }
     } catch (err) {
       console.warn(`[EngineClient] Error checking/ensuring balance for ${userId}:`, err);
