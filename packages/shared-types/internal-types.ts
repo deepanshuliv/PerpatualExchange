@@ -152,11 +152,7 @@ export const USER_MARKET_ORDER_TYPES_SCHEMA = z.object({
 });
 export type userMarketOrderTypes = z.infer<typeof USER_MARKET_ORDER_TYPES_SCHEMA>;
 
-export type MarketMarkPrice = Map<string, number>;
-
 export type Positions = Map<string, PositionDetails[]>;
-
-export type MarketIndex = Map<MARKET_AVAILABEL, Set<string>>;
 
 export type RedisStreamResponse = Array<{
   name: string;
