@@ -20,7 +20,6 @@ const CREATE_ORDER_SCHEMA = BASE_ENGINE_SCHEMA.extend({
     margin: decimalString,
   }),
 });
-type CREATE_ORDER = z.infer<typeof CREATE_ORDER_SCHEMA>;
 
 const GET_BALANCE_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   type: z.literal('get_balance'),
@@ -29,16 +28,12 @@ const GET_BALANCE_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   }),
 });
 
-type GET_BALANCE = z.infer<typeof GET_BALANCE_SCHEMA>;
-
 const CANCEL_ORDER_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   type: z.literal('cancel_order'),
   payload: ENGINE_PAYLOAD_SCHEMA.extend({
     orderId: z.string(),
   }),
 });
-
-type CANCEL_ORDER = z.infer<typeof CANCEL_ORDER_SCHEMA>;
 
 const ADD_BALANCE_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   type: z.literal('add_balance'),
@@ -47,15 +42,12 @@ const ADD_BALANCE_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   }),
 });
 
-type ADD_BALANCE = z.infer<typeof ADD_BALANCE_SCHEMA>;
-
 const GET_POSITION_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   type: z.literal('get_position'),
   payload: ENGINE_PAYLOAD_SCHEMA.extend({
     market: MARKET_AVAILABEL_SCHEMA.optional(),
   }),
 });
-type GET_POSITION = z.infer<typeof GET_POSITION_SCHEMA>;
 
 const GET_OPEN_ORDERS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   type: z.literal('get_open_orders'),
@@ -63,13 +55,11 @@ const GET_OPEN_ORDERS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
     market: MARKET_AVAILABEL_SCHEMA.optional(),
   }),
 });
-type GET_OPEN_ORDERS = z.infer<typeof GET_OPEN_ORDERS_SCHEMA>;
 
 const GET_FILLS_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   type: z.literal('get_fills'),
   payload: ENGINE_PAYLOAD_SCHEMA,
 });
-type GET_FILLS = z.infer<typeof GET_FILLS_SCHEMA>;
 
 const GET_DEPTH_SCHEMA = BASE_ENGINE_SCHEMA.extend({
   type: z.literal('get_depth'),
@@ -77,7 +67,6 @@ const GET_DEPTH_SCHEMA = BASE_ENGINE_SCHEMA.extend({
     market: MARKET_AVAILABEL_SCHEMA,
   }),
 });
-type GET_DEPTH = z.infer<typeof GET_DEPTH_SCHEMA>;
 
 const GET_MARKET_PRICE_SCHEMA = z.object({
   type: z.literal('markprice_updated'),
@@ -121,15 +110,7 @@ type ENGINE_REQUEST = z.infer<typeof ENGINE_REQUEST_SCHEMA>;
 export {
   ENGINE_REQUEST_SCHEMA,
   GET_MARKET_PRICE_SCHEMA,
-  type ADD_BALANCE,
   type BACKEND_ENGINE_REQUEST,
-  type CANCEL_ORDER,
-  type CREATE_ORDER,
   type ENGINE_REQUEST,
-  type GET_BALANCE,
-  type GET_DEPTH,
-  type GET_FILLS,
-  type GET_OPEN_ORDERS,
   type GET_MARKET_PRICE,
-  type GET_POSITION,
 };
