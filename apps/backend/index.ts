@@ -6,6 +6,15 @@ import { initializeRedis } from './utils/toEngine';
 
 const app = express();
 
+// These endpoints expose live exchange state. Do not let Express generate
+// conditional 304 responses from ETags, or let a browser/proxy reuse stale API
+// data while the market is changing.
+app.disable('etag');
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  next();
+});
+
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || 'https://exchange.deepanshu.live,http://localhost:3000,http://127.0.0.1:3000')
     .split(',')
