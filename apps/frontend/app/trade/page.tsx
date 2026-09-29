@@ -179,11 +179,13 @@ export default function TradePage() {
             </span>
           </Stat>
           <Stat label="Funding / countdown">
-            <span className="text-warn">
-              {previewFundingRate !== null ? formatFundingRate(previewFundingRate) : '—'}
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-warn">
+                {previewFundingRate !== null ? formatFundingRate(previewFundingRate) : '—'}
+              </span>
+              <span aria-hidden className="h-[3px] w-[3px] rounded-full bg-subtle" />
+              <span>{fundingCountdown}</span>
             </span>
-            <span className="text-subtle"> · </span>
-            {fundingCountdown}
           </Stat>
           <Stat label="24h high">{day && day.high24h > 0 ? fmtPrice(day.high24h) : '—'}</Stat>
           <Stat label="24h low">{day && day.low24h > 0 ? fmtPrice(day.low24h) : '—'}</Stat>
