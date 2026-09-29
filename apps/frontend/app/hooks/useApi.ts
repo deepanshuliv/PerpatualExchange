@@ -4,6 +4,9 @@ import { createCorrelationId } from '../utils/correlationId';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '');
 
+const fetchApi = (input: RequestInfo | URL, init: RequestInit = {}) =>
+  fetch(input, { ...init, cache: 'no-store' });
+
 function resolveWebSocketBase() {
   if (process.env.NEXT_PUBLIC_WS_URL) {
     return process.env.NEXT_PUBLIC_WS_URL.replace(/\/$/, '');
@@ -41,77 +44,77 @@ const getHeaders = (token?: string, hasJsonBody = false) => {
 
 export const apiService = {
   getDepth: async (market: string) => {
-    const res = await fetch(`${API_BASE}/depth/${market}`, {
+    const res = await fetchApi(`${API_BASE}/depth/${market}`, {
       headers: getHeaders(),
     });
     return res.json();
   },
 
   getTickerPrice: async (market: string) => {
-    const res = await fetch(`${API_BASE}/ticker/price/${market}`, {
+    const res = await fetchApi(`${API_BASE}/ticker/price/${market}`, {
       headers: getHeaders(),
     });
     return res.json();
   },
 
   getMarkPrice: async (market: string) => {
-    const res = await fetch(`${API_BASE}/ticker/mark/${market}`, {
+    const res = await fetchApi(`${API_BASE}/ticker/mark/${market}`, {
       headers: getHeaders(),
     });
     return res.json();
   },
 
   getLiquidations: async (market: string) => {
-    const res = await fetch(`${API_BASE}/liquidations/${market}`, {
+    const res = await fetchApi(`${API_BASE}/liquidations/${market}`, {
       headers: getHeaders(),
     });
     return res.json();
   },
 
   getTrades: async (market: string) => {
-    const res = await fetch(`${API_BASE}/trades/${market}`, {
+    const res = await fetchApi(`${API_BASE}/trades/${market}`, {
       headers: getHeaders(),
     });
     return res.json();
   },
 
   getCandles: async (market: string, interval: '1m' | '5m' | '15m' | '1h' | '1d', limit = 200) => {
-    const res = await fetch(`${API_BASE}/candles/${market}/${interval}?limit=${limit}`, {
+    const res = await fetchApi(`${API_BASE}/candles/${market}/${interval}?limit=${limit}`, {
       headers: getHeaders(),
     });
     return res.json();
   },
 
   getAvailableEquity: async (token: string) => {
-    const res = await fetch(`${API_BASE}/equity/available`, {
+    const res = await fetchApi(`${API_BASE}/equity/available`, {
       headers: getHeaders(token),
     });
     return { status: res.status, ...(await res.json()) };
   },
 
   getOpenPositions: async (token: string) => {
-    const res = await fetch(`${API_BASE}/positions/open/all`, {
+    const res = await fetchApi(`${API_BASE}/positions/open/all`, {
       headers: getHeaders(token),
     });
     return { status: res.status, ...(await res.json()) };
   },
 
   getOpenOrders: async (token: string) => {
-    const res = await fetch(`${API_BASE}/orders/open/all`, {
+    const res = await fetchApi(`${API_BASE}/orders/open/all`, {
       headers: getHeaders(token),
     });
     return { status: res.status, ...(await res.json()) };
   },
 
   getFills: async (token: string) => {
-    const res = await fetch(`${API_BASE}/fills`, {
+    const res = await fetchApi(`${API_BASE}/fills`, {
       headers: getHeaders(token),
     });
     return { status: res.status, ...(await res.json()) };
   },
 
   provisionSimUser: async (label: string, amount: number) => {
-    const res = await fetch(`${API_BASE}/sim/provision`, {
+    const res = await fetchApi(`${API_BASE}/sim/provision`, {
       method: 'POST',
       headers: getHeaders(undefined, true),
       body: JSON.stringify({ label, amount }),
@@ -121,7 +124,7 @@ export const apiService = {
   },
 
   injectMarkPrice: async (market: string, price: number) => {
-    const res = await fetch(`${API_BASE}/sim/inject-mark-price`, {
+    const res = await fetchApi(`${API_BASE}/sim/inject-mark-price`, {
       method: 'POST',
       headers: getHeaders(undefined, true),
       body: JSON.stringify({ market, price }),
@@ -131,7 +134,7 @@ export const apiService = {
   },
 
   signup: async (email: string, password: string) => {
-    const res = await fetch(`${API_BASE}/signup`, {
+    const res = await fetchApi(`${API_BASE}/signup`, {
       method: 'POST',
       headers: getHeaders(undefined, true),
       body: JSON.stringify({ email, password }),
@@ -141,7 +144,7 @@ export const apiService = {
   },
 
   signin: async (email: string, password: string) => {
-    const res = await fetch(`${API_BASE}/signin`, {
+    const res = await fetchApi(`${API_BASE}/signin`, {
       method: 'POST',
       headers: getHeaders(undefined, true),
       body: JSON.stringify({ email, password }),
@@ -151,7 +154,7 @@ export const apiService = {
   },
 
   resetPassword: async (email: string, password: string) => {
-    const res = await fetch(`${API_BASE}/reset-password`, {
+    const res = await fetchApi(`${API_BASE}/reset-password`, {
       method: 'POST',
       headers: getHeaders(undefined, true),
       body: JSON.stringify({ email, password }),
@@ -161,7 +164,7 @@ export const apiService = {
   },
 
   onramp: async (token: string, amount: number) => {
-    const res = await fetch(`${API_BASE}/onramp`, {
+    const res = await fetchApi(`${API_BASE}/onramp`, {
       method: 'POST',
       headers: getHeaders(token, true),
       body: JSON.stringify({
@@ -175,7 +178,7 @@ export const apiService = {
   },
 
   placeOrder: async (token: string, orderData: PlaceOrderParams) => {
-    const res = await fetch(`${API_BASE}/order`, {
+    const res = await fetchApi(`${API_BASE}/order`, {
       method: 'POST',
       headers: getHeaders(token, true),
       body: JSON.stringify({
@@ -196,7 +199,7 @@ export const apiService = {
   },
 
   cancelOrder: async (token: string, orderId: string) => {
-    const res = await fetch(`${API_BASE}/order/cancel`, {
+    const res = await fetchApi(`${API_BASE}/order/cancel`, {
       method: 'POST',
       headers: getHeaders(token, true),
       body: JSON.stringify({
