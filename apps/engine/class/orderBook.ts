@@ -591,10 +591,10 @@ export default class OrderBookManager {
 
   cancelOrder(userId: string, orderId: string) {
     const userOrderDetails = this.getOrder(userId, orderId);
-    if (!userOrderDetails) {
+    // Unknown and foreign orders get the same rejection so order ids can't be probed.
+    if (!userOrderDetails || userOrderDetails.userId !== userId) {
       return null;
     }
-    this.changeOrderStatus(userId, orderId, 'CANCELLED');
 
     const kind = userOrderDetails.kind;
     const market = userOrderDetails.market;
@@ -609,6 +609,9 @@ export default class OrderBookManager {
     if (!deleteIngOrder) {
       return null;
     }
+
+    // Mutate only after every lookup has succeeded, so a failed cancel leaves no partial state.
+    this.changeOrderStatus(userId, orderId, 'CANCELLED');
 
     const unfilledQty = deleteIngOrder.totalQty - deleteIngOrder.filledQty;
     priceLevel.totalqty -= unfilledQty;
