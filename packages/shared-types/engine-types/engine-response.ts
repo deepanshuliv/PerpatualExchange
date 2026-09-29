@@ -21,7 +21,6 @@ const FILL_DETAIL_SCHEMA = z.object({
   createdAt: z.date().or(z.string()),
   transactionTime: z.number(),
 });
-type FILL_DETAIL = z.infer<typeof FILL_DETAIL_SCHEMA>;
 
 const CREATE_ORDER_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("create_order"),
@@ -41,7 +40,6 @@ const CREATE_ORDER_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
     transactionTime: z.number(),
   }),
 });
-type CREATE_ORDER_RESPONSE = z.infer<typeof CREATE_ORDER_RESPONSE_SCHEMA>;
 
 const CANCEL_ORDER_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("cancel_order"),
@@ -57,19 +55,16 @@ const CANCEL_ORDER_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
     transactionTime: z.number(),
   }),
 });
-type CANCEL_ORDER_RESPONSE = z.infer<typeof CANCEL_ORDER_RESPONSE_SCHEMA>;
 
 const GET_BALANCE_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("get_balance"),
   payload: z.number().nullable(),
 });
-type GET_BALANCE_RESPONSE = z.infer<typeof GET_BALANCE_RESPONSE_SCHEMA>;
 
 const ADD_BALANCE_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("add_balance"),
   payload: z.number(),
 });
-type ADD_BALANCE_RESPONSE = z.infer<typeof ADD_BALANCE_RESPONSE_SCHEMA>;
 
 const ERROR_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("error"),
@@ -77,7 +72,6 @@ const ERROR_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
     error: z.string(),
   }),
 });
-type ERROR_RESPONSE = z.infer<typeof ERROR_RESPONSE_SCHEMA>;
 
 const LIQUIDATION_EVENT_SCHEMA = z.object({
   type: z.literal("liquidation"),
@@ -93,7 +87,6 @@ const LIQUIDATION_EVENT_SCHEMA = z.object({
     transactionTime: z.number(),
   }),
 });
-type LIQUIDATION_EVENT = z.infer<typeof LIQUIDATION_EVENT_SCHEMA>;
 
 const POSITION_DETAILS_SCHEMA = z.object({
   costBasis: z.number(),
@@ -102,13 +95,11 @@ const POSITION_DETAILS_SCHEMA = z.object({
   market: MARKET_AVAILABEL_SCHEMA,
   qty: z.number(),
 });
-type POSITION_DETAILS = z.infer<typeof POSITION_DETAILS_SCHEMA>;
 
 const GET_POSITION_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("get_position"),
   payload: z.union([POSITION_DETAILS_SCHEMA, z.array(POSITION_DETAILS_SCHEMA)]).nullable(),
 });
-type GET_POSITION_RESPONSE = z.infer<typeof GET_POSITION_RESPONSE_SCHEMA>;
 
 const OPEN_ORDER_DETAILS_SCHEMA = z.object({
   orderId: z.string(),
@@ -129,13 +120,11 @@ const GET_OPEN_ORDERS_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal('get_open_orders'),
   payload: z.array(OPEN_ORDER_DETAILS_SCHEMA),
 });
-type GET_OPEN_ORDERS_RESPONSE = z.infer<typeof GET_OPEN_ORDERS_RESPONSE_SCHEMA>;
 
 const GET_FILLS_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("get_fills"),
   payload: z.array(FILL_DETAIL_SCHEMA),
 });
-type GET_FILLS_RESPONSE = z.infer<typeof GET_FILLS_RESPONSE_SCHEMA>;
 
 const GET_DEPTH_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
   type: z.literal("get_depth"),
@@ -144,7 +133,6 @@ const GET_DEPTH_RESPONSE_SCHEMA = BASE_RESPONSE.extend({
     asks: z.array(z.tuple([z.coerce.number(), z.coerce.number()])),
   }),
 });
-type GET_DEPTH_RESPONSE = z.infer<typeof GET_DEPTH_RESPONSE_SCHEMA>;
 
 const MARKPRICE_UPDATED_RESPONSE_SCHEMA = z.object({
   type: z.literal('markprice_updated'),
@@ -154,7 +142,6 @@ const MARKPRICE_UPDATED_RESPONSE_SCHEMA = z.object({
     transactionTime: z.number(),
   }),
 });
-type MARKPRICE_UPDATED_RESPONSE = z.infer<typeof MARKPRICE_UPDATED_RESPONSE_SCHEMA>;
 
 
 const DEPTH_LEVEL_SCHEMA = z.tuple([z.coerce.number(), z.coerce.number()]);
@@ -168,7 +155,6 @@ const DEPTH_UPDATED_RESPONSE_SCHEMA = z.object({
     transactionTime: z.number(),
   }),
 });
-type DEPTH_UPDATED_RESPONSE = z.infer<typeof DEPTH_UPDATED_RESPONSE_SCHEMA>;
 
 const TRADE_EXECUTED_RESPONSE_SCHEMA = z.object({
   type: z.literal('trade_executed'),
@@ -179,7 +165,6 @@ const TRADE_EXECUTED_RESPONSE_SCHEMA = z.object({
     transactionTime: z.number(),
   }),
 });
-type TRADE_EXECUTED_RESPONSE = z.infer<typeof TRADE_EXECUTED_RESPONSE_SCHEMA>;
 
 const LAST_TRADED_PRICE_UPDATED_RESPONSE_SCHEMA = z.object({
   type: z.literal('last_traded_price_updated'),
@@ -189,7 +174,6 @@ const LAST_TRADED_PRICE_UPDATED_RESPONSE_SCHEMA = z.object({
     transactionTime: z.number(),
   }),
 });
-type LAST_TRADED_PRICE_UPDATED_RESPONSE = z.infer<typeof LAST_TRADED_PRICE_UPDATED_RESPONSE_SCHEMA>;
 
 const FUNDING_TIMER_RESET_SCHEMA = z.object({
   type: z.literal('funding_timer_reset'),
@@ -198,7 +182,6 @@ const FUNDING_TIMER_RESET_SCHEMA = z.object({
     transactionTime: z.number(),
   }),
 });
-type FUNDING_TIMER_RESET = z.infer<typeof FUNDING_TIMER_RESET_SCHEMA>;
 
 const BACKEND_RESPONSE_SCHEMA = z.discriminatedUnion('type', [
   CREATE_ORDER_RESPONSE_SCHEMA,
@@ -221,7 +204,6 @@ const WS_BROADCAST_EVENT_SCHEMA = z.discriminatedUnion('type', [
   LAST_TRADED_PRICE_UPDATED_RESPONSE_SCHEMA,
   FUNDING_TIMER_RESET_SCHEMA,
 ]);
-type WS_BROADCAST_EVENT = z.infer<typeof WS_BROADCAST_EVENT_SCHEMA>;
 
 const ENGINE_STREAM_MESSAGE_SCHEMA = z.union([
   BACKEND_RESPONSE_SCHEMA,
@@ -234,7 +216,6 @@ const DB_PERSISTENCE_EVENT_SCHEMA = z.discriminatedUnion('type', [
   CANCEL_ORDER_RESPONSE_SCHEMA,
   LIQUIDATION_EVENT_SCHEMA,
 ]);
-type DB_PERSISTENCE_EVENT = z.infer<typeof DB_PERSISTENCE_EVENT_SCHEMA>;
 
 export {
   BACKEND_RESPONSE_SCHEMA,
