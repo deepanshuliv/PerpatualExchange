@@ -20,7 +20,7 @@ out/
 build
 dist
 snapshot/
-apps/engine/snapshots/
+apps/engine/**/snapshots/
 
 npm-debug.log*
 yarn-debug.log*
