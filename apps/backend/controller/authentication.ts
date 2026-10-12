@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { prisma } from "@repo/db"
 import { InternalTypes } from "@repo/shared-types";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken"
+import { signToken } from "../utils/jwt";
 
 const BCRYPT_ROUNDS = 10;
 
@@ -11,15 +11,12 @@ function isBcryptHash(value: string) {
     return /^\$2[aby]\$\d{2}\$/.test(value);
 }
 
-function firstIssue(error: { issues: { message: string }[] }) {
-    return error.issues[0]?.message ?? "please provide all fields";
+function passwordMatches(password: string, stored: string) {
+    return isBcryptHash(stored) ? bcrypt.compare(password, stored) : Promise.resolve(stored === password);
 }
 
-function signToken(userId: string) {
-    if (!process.env.JWT_SECRET) {
-        throw new Error("JWT_SECRET is not defined");
-    }
-    return jwt.sign({ userId }, process.env.JWT_SECRET);
+function firstIssue(error: { issues: { message: string }[] }) {
+    return error.issues[0]?.message ?? "please provide all fields";
 }
 
 function authResponse(user: { id: string; email: string }) {
@@ -44,10 +41,8 @@ export async function signIn(req: Request, res: Response) {
         const invalid = () => res.status(401).json({ msg: "Incorrect email or password" });
         if (!user) return invalid();
 
-        if (isBcryptHash(user.password)) {
-            if (!(await bcrypt.compare(password, user.password))) return invalid();
-        } else {
-            if (user.password !== password) return invalid();
+        if (!(await passwordMatches(password, user.password))) return invalid();
+        if (!isBcryptHash(user.password)) {
             // Upgrade a legacy plain-text password to a hash on successful login.
             await prisma.user.update({
                 where: { id: user.id },
@@ -88,33 +83,33 @@ export async function signUp(req: Request, res: Response) {
 }
 
 /**
- * Sets a new password for an email address.
+ * Changes the signed-in user's password. The current password is required, so a
+ * stolen session token alone cannot take over the account.
  *
- * NOTE: there is no email verification yet, so anyone who knows an account's
- * email can reset its password. Replace with a token sent by email before
- * this handles real accounts.
+ * There is no "forgot password" flow: that needs a token delivered by email,
+ * which this project does not send.
  */
-export async function resetPassword(req: Request, res: Response) {
+export async function changePassword(req: Request, res: Response) {
     try {
-        const parsed = InternalTypes.RESET_PASSWORD_SCHEMA.safeParse(req.body);
+        const parsed = InternalTypes.CHANGE_PASSWORD_SCHEMA.safeParse(req.body);
         if (!parsed.success) {
             return res.status(400).json({ msg: firstIssue(parsed.error) });
         }
 
-        const { email, password } = parsed.data;
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) {
-            return res.status(404).json({ msg: "No account found with this email" });
+        const { currentPassword, newPassword } = parsed.data;
+        const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+        if (!user || !(await passwordMatches(currentPassword, user.password))) {
+            return res.status(401).json({ msg: "Current password is incorrect" });
         }
 
         await prisma.user.update({
             where: { id: user.id },
-            data: { password: await bcrypt.hash(password, BCRYPT_ROUNDS) },
+            data: { password: await bcrypt.hash(newPassword, BCRYPT_ROUNDS) },
         });
 
         res.status(200).json({ ok: true, msg: "Password updated" });
     } catch (error) {
-        console.error('[resetPassword] error:', error);
+        console.error('[changePassword] error:', error);
         res.status(500).json({ msg: "internal server error" });
     }
 }

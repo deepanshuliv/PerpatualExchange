@@ -1,12 +1,14 @@
+// Mirrors FUNDING_INTERVAL_MS / nextFundingTime in packages/shared-types/shared.ts:
+// the engine settles funding on the 00:00, 08:00 and 16:00 UTC boundaries.
 export const FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
 const MAX_FUNDING_RATE = 0.0005;
 
-export function startFundingTimer(from = Date.now()): number {
-  return from + FUNDING_INTERVAL_MS;
+export function nextFundingTime(now = Date.now()): number {
+  return Math.floor(now / FUNDING_INTERVAL_MS) * FUNDING_INTERVAL_MS + FUNDING_INTERVAL_MS;
 }
 
-export function fundingMsRemaining(deadline: number, now = Date.now()): number {
-  return Math.max(0, deadline - now);
+export function fundingMsRemaining(now = Date.now()): number {
+  return nextFundingTime(now) - now;
 }
 
 export function formatCountdown(ms: number): string {

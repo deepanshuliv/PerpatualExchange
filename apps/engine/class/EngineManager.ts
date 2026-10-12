@@ -5,12 +5,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 
-import { allMarketsList, type MARKET_AVAILABEL } from '../../../packages/shared-types/shared';
+import {
+  allMarketsList,
+  nextFundingTime,
+  type MARKET_AVAILABEL,
+} from '../../../packages/shared-types/shared';
 import BinanceClassListner from './binanceListner';
 import MatchingEngine from './matchingEngine';
 import PostionManager from './PositionManager';
 
-const FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
 const SNAPSHOT_INTERVAL_MS = 3 * 1000;
 const ENGINE_STREAM = process.env.ENGINE_STREAM || 'to-engine';
 const BACKEND_STREAM = process.env.BACKEND_STREAM || 'to-backend';
@@ -51,7 +54,6 @@ export default class EngineManager {
   private positionManager: PostionManager;
   private matchingManger: MatchingEngine;
   private redisReadPointer = '';
-  private fundingRateTimerStarted = false;
   private snapshotInProgress = false;
 
   constructor() {
@@ -287,19 +289,6 @@ export default class EngineManager {
         await this.publishMarketUpdates(market, liquidationOrder.fills ?? [], transactionTime);
       }
     } else if (request.type === 'run_funding_rate') {
-      if (!this.fundingRateTimerStarted) {
-        this.fundingRateTimerStarted = true;
-        setInterval(async () => {
-          this.publisherRedisClient.xAdd(
-            ENGINE_STREAM,
-            '*',
-            {
-              data: JSON.stringify({ type: 'run_funding_rate' }),
-            },
-            { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } },
-          );
-        }, FUNDING_INTERVAL_MS);
-      }
       const now = Date.now();
       for (const market of allMarketsList) {
         const markPrice = this.positionManager.getMarkpriceOfMarket(market) || 0;
@@ -317,6 +306,31 @@ export default class EngineManager {
         payload: { error: `UNHANDLED_REQUEST_TYPE_${(request as { type: string }).type}` },
       });
     }
+  }
+
+  /**
+   * Funding settles on the fixed 00:00/08:00/16:00 UTC boundaries. The timer only
+   * enqueues a `run_funding_rate` command, so the settlement itself goes through
+   * the stream like every other state change and is covered by snapshot replay.
+   * A boundary that passes while the engine is down is skipped, not settled late.
+   */
+  private scheduleFunding() {
+    const delay = nextFundingTime() - Date.now();
+    setTimeout(async () => {
+      try {
+        await this.publisherRedisClient.xAdd(
+          ENGINE_STREAM,
+          '*',
+          { data: JSON.stringify({ type: 'run_funding_rate' }) },
+          { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } },
+        );
+      } catch (err) {
+        console.log('[scheduleFunding] error', err);
+      } finally {
+        this.scheduleFunding();
+      }
+    }, delay);
+    console.log(`[Funding] next settlement at ${new Date(Date.now() + delay).toISOString()}`);
   }
 
   private async writeLocalSnapshot(jsonStr: string) {
@@ -458,6 +472,8 @@ export default class EngineManager {
       await this.publishMarketUpdates(market, [], now);
     }
     console.log('initial market depth published');
+
+    this.scheduleFunding();
 
     setInterval(async () => {
       try {

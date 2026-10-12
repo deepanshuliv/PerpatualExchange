@@ -29,7 +29,6 @@ enum Market {
   BTCUSD
   ETHUSD
   SOLUSD
-  USD
 }
 
 model user {

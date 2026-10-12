@@ -153,11 +153,11 @@ export const apiService = {
     return { status: res.status, ...json };
   },
 
-  resetPassword: async (email: string, password: string) => {
-    const res = await fetchApi(`${API_BASE}/reset-password`, {
+  changePassword: async (token: string, currentPassword: string, newPassword: string) => {
+    const res = await fetchApi(`${API_BASE}/change-password`, {
       method: 'POST',
-      headers: getHeaders(undefined, true),
-      body: JSON.stringify({ email, password }),
+      headers: getHeaders(token, true),
+      body: JSON.stringify({ currentPassword, newPassword }),
     });
     const json = await res.json();
     return { status: res.status, ...json };

@@ -10,7 +10,7 @@ type CreateOrderEvent = Extract<DbEvent, { type: 'create_order' }>;
 type CancelOrderEvent = Extract<DbEvent, { type: 'cancel_order' }>;
 type LiquidationEvent = Extract<DbEvent, { type: 'liquidation' }>;
 
-type Market = 'BTCUSD' | 'ETHUSD' | 'SOLUSD' | 'USD';
+type Market = 'BTCUSD' | 'ETHUSD' | 'SOLUSD';
 
 interface StreamMessage {
   id: string;

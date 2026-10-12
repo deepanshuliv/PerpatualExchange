@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { connectRedisClient, redisClient } from '@repo/redis';
 import { Shared } from '@repo/shared-types';
 import type { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
+import { signToken } from '../utils/jwt';
 
 const ENGINE_STREAM = process.env.ENGINE_STREAM || 'to-engine';
 
@@ -31,7 +31,7 @@ export async function provisionSimUser(req: Request, res: Response) {
       { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 100000 } }
     );
 
-    const token = jwt.sign({ userId }, process.env.JWT_SECRET!);
+    const token = signToken(userId);
 
     return res.status(201).json({
       ok: true,

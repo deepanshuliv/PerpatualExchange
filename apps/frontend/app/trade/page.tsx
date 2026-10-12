@@ -198,7 +198,11 @@ export default function TradePage() {
 
         <div className="flex shrink-0 items-center gap-2">
           {user ? (
-            <AccountMenu email={user.email} onLogout={() => setLogoutConfirmOpen(true)} />
+            <AccountMenu
+                email={user.email}
+                onLogout={() => setLogoutConfirmOpen(true)}
+                onChangePassword={() => setAuthModalMode('change_password')}
+              />
           ) : (
             <>
               <button

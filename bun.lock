@@ -67,13 +67,13 @@
       "name": "frontend",
       "version": "0.1.0",
       "dependencies": {
+        "@repo/types": "workspace:*",
         "lightweight-charts": "^5.2.0",
         "lucide-react": "^0.475.0",
         "motion": "^13.4.4",
         "next": "16.2.9",
         "react": "19.2.4",
         "react-dom": "19.2.4",
-        "types": "workspace:*",
       },
       "devDependencies": {
         "@tailwindcss/postcss": "^4",
@@ -157,7 +157,7 @@
       },
     },
     "packages/types": {
-      "name": "types",
+      "name": "@repo/types",
       "devDependencies": {
         "@types/bun": "latest",
       },
@@ -438,6 +438,8 @@
     "@repo/redis": ["@repo/redis@workspace:packages/redis"],
 
     "@repo/shared-types": ["@repo/shared-types@workspace:packages/shared-types"],
+
+    "@repo/types": ["@repo/types@workspace:packages/types"],
 
     "@repo/typescript-config": ["@repo/typescript-config@workspace:packages/typescript-config"],
 
@@ -1404,8 +1406,6 @@
     "typed-array-byte-offset": ["typed-array-byte-offset@1.0.4", "", { "dependencies": { "available-typed-arrays": "^1.0.7", "call-bind": "^1.0.8", "for-each": "^0.3.3", "gopd": "^1.2.0", "has-proto": "^1.2.0", "is-typed-array": "^1.1.15", "reflect.getprototypeof": "^1.0.9" } }, "sha512-bTlAFB/FBYMcuX81gbL4OcpH5PmlFHqlCCpAl8AlEzMz5k53oNDvN8p1PNOWLEmI2x4orp3raOFB51tv9X+MFQ=="],
 
     "typed-array-length": ["typed-array-length@1.0.7", "", { "dependencies": { "call-bind": "^1.0.7", "for-each": "^0.3.3", "gopd": "^1.0.1", "is-typed-array": "^1.1.13", "possible-typed-array-names": "^1.0.0", "reflect.getprototypeof": "^1.0.6" } }, "sha512-3KS2b+kL7fsuk/eJZ7EQdnEmQoaho/r6KUef7hxvltNA5DR8NAUM+8wJMbJyZ4G9/7i3v5zPBIMN5aybAh2/Jg=="],
-
-    "types": ["types@workspace:packages/types"],
 
     "typescript": ["typescript@5.9.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrSJu3+t/xlw3R9A=="],
 

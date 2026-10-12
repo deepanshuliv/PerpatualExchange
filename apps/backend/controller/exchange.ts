@@ -40,9 +40,6 @@ export async function createOrder(req: Request, res: Response) {
   }
 
   const maxLeverage = Shared.MAX_LEVERAGE[market];
-  if (!maxLeverage) {
-    return res.status(400).json({ msg: `${market} is not a tradable market` });
-  }
 
   // Market orders are sent with a price that includes slippage room, so allow a
   // small tolerance before treating the margin as over the leverage cap.
@@ -127,12 +124,58 @@ export async function getOpenOrders(req: Request, res: Response) {
   });
 }
 
+const FILL_HISTORY_LIMIT = 200;
+
+/**
+ * Trade history comes from Postgres, not the engine: the engine only keeps fills
+ * until its next snapshot. Each match stores one fill per order, so filtering on
+ * the user's own orders returns exactly their side, and the side/type come from
+ * that order. Postgres trails the engine by one db-consumer batch.
+ */
 export async function getFills(req: Request, res: Response) {
-  return callEngine(res, {
-    correlationId: crypto.randomUUID(),
-    type: 'get_fills',
-    payload: { userId: req.userId! },
-  });
+  try {
+    const fills = await prisma.fill.findMany({
+      where: { order: { userId: req.userId! } },
+      orderBy: { transactionTime: 'desc' },
+      take: FILL_HISTORY_LIMIT,
+      select: {
+        id: true,
+        orderId: true,
+        buyerId: true,
+        sellerId: true,
+        price: true,
+        qty: true,
+        status: true,
+        transactionTime: true,
+        order: { select: { kind: true, type: true, market: true } },
+      },
+    });
+
+    const data = [];
+    // Oldest first, matching the order the engine used to return.
+    for (let i = fills.length - 1; i >= 0; i--) {
+      const fill = fills[i]!;
+      data.push({
+        id: fill.id,
+        orderId: fill.orderId,
+        buyerId: fill.buyerId,
+        sellerId: fill.sellerId,
+        price: fill.price,
+        qty: fill.qty,
+        kind: fill.order.kind,
+        type: fill.order.type,
+        market: fill.order.market,
+        status: fill.status,
+        createdAt: fill.transactionTime.toISOString(),
+        transactionTime: fill.transactionTime.getTime(),
+      });
+    }
+
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    console.log('[getFills] error', error);
+    return res.status(503).json({ msg: 'trade history unavailable' });
+  }
 }
 
 export async function getDepth(req: Request, res: Response) {

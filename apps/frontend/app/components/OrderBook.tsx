@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Lock, Unlock, Minus, Plus, LocateFixed } from "lucide-react";
 import { EmptyState, Panel, PanelTabs } from "./ui";
-import type { OrderBookRow } from "types";
+import type { OrderBookRow } from "@repo/types";
 import { useTrading } from "../context/TradingContext";
 import { groupOrderBookRows } from "../utils/orderbook";
 

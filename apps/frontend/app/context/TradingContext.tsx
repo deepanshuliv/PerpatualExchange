@@ -2,13 +2,12 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Fill, Order, OrderBookRow, Position } from 'types';
+import type { Fill, Order, OrderBookRow, Position } from '@repo/types';
 import { useApi, WS_BASE } from '../hooks/useApi';
 import {
   computeFundingRatePreview,
   formatCountdown,
   fundingMsRemaining,
-  startFundingTimer,
 } from '../utils/funding';
 import { parseDepthSnapshot } from '../utils/orderbook';
 import { calculateUnrealizedPnl } from '../utils/position';
@@ -47,6 +46,8 @@ export interface PlacedOrder {
   totalSpent: number;
 }
 
+export type AuthModalMode = 'login' | 'signup' | 'change_password' | null;
+
 interface TradingContextType {
   market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD';
   setMarket: (market: 'BTCUSD' | 'ETHUSD' | 'SOLUSD') => void;
@@ -70,11 +71,11 @@ interface TradingContextType {
   openOrders: Order[];
   fills: Fill[];
   loadingDepth: boolean;
-  authModalMode: 'login' | 'signup' | 'forgot_password' | null;
-  setAuthModalMode: (mode: 'login' | 'signup' | 'forgot_password' | null) => void;
+  authModalMode: AuthModalMode;
+  setAuthModalMode: (mode: AuthModalMode) => void;
   login: (email: string, password: string) => Promise<AuthResult>;
   signup: (email: string, password: string) => Promise<AuthResult>;
-  resetPassword: (email: string, password: string) => Promise<AuthResult>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<AuthResult>;
   logout: () => void;
   deposit: (amount: number) => Promise<{ ok: boolean; msg?: string }>;
   placeOrder: (
@@ -230,8 +231,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [asks, setAsks] = useState<OrderBookRow[]>([]);
   const [lastPrice, setLastPrice] = useState<number>(0);
   const [markPrice, setMarkPrice] = useState<number>(0);
-  const [fundingDeadline, setFundingDeadline] = useState(() => startFundingTimer());
-  const [fundingCountdown, setFundingCountdown] = useState('08:00:00');
+  const [fundingCountdown, setFundingCountdown] = useState(() => formatCountdown(fundingMsRemaining()));
   const [marketTrades, setMarketTrades] = useState<MarketTrade[]>([]);
   const [marketLiquidations, setMarketLiquidations] = useState<MarketLiquidation[]>([]);
   const [loadingDepth, setLoadingDepth] = useState<boolean>(true);
@@ -245,7 +245,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [markPricesByMarket, setMarkPricesByMarket] = useState<Record<string, number>>({});
   const [openOrders, setOpenOrders] = useState<Order[]>([]);
   const [fills, setFills] = useState<Fill[]>([]);
-  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | 'forgot_password' | null>(null);
+  const [authModalMode, setAuthModalMode] = useState<AuthModalMode>(null);
 
   const openPositionsWithPnl = useMemo(
     () =>
@@ -281,11 +281,11 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [chartInterval]);
 
   useEffect(() => {
-    const tick = () => setFundingCountdown(formatCountdown(fundingMsRemaining(fundingDeadline)));
+    const tick = () => setFundingCountdown(formatCountdown(fundingMsRemaining()));
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [fundingDeadline]);
+  }, []);
 
   useEffect(() => {
     const savedToken = localStorage.getItem('perp_token');
@@ -309,7 +309,6 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setMarketLiquidations([]);
     setCandles([]);
     setLoadingCandles(true);
-    setFundingDeadline(startFundingTimer());
   }, [market]);
 
   useEffect(() => {
@@ -384,7 +383,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         if (stream.startsWith('funding')) {
-          setFundingDeadline(startFundingTimer());
+          // Funding just settled; margins changed. The countdown follows the clock.
           if (tokenRef.current) refreshUserData();
           return;
         }
@@ -856,13 +855,14 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const resetPassword = async (email: string, password: string): Promise<AuthResult> => {
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<AuthResult> => {
+    if (!token) return { ok: false, msg: 'Please log in first.' };
     try {
-      const json = await api.resetPassword(email, password);
+      const json = await api.changePassword(token, currentPassword, newPassword);
       if (json.status === 200 && json.ok) return { ok: true };
-      return { ok: false, msg: json.msg || 'Could not reset your password.' };
+      return { ok: false, msg: json.msg || 'Could not change your password.' };
     } catch (err) {
-      console.log('[resetPassword] error', err);
+      console.log('[changePassword] error', err);
       return { ok: false, msg: 'Could not reach the server. Please try again.' };
     }
   };
@@ -981,7 +981,7 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setAuthModalMode,
         login,
         signup,
-        resetPassword,
+        changePassword,
         logout,
         deposit,
         placeOrder,

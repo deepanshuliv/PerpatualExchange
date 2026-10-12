@@ -4,6 +4,10 @@ Axiom is a personal study implementation of a perpetual cryptocurrency exchange 
 
 **Status:** Personal project / prototype. It is not a production trading system and should not be used with real credentials or funds.
 
+## Demo
+
+https://github.com/user-attachments/assets/195d7f68-ce84-4af1-8b83-60ffa96271ca
+
 ## What is included
 
 - An in-memory order book, balance manager, position manager, funding-rate handling, and liquidation flow in `apps/engine`.
@@ -72,16 +76,22 @@ Unauthenticated routes include:
 
 - `GET /healthz`
 - `POST /signup` and `POST /signin`
-- `POST /sim/provision` and `POST /sim/inject-mark-price`
 - `GET /depth/:marketId`, `/ticker/price/:marketId`, and `/ticker/mark/:marketId`
 - `GET /trades/:marketId`, `/liquidations/:marketId`, and `/candles/:marketId/:interval`
 
-Authenticated routes require `Authorization: Bearer <token>`:
+Authenticated routes require `Authorization: Bearer <token>`. Tokens expire after `JWT_EXPIRES_IN` (default `7d`).
 
 - `POST /onramp`, `/order`, and `/order/cancel`
+- `POST /change-password` with `{ "currentPassword", "newPassword" }`
 - `GET /equity/available`, `/positions/open/:marketId`, `/orders/open/:marketId`, and `/fills`
 
-The order request schema accepts `LIMIT` and `MARKET` orders with `LONG` or `SHORT` direction. The shared market schema currently accepts `BTCUSD`, `ETHUSD`, `SOLUSD`, and `USD`; the frontend selector exposes the three perpetual markets backed by the Binance listener.
+`/fills` returns the caller's most recent 200 fills from Postgres, so it can trail the engine by one database-consumer batch. There is no "forgot password" flow, because that needs a reset token delivered by email.
+
+Simulation routes are disabled unless the backend runs with `ENABLE_SIM_ROUTES=true`; otherwise they return `403`. They mint funded users and move the mark price, which liquidates real positions, so keep them off on any public deployment:
+
+- `POST /sim/provision` and `POST /sim/inject-mark-price`
+
+The order request schema accepts `LIMIT` and `MARKET` orders with `LONG` or `SHORT` direction. A market order's price is its worst acceptable price. The trading UI and the market maker send the best price plus or minus 1%. The markets are `BTCUSD`, `ETHUSD`, and `SOLUSD`, each backed by a Binance mark-price stream.
 
 For example, with the backend running directly on the host:
 
@@ -92,7 +102,7 @@ curl -s "$API_BASE/healthz"
 
 curl -s -X POST "$API_BASE/signup" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"alice","password":"use-a-local-test-password"}'
+  -d '{"email":"alice@example.com","password":"use-a-local-test-password"}'
 ```
 
 The signup response contains a JWT. Use that token for authenticated requests. `/onramp` adds demo balance through the engine; it is not a payment integration.
@@ -129,6 +139,8 @@ The services communicate through Redis Streams rather than calling the engine ov
 4. `apps/db` consumes persistence events from `to-backend` through its own consumer group and writes users, orders, fills, ticks, and candles to Postgres/TimescaleDB.
 5. The engine's Binance listener converts BTCUSDT, ETHUSDT, and SOLUSDT mark-price messages into `BTCUSD`, `ETHUSD`, and `SOLUSD` engine events.
 
+Funding settles every eight hours, on the 00:00, 08:00, and 16:00 UTC boundaries. The engine enqueues a `run_funding_rate` command at each boundary, and the UI counts down to the same boundary.
+
 The engine keeps its operational state in memory. It writes `snapshot-latest.json` to the `engine_snapshots` Docker volume every three seconds and can also copy that snapshot to an S3-compatible R2 bucket when the R2 variables are configured.
 
 ## Configuration
@@ -136,7 +148,8 @@ The engine keeps its operational state in memory. It writes `snapshot-latest.jso
 The root [`.env.example`](./.env.example) contains the environment values used by the Compose deployment. The most important groups are:
 
 - Database and Redis: `DATABASE_URL`, `REDIS_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`.
-- API and browser routing: `JWT_SECRET`, `CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`, and `NEXT_PUBLIC_WS_URL`.
+- API and browser routing: `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`, and `NEXT_PUBLIC_WS_URL`.
+- Simulation helpers: `ENABLE_SIM_ROUTES` (default `false`).
 - Stream names and consumer identities: `ENGINE_STREAM`, `BACKEND_STREAM`, `WS_CONSUMER_GROUP`, `WS_CONSUMER_NAME`, `DB_CONSUMER_GROUP`, and `DB_CONSUMER_NAME`.
 - External prices and engine snapshots: `BINANCE_STREAM_URL`, `SNAPSHOT_DIR`, and the optional `R2_*` variables.
 - Resource limits and retention: `ENGINE_MAX_IN_MEMORY_FILLS`, `ENGINE_MAX_OPEN_ORDERS`, `WS_MAX_CLIENTS`, `WS_MAX_BUFFERED_BYTES`, and `HISTORY_RETENTION_DAYS`.
@@ -155,22 +168,22 @@ bun run check-types  # run TypeScript checks
 bun run format       # format TypeScript and Markdown files
 ```
 
-The root package does not define a test script. Its `check-types` entry currently has no package-level Turbo task, so Turbo reports that no type-check tasks were executed. The repository does include a manual API stress script:
+The root package does not define a test script. `check-types` runs `tsc --noEmit` in every workspace. The repository also includes a manual API stress script:
 
 ```bash
 bun scripts/stress-benchmark.ts
 ```
 
-It targets `http://localhost:3001` by default, provisions simulation users, exercises the API routes, and writes `scripts/stress-benchmark-results.json`. Set `API_BASE`, `CONCURRENCY`, and `REQUESTS` to change its target and workload.
+It targets `http://localhost:3001` by default and needs the backend to run with `ENABLE_SIM_ROUTES=true`. It provisions simulation users, exercises the API routes, and writes `scripts/stress-benchmark-results.json`. Set `API_BASE`, `CONCURRENCY`, and `REQUESTS` to change its target and workload.
 
 ## Operational limits and prototype gaps
 
 - Redis streams are written with approximate `MAXLEN` trimming at 100,000 entries.
 - The engine caps in-memory fills and resting limit orders using `ENGINE_MAX_IN_MEMORY_FILLS` and `ENGINE_MAX_OPEN_ORDERS`; both default to 100,000.
 - The WebSocket service defaults to 1,000 clients and disconnects slow consumers above `WS_MAX_BUFFERED_BYTES`.
-- The database migration applies 30-day retention to raw ticks. The database consumer removes fills and terminal orders older than `HISTORY_RETENTION_DAYS`, which defaults to 90 days.
+- Database migrations apply Timescale retention: raw ticks 30 days; 1m candles 30 days, 5m 90 days, 15m 180 days, and 1h 730 days. Daily candles are kept. The database consumer removes fills and terminal orders older than `HISTORY_RETENTION_DAYS`, which defaults to 90 days.
 - Engine snapshots are recovery checkpoints, not a replacement for database backups. The deployment still requires disk and memory monitoring.
-- Authentication currently stores and compares the password field directly in the `user` table. Do not reuse real passwords.
+- Passwords are hashed with bcrypt. Legacy plain-text passwords are re-hashed on the next successful login. JWTs cannot be revoked before they expire, and changing a password does not end existing sessions.
 - `/onramp` credits a demo balance. `DEPLOYMENT.md` documents what would be required for a real payment flow.
 
 ## Deployment
@@ -188,4 +201,5 @@ It targets `http://localhost:3001` by default, provisions simulation users, exer
 - `packages/shared-types` — Zod schemas and shared event types
 - `packages/db` — Prisma schema, client, and migrations
 - `packages/redis` — shared Redis client
-- `scripts` — manual stress and external benchmark scripts
+- `packages/types` — UI types used by the frontend (`@repo/types`)
+- `scripts` — manual API stress benchmark

@@ -20,6 +20,8 @@
         "DATABASE_URL",
         "REDIS_URL",
         "JWT_SECRET",
+        "JWT_EXPIRES_IN",
+        "ENABLE_SIM_ROUTES",
         "CORS_ORIGINS",
         "NEXT_PUBLIC_API_URL",
         "NEXT_PUBLIC_WS_URL",

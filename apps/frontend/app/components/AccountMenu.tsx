@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { LogOut } from 'lucide-react';
+import { KeyRound, LogOut } from 'lucide-react';
 
 const CLOSE_DELAY_MS = 150;
 
@@ -9,7 +9,15 @@ const CLOSE_DELAY_MS = 150;
  * Avatar button with an account popover.
  * Hover previews the popover; clicking pins it open until you click outside or press Escape.
  */
-export default function AccountMenu({ email, onLogout }: { email: string; onLogout: () => void }) {
+export default function AccountMenu({
+  email,
+  onLogout,
+  onChangePassword,
+}: {
+  email: string;
+  onLogout: () => void;
+  onChangePassword: () => void;
+}) {
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -92,6 +100,18 @@ export default function AccountMenu({ email, onLogout }: { email: string; onLogo
               </div>
             </div>
             <div className="border-t border-line p-1">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  close();
+                  onChangePassword();
+                }}
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] text-muted transition-colors hover:bg-hover hover:text-fg"
+              >
+                <KeyRound className="h-4 w-4" />
+                Change password
+              </button>
               <button
                 type="button"
                 role="menuitem"

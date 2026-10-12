@@ -270,6 +270,7 @@ export class EngineClient {
     market: Shared.MARKET_AVAILABEL,
     kind: Shared.KIND,
     qty: number,
+    limitPrice: number,
     margin: number,
   ): Promise<void> {
     const correlationId = `trader-mkt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -283,7 +284,7 @@ export class EngineClient {
           kind,
           type: 'MARKET',
           qty: String(qty),
-          price: '0',
+          price: String(limitPrice),
           margin: String(margin),
         },
       },

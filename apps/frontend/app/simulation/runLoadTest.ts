@@ -145,6 +145,10 @@ async function getUsers(
     if (res.status === 201 && res.token) {
       users.push({ username, token: res.token });
       log(`Provisioned ${username} ($${fund.toLocaleString()})`);
+    } else {
+      // Disabled (ENABLE_SIM_ROUTES is off) or failing: stop asking for more users.
+      log(`Could not provision sim users: ${res.msg ?? `HTTP ${res.status}`}`);
+      break;
     }
   }
 
@@ -248,7 +252,11 @@ async function runLiquidationDemo(
   const markUp = fmtPrice(mark * (1 + LIQ_MOVE), config.market);
 
   log(`Inject mark $${markDown.toLocaleString()} → liquidate LONGs`);
-  await apiService.injectMarkPrice(config.market, markDown);
+  const down = await apiService.injectMarkPrice(config.market, markDown);
+  if (down.status !== 200) {
+    log(`Mark-price injection unavailable: ${down.msg ?? `HTTP ${down.status}`}. Skipping liquidation demo.`);
+    return;
+  }
   await wait(1500, signal);
 
   log(`Inject mark $${markUp.toLocaleString()} → liquidate SHORTs`);

@@ -8,7 +8,7 @@ import {
   type OhlcCandle,
 } from '@repo/shared-types/market-data';
 
-type Market = 'BTCUSD' | 'ETHUSD' | 'SOLUSD' | 'USD';
+type Market = 'BTCUSD' | 'ETHUSD' | 'SOLUSD';
 
 export interface TradeTickInput {
   market: Market;

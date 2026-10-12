@@ -60,9 +60,10 @@ export const SIGNUP_SCHEMA = z.object({
   password: NEW_PASSWORD_SCHEMA,
 });
 
-export const RESET_PASSWORD_SCHEMA = z.object({
-  email: EMAIL_SCHEMA,
-  password: NEW_PASSWORD_SCHEMA,
+/** Change password for a signed-in user; the current password proves ownership. */
+export const CHANGE_PASSWORD_SCHEMA = z.object({
+  currentPassword: z.string().min(1, { message: 'Enter your current password' }),
+  newPassword: NEW_PASSWORD_SCHEMA,
 });
 
 export const COLLATERAL_SCHEMA = z.object({

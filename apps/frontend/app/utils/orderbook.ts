@@ -1,4 +1,4 @@
-import type { OrderBookRow } from "types";
+import type { OrderBookRow } from "@repo/types";
 
 export function parseDepthSnapshot(
   rawBids: unknown,

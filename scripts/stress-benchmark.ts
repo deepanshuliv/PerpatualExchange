@@ -87,8 +87,13 @@ async function provisionToken() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ label: `bench_${Date.now()}`, amount: 100_000 }),
   });
-  const json = (await res.json()) as { token?: string };
-  if (!json.token) throw new Error('Failed to provision sim user');
+  const json = (await res.json()) as { token?: string; msg?: string };
+  if (!json.token) {
+    throw new Error(
+      `Failed to provision sim user (HTTP ${res.status}: ${json.msg ?? 'no message'}). ` +
+        'The backend must run with ENABLE_SIM_ROUTES=true.',
+    );
+  }
   return json.token;
 }
 

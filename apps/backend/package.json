@@ -10,7 +10,8 @@
     "typescript": "^5"
   },
   "scripts": {
-    "dev": "bun index.ts"
+    "dev": "bun index.ts",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@repo/db": "workspace:*",

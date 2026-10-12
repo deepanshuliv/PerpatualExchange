@@ -1,5 +1,5 @@
 {
-  "name": "types",
+  "name": "@repo/types",
   "private": true,
   "devDependencies": {
     "@types/bun": "latest"
@@ -9,5 +9,8 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
   }
 }

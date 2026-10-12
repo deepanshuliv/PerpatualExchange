@@ -13,7 +13,7 @@ COPY apps ./apps
 
 RUN bun install --frozen-lockfile
 
-RUN cd packages/db && bun run prisma generate || true
+RUN cd packages/db && bun run prisma generate
 RUN cd apps/frontend && bun run build
 
 CMD ["bun", "apps/engine/index.ts"]

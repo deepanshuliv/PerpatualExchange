@@ -59,6 +59,10 @@ Edit `.env` and set real values. At minimum, replace `POSTGRES_PASSWORD` and `JW
 ```dotenv
 POSTGRES_PASSWORD=generate-a-long-random-password
 JWT_SECRET=generate-another-long-random-secret
+JWT_EXPIRES_IN=7d
+# Keep false in production: the /sim routes mint funded users and can move the
+# mark price, which liquidates real positions.
+ENABLE_SIM_ROUTES=false
 CORS_ORIGINS=https://exchange.deepanshu.live
 NEXT_PUBLIC_API_URL=https://exchange.deepanshu.live/api
 NEXT_PUBLIC_WS_URL=wss://exchange.deepanshu.live/ws
@@ -94,8 +98,10 @@ docker compose ps
 The engine checkpoints locally to the `engine_snapshots` volume every few
 seconds and uses R2 only as an optional remote copy. Docker container logs are
 rotated at 10 MB × 3 files. Redis streams are trimmed and its AOF is rewritten
-automatically. Raw tick data is retained for 30 days; fills and terminal orders
-are retained for `HISTORY_RETENTION_DAYS` (90 by default). Open orders and
+automatically. Raw tick data is retained for 30 days; candles for 30 days (1m),
+90 days (5m), 180 days (15m) and 730 days (1h), while daily candles are kept;
+fills and terminal orders are retained for `HISTORY_RETENTION_DAYS` (90 by
+default). Open orders and
 positions remain until they are closed or cancelled; the engine rejects new
 resting limit orders after `ENGINE_MAX_OPEN_ORDERS` (100,000 by default).
 
@@ -135,7 +141,7 @@ Leave the records DNS-only until Caddy has obtained certificates. Then turn on t
 ```bash
 curl -i https://exchange.deepanshu.live/api/healthz
 curl -i https://exchange-api.deepanshu.live/healthz
-curl -i https://exchange.deepanshu.live/ticker/mark/BTCUSD
+curl -i https://exchange.deepanshu.live/api/ticker/mark/BTCUSD
 docker compose logs --tail=100 backend ws caddy
 ```
 
@@ -160,26 +166,26 @@ The `/onramp` endpoint currently credits a demo balance; it is not a UPI payment
 
 ## SSH recovery when port 22 times out
 
-Google Cloud currently reports the VM as running and the public SSH firewall rule as allowed, but the guest may not have a healthy `sshd` listener. IAP is the safest recovery path:
+If Google Cloud reports the VM as running and the SSH firewall rule as allowed, but SSH still times out, the guest may not have a healthy `sshd` listener. IAP is the safest recovery path. These commands reuse `PROJECT_ID`, `ZONE` and `VM_NAME` from step 1:
 
 ```bash
-gcloud compute firewall-rules create exchange-allow-iap-ssh \
-  --project=YOUR_GCP_PROJECT_ID \
+gcloud compute firewall-rules create "${VM_NAME}-allow-iap-ssh" \
+  --project="$PROJECT_ID" \
   --network=default \
   --direction=INGRESS \
   --action=ALLOW \
   --rules=tcp:22 \
   --source-ranges=35.235.240.0/20 \
-  --target-tags=exchange-backend-ssh
+  --target-tags="${VM_NAME}-ssh"
 
-gcloud compute instances add-tags exchange-backend \
-  --project=YOUR_GCP_PROJECT_ID \
-  --zone=asia-south1-c \
-  --tags=exchange-backend-ssh
+gcloud compute instances add-tags "$VM_NAME" \
+  --project="$PROJECT_ID" \
+  --zone="$ZONE" \
+  --tags="${VM_NAME}-ssh"
 
-gcloud compute ssh exchange-backend \
-  --project=YOUR_GCP_PROJECT_ID \
-  --zone=asia-south1-c \
+gcloud compute ssh "$VM_NAME" \
+  --project="$PROJECT_ID" \
+  --zone="$ZONE" \
   --tunnel-through-iap
 ```
 

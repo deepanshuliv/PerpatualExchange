@@ -2,6 +2,9 @@ import type { Shared } from '@repo/shared-types';
 import type { EngineClient } from './client';
 import type { MarketConfig } from './config';
 
+/** Same slippage room the trading UI gives market orders (OrderEntryPanel MARKET_SLIPPAGE). */
+const TAKER_SLIPPAGE = 0.01;
+
 export class MarketMakerStrategy {
   private config: MarketConfig;
   private client: EngineClient;
@@ -110,13 +113,20 @@ export class MarketMakerStrategy {
       this.round(baseQty * (0.2 + Math.random() * 0.6), qtyDecimals),
       Math.pow(10, -qtyDecimals),
     );
-    const estimatedMargin = this.round(tradeQty * markPrice * marginRatio, 2);
+    // The engine treats a market order's price as its worst acceptable price, so a
+    // LONG needs a bound above the asks and a SHORT one below the bids.
+    const limitPrice = this.round(
+      markPrice * (isBuy ? 1 + TAKER_SLIPPAGE : 1 - TAKER_SLIPPAGE),
+      this.config.priceDecimals,
+    );
+    const estimatedMargin = this.round(tradeQty * limitPrice * marginRatio, 2);
 
     await this.client.placeMarketOrder(
       this.takerUserId,
       this.config.market,
       kind,
       tradeQty,
+      limitPrice,
       estimatedMargin,
     );
   }

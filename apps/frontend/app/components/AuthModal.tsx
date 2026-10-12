@@ -79,9 +79,10 @@ function StrengthMeter({ password }: { password: string }) {
 }
 
 export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () => void } = {}) {
-  const { authModalMode, setAuthModalMode, login, signup, resetPassword } = useTrading();
+  const { authModalMode, setAuthModalMode, login, signup, changePassword } = useTrading();
 
   const [email, setEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agree, setAgree] = useState(false);
@@ -89,7 +90,7 @@ export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () =>
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Carried across the switch from "reset password" back to "log in".
+  // Carried across a switch between modes (e.g. the email typed so far).
   const carryRef = useRef<{ email: string; notice: string } | null>(null);
 
   useEffect(() => {
@@ -97,6 +98,7 @@ export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () =>
     carryRef.current = null;
     setEmail(carry?.email ?? '');
     setNotice(carry?.notice ?? '');
+    setCurrentPassword('');
     setPassword('');
     setConfirmPassword('');
     setAgree(false);
@@ -116,9 +118,17 @@ export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () =>
 
   const isLogin = authModalMode === 'login';
   const isSignup = authModalMode === 'signup';
-  const isReset = authModalMode === 'forgot_password';
+  const isChange = authModalMode === 'change_password';
 
   const validate = (): string | null => {
+    if (isChange) {
+      if (!currentPassword) return 'Enter your current password.';
+      if (password.length < PASSWORD_MIN_LENGTH) {
+        return `New password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
+      }
+      if (password !== confirmPassword) return 'Passwords do not match.';
+      return null;
+    }
     const trimmed = email.trim();
     if (!trimmed) return 'Enter your email.';
     if (!EMAIL_PATTERN.test(trimmed)) return 'Enter a valid email address.';
@@ -145,14 +155,16 @@ export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () =>
     const normalizedEmail = email.trim().toLowerCase();
     setLoading(true);
     try {
-      if (isReset) {
-        const result = await resetPassword(normalizedEmail, password);
+      if (isChange) {
+        const result = await changePassword(currentPassword, password);
         if (!result.ok) {
-          setError(result.msg ?? 'Could not reset your password.');
+          setError(result.msg ?? 'Could not change your password.');
           return;
         }
-        carryRef.current = { email: normalizedEmail, notice: 'Password updated. Log in with your new password.' };
-        setAuthModalMode('login');
+        setCurrentPassword('');
+        setPassword('');
+        setConfirmPassword('');
+        setNotice('Password updated.');
         return;
       }
 
@@ -171,13 +183,13 @@ export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () =>
     }
   };
 
-  const title = isLogin ? 'Log in to Axiom' : isReset ? 'Reset your password' : 'Create your account';
+  const title = isLogin ? 'Log in to Axiom' : isChange ? 'Change your password' : 'Create your account';
   const subtitle = isLogin
     ? 'Welcome back. Enter your details to continue.'
-    : isReset
-      ? 'Choose a new password for your account.'
+    : isChange
+      ? 'Enter your current password, then choose a new one.'
       : 'Start trading perpetuals in under a minute.';
-  const submitLabel = isLogin ? 'Log in' : isReset ? 'Update password' : 'Create account';
+  const submitLabel = isLogin ? 'Log in' : isChange ? 'Update password' : 'Create account';
 
   return (
     <div
@@ -219,6 +231,15 @@ export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () =>
         )}
 
         <form onSubmit={handleSubmit} noValidate className="flex w-full flex-col gap-4">
+          {isChange ? (
+            <PasswordField
+              label="Current password"
+              value={currentPassword}
+              onChange={setCurrentPassword}
+              placeholder="Enter your current password"
+              autoComplete="current-password"
+            />
+          ) : (
           <label className="flex flex-col gap-1.5">
             <span className="text-xs text-muted">Email</span>
             <span className={inputBox}>
@@ -234,6 +255,7 @@ export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () =>
               />
             </span>
           </label>
+          )}
 
           <PasswordField
             label={isLogin ? 'Password' : 'New password'}
@@ -269,19 +291,6 @@ export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () =>
             </label>
           )}
 
-          {isLogin && (
-            <button
-              type="button"
-              onClick={() => {
-                carryRef.current = { email: email.trim(), notice: '' };
-                setAuthModalMode('forgot_password');
-              }}
-              className="-mt-1 self-end text-xs text-muted transition-colors hover:text-fg"
-            >
-              Forgot password?
-            </button>
-          )}
-
           <button
             type="submit"
             disabled={loading}
@@ -291,15 +300,17 @@ export default function AuthModal({ onAuthenticated }: { onAuthenticated?: () =>
           </button>
         </form>
 
-        <p className="mt-5 border-t border-line pt-4 text-center text-xs text-muted">
-          {isLogin ? "Don't have an account? " : isReset ? 'Remembered it? ' : 'Already have an account? '}
-          <button
-            onClick={() => setAuthModalMode(isLogin ? 'signup' : 'login')}
-            className="font-medium text-fg transition-colors hover:text-white"
-          >
-            {isLogin ? 'Sign up' : 'Log in'}
-          </button>
-        </p>
+        {!isChange && (
+          <p className="mt-5 border-t border-line pt-4 text-center text-xs text-muted">
+            {isLogin ? "Don't have an account? " : 'Already have an account? '}
+            <button
+              onClick={() => setAuthModalMode(isLogin ? 'signup' : 'login')}
+              className="font-medium text-fg transition-colors hover:text-white"
+            >
+              {isLogin ? 'Sign up' : 'Log in'}
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );
