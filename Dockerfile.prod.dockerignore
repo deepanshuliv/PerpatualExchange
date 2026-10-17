@@ -1,0 +1,13 @@
+**/node_modules
+**/.next
+**/.turbo
+**/.env*
+**/*.tsbuildinfo
+**/snapshots
+.git
+.cache
+dist
+build
+video
+assets
+packages/db/generated

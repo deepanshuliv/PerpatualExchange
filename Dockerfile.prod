@@ -1,0 +1,26 @@
+# One production image for every Bun service and the Next.js frontend.
+# docker-compose.prod.yml picks the process with `command:`.
+FROM oven/bun:1.3.13
+WORKDIR /app
+
+# Baked into the browser bundle. The defaults are relative, so the same image
+# works on any hostname: the API is same-origin /api and the WebSocket URL is
+# derived from window.location (see apps/frontend/app/hooks/useApi.ts).
+ARG NEXT_PUBLIC_API_URL=/api
+ARG NEXT_PUBLIC_WS_URL=
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
+    NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL} \
+    NEXT_TELEMETRY_DISABLED=1
+
+COPY package.json bun.lock turbo.json ./
+COPY packages ./packages
+COPY apps ./apps
+
+RUN bun install --frozen-lockfile
+
+RUN cd packages/db && bun run prisma generate
+RUN cd apps/frontend && bun run build && rm -rf .next/cache
+
+ENV NODE_ENV=production
+
+CMD ["bun", "apps/engine/index.ts"]
