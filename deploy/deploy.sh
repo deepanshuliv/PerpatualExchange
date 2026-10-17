@@ -9,6 +9,10 @@ df -h /
 flock /opt/apps/.build.lock \
   docker compose -p perp -f docker-compose.prod.yml up -d --build --remove-orphans
 
+# git pull replaces deploy/nginx.conf with a new file, and a running container
+# keeps the old bind-mounted one, so recreate the gateway to load it.
+docker compose -p perp -f docker-compose.prod.yml up -d --force-recreate --no-deps gateway
+
 # A rebuild leaves the previous images untagged. Remove only this project's
 # (shared VM rule: no global prune).
 docker image ls -q --filter dangling=true --filter label=com.docker.compose.project=perp \
