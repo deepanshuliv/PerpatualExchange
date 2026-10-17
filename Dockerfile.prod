@@ -16,7 +16,10 @@ COPY package.json bun.lock turbo.json ./
 COPY packages ./packages
 COPY apps ./apps
 
-RUN bun install --frozen-lockfile
+# Not --frozen-lockfile: every package depends on "@types/bun": "latest", so a
+# frozen install fails whenever a new @types/bun is published. Only that
+# types-only entry moves; everything else resolves from bun.lock.
+RUN bun install
 
 RUN cd packages/db && bun run prisma generate
 RUN cd apps/frontend && bun run build && rm -rf .next/cache
