@@ -12,14 +12,28 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL} \
     NEXT_TELEMETRY_DISABLED=1
 
+# Manifests first, so the install layer is reused when only source changes.
+# A new workspace needs its package.json listed here.
 COPY package.json bun.lock turbo.json ./
-COPY packages ./packages
-COPY apps ./apps
+COPY apps/backend/package.json apps/backend/
+COPY apps/db/package.json apps/db/
+COPY apps/engine/package.json apps/engine/
+COPY apps/frontend/package.json apps/frontend/
+COPY apps/market-maker/package.json apps/market-maker/
+COPY apps/ws/package.json apps/ws/
+COPY packages/db/package.json packages/db/
+COPY packages/redis/package.json packages/redis/
+COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/types/package.json packages/types/
+COPY packages/typescript-config/package.json packages/typescript-config/
 
 # Not --frozen-lockfile: every package depends on "@types/bun": "latest", so a
 # frozen install fails whenever a new @types/bun is published. Only that
 # types-only entry moves; everything else resolves from bun.lock.
 RUN bun install
+
+COPY packages ./packages
+COPY apps ./apps
 
 RUN cd packages/db && bun run prisma generate
 RUN cd apps/frontend && bun run build && rm -rf .next/cache
