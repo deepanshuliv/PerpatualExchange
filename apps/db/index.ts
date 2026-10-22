@@ -7,7 +7,8 @@ const CONSUMER_GROUP = process.env.DB_CONSUMER_GROUP || 'db-consumer-group';
 const CONSUMER_NAME = process.env.DB_CONSUMER_NAME || 'db-consumer';
 const STREAM_KEY = process.env.BACKEND_STREAM || 'to-backend';
 const BATCH_SIZE = 1000;
-const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+// Hourly, so each run only has about an hour of cancelled market-maker quotes to delete.
+const RETENTION_INTERVAL_MS = 60 * 60 * 1000;
 
 function readStream(
   subscriber: ReturnType<typeof redisClient.duplicate>,

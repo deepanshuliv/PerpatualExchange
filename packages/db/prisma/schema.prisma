@@ -58,6 +58,8 @@ model order {
   fills           fill[]
   transactionTime DateTime @default(now())
   createdAt       DateTime @default(now())
+
+  @@index([status, transactionTime])
 }
 
 model fill {
@@ -73,8 +75,11 @@ model fill {
   type            Type
   kind            Kind
   status          Status
-  transactionTime DateTime 
+  transactionTime DateTime
   createdAt       DateTime @default(now())
+
+  @@index([orderId])
+  @@index([transactionTime])
 }
 
 

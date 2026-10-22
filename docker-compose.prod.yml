@@ -126,6 +126,7 @@ services:
       DB_CONSUMER_GROUP: db-consumer-group
       DB_CONSUMER_NAME: db-consumer
       HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-90}
+      CANCELLED_ORDER_RETENTION_HOURS: ${CANCELLED_ORDER_RETENTION_HOURS:-48}
 
   backend:
     <<: *app
